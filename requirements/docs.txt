@@ -1,5 +1,5 @@
 -r prd.txt
-tox==4.15.0
+tox==4.27.0
 sphinx
 sphinx-autoapi
 sphinx-issues
