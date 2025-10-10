@@ -8,41 +8,26 @@ repository. i.e. this file was invoked using:
 
 
 import functools
-import itertools
-import logging
-import os
 from pathlib import Path
 import typing
 import jax
 import jax.numpy as jnp
 import jax_md
 import optax
-import ray
-import sys
-from tqdm import tqdm
 
-
-import jax_dna
 import jax_dna.energy as jdna_energy
 import jax_dna.energy.dna1 as dna1_energy
-import jax_dna.input.toml as toml_reader
 import jax_dna.input.tree as jdna_tree
 import jax_dna.observables as jd_obs
 import jax_dna.optimization.simulator as jdna_simulator
 import jax_dna.optimization.objective as jdna_objective
 import jax_dna.optimization.optimization as jdna_optimization
 import jax_dna.simulators.oxdna as oxdna
-import jax_dna.simulators.io as jdna_sio
 import jax_dna.utils.types as jdna_types
-import jax_dna.ui.loggers.jupyter as jupyter_logger
-import jax_dna.ui.loggers.console as console_logger
-from jax_dna.input import topology, trajectory
+from jax_dna.input import topology
 
 jax.config.update("jax_enable_x64", True)
 
-# You need to either set the `oxdna` executable/build paths here or somewhere else
-os.environ[oxdna.BIN_PATH_ENV_VAR] = str(Path("../oxDNA/build/bin/oxDNA").resolve())
-os.environ[oxdna.BUILD_PATH_ENV_VAR] =  str(Path("../oxDNA/build").resolve())
 
 def main():
 
@@ -100,10 +85,10 @@ def main():
         sim_type=jdna_types.oxDNASimulatorType.DNA1,
         energy_configs=energy_fn_configs,
         n_build_threads=4,
-        disable_build=False,
+        source_path="../oxDNA",
     )
 
-    cwd = Path(os.getcwd())
+    cwd = Path.cwd()
     output_dir = cwd / "basic_trajectory"
     trajectory_loc = output_dir / "trajectory.pkl"
     if not output_dir.exists():
@@ -168,7 +153,7 @@ def main():
 
 
     for i in range(optimization_config["n_steps"]):
-        opt_state, opt_params = opt.step(opt_params)
+        opt_state, opt_params, _ = opt.step(opt_params)
 
         if i % 5 == 0:
             log_values = propeller_twist_objective.logging_observables()
@@ -179,6 +164,8 @@ def main():
             optimizer_state=opt_state,
             opt_params=opt_params,
         )
+
+    simulator.cleanup_build()
 
 if __name__=="__main__":
     main()

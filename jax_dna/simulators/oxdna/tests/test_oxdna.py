@@ -16,13 +16,15 @@ def test_guess_binary_location() -> None:
     """tests the guess_binary_location function."""
 
     assert oxdna._guess_binary_location("bash", "OXDNA_BIN_PATH") is not None
-    assert oxdna._guess_binary_location("zamboomafoo", "MAKE_BIN_PATH") is None
+    with pytest.raises(FileNotFoundError):
+        oxdna._guess_binary_location("zamboomafoo", "MAKE_BIN_PATH")
 
 
-def setup_test_dir(add_input: bool = True):  # noqa: FBT001,FBT002
+def setup_test_dir(test_dir: Path = None, add_input: bool = True):  # noqa: FBT001,FBT002
     """Setup the test directory."""
-    test_dir = file_dir / f"test_data/{uuid.uuid4()}"
-    test_dir.mkdir(parents=True)
+    if not test_dir:
+        test_dir = file_dir / f"test_data/{uuid.uuid4()}"
+        test_dir.mkdir(parents=True)
     if add_input:
         with (test_dir / "input").open("w") as f:
             f.write("trajectory_file = test.conf\ntopology = test.top\n")
@@ -46,14 +48,6 @@ def tear_down_test_dir(test_dir: str):
         test_dir.parent.rmdir()
 
 
-def test_oxDNABinarySemaphore_init():  # noqa: N802 oxDNA is a special word
-    """Test the oxDNA binary semaphore initialization."""
-    semaphore = oxdna.oxDNABinarySemaphore()
-    assert not semaphore.check()
-    semaphore.set(ready=True)
-    assert semaphore.check()
-
-
 def test_oxdna_init():
     """Test the oxDNA simulator initialization."""
     test_dir = setup_test_dir()
@@ -61,6 +55,7 @@ def test_oxdna_init():
         input_dir=test_dir,
         sim_type=typ.oxDNASimulatorType.DNA1,
         energy_configs=[],
+        source_path='src',
     )
     tear_down_test_dir(test_dir)
     assert str(sim["input_dir"]) == str(test_dir)
@@ -69,109 +64,118 @@ def test_oxdna_init():
 def test_oxdna_run_raises_fnf():
     """Test that the oxDNA simulator raises FileNotFoundError."""
     test_dir = setup_test_dir(add_input=False)
-    sim = oxdna.oxDNASimulator(
-        input_dir=test_dir,
-        sim_type=typ.oxDNASimulatorType.DNA1,
-        energy_configs=[],
-    )
-    with pytest.raises(FileNotFoundError, match=oxdna.ERR_INPUT_FILE_NOT_FOUND[:10]):
-        sim.run()
+    with pytest.raises(FileNotFoundError, match="No such file or directory"):
+        oxdna.oxDNASimulator(
+            input_dir=test_dir,
+            sim_type=typ.oxDNASimulatorType.DNA1,
+            energy_configs=[],
+            source_path='src',
+        )
     tear_down_test_dir(test_dir)
 
 
-def test_oxdna_run_raises_bin_path_not_set():
-    """Test that the oxDNA simulator raises ValueError."""
-    test_dir = setup_test_dir()
+def test_oxdna_binary_mode_run_raises_for_missing_bin(tmp_path):
+    """Test that the oxDNA simulator raises FileNotFoundError."""
+    setup_test_dir(tmp_path, add_input=True)
     sim = oxdna.oxDNASimulator(
-        input_dir=test_dir,
+        input_dir=tmp_path,
         sim_type=typ.oxDNASimulatorType.DNA1,
         energy_configs=[],
+        binary_path="some/non/existent/path",
     )
-    with pytest.raises(ValueError, match=oxdna.ERR_BIN_PATH_NOT_SET[:10]):
+    with pytest.raises(FileNotFoundError, match="some/non/existent/path"):
         sim.run()
+
+
+def test_oxdna_binary_mode_raises_for_params_input(tmp_path):
+    """Test that the oxDNA simulator raises ValueError."""
+    setup_test_dir(tmp_path, add_input=True)
+    sim = oxdna.oxDNASimulator(
+        input_dir=tmp_path,
+        sim_type=typ.oxDNASimulatorType.DNA1,
+        energy_configs=[],
+        binary_path=shutil.which("echo"),
+    )
+    with pytest.raises(ValueError, match="params provided without source_path"):
+        sim.run(opt_params=[{"some_param": 1.0}])
+
+
+def test_oxdna_binary_mode_ignore_params(tmp_path):
+    """Test that the oxDNA simulator ignores params when configured."""
+    setup_test_dir(tmp_path, add_input=True)
+    sim = oxdna.oxDNASimulator(
+        input_dir=tmp_path,
+        sim_type=typ.oxDNASimulatorType.DNA1,
+        energy_configs=[],
+        binary_path=shutil.which("echo"),
+        ignore_params=True,
+    )
+    sim._read_trajectory = lambda: None
+    sim.run(opt_params=[{"some_param": 1.0}])
+
+def test_oxdna_override_input(tmp_path):
+    """Test that the oxDNA simulator ignores params when configured."""
+    setup_test_dir(tmp_path, add_input=True)
+    sim = oxdna.oxDNASimulator(
+        input_dir=tmp_path,
+        sim_type=typ.oxDNASimulatorType.DNA1,
+        energy_configs=[],
+        binary_path=shutil.which("echo"),
+        overwrite_input=True,
+    )
+    sim._read_trajectory = lambda: None
+    sim.run()
+    assert sim.base_dir == tmp_path
+    assert sim.input_file == tmp_path / "input"
+    assert tmp_path.joinpath("oxdna.out.log").exists()
+
+
+@pytest.mark.parametrize(("bin_path", "source_path"), [(None, None), ("x", "x")])
+def test_oxdna_run_raises_on_non_exclusive_bin_source_paths(bin_path, source_path):
+    """Test that the oxDNA simulator raises ValueError."""
+    test_dir = setup_test_dir()
+    with pytest.raises(ValueError, match="Must set one and only one"):
+        oxdna.oxDNASimulator(
+            input_dir=test_dir,
+            sim_type=typ.oxDNASimulatorType.DNA1,
+            energy_configs=[],
+            source_path=source_path,
+            binary_path=bin_path,
+        )
     tear_down_test_dir(test_dir)
 
 
 def test_oxdna_run():
     """Test the oxDNA simulator run function."""
-    os.environ[oxdna.BIN_PATH_ENV_VAR] = "echo"
+    # os.environ[oxdna.BIN_PATH_ENV_VAR] = "echo"
     test_dir = setup_test_dir()
     sim = oxdna.oxDNASimulator(
         input_dir=test_dir,
         sim_type=typ.oxDNASimulatorType.DNA1,
         energy_configs=[],
+        binary_path=shutil.which("echo"),
     )
+    sim._read_trajectory = lambda: None
     sim.run()
-    with (test_dir / "oxdna.out.log").open() as f:
+    with (sim.base_dir / "oxdna.out.log").open() as f:
         assert f.read() == "input\n"
     tear_down_test_dir(test_dir)
-    del os.environ[oxdna.BIN_PATH_ENV_VAR]
 
 
-def test_oxdna_restore_params() -> None:
-    """Tests oxdna restore params"""
+def test_oxdna_build(monkeypatch, tmp_path) -> None:
+    """Test for oxdna build, fails for missing build dir"""
 
-    test_dir = setup_test_dir()
-    tmp_build_dir = test_dir / "build"
+    model_h = Path(__file__).parent / "test_data/test.model.h"
+    excepted_model_h = Path(__file__).parent / "test_data/expected.model.h"
 
-    expected_text = "Testing text"
-    tmp_src = test_dir / "src"
-    tmp_src.mkdir()
-
-    (tmp_src / "model.h.old").write_text(expected_text)
-    (tmp_src / "model.h").write_text("Will be removed")
-
-    os.environ[oxdna.BUILD_PATH_ENV_VAR] = str(tmp_build_dir)
-
-    sim = oxdna.oxDNASimulator(
-        input_dir=test_dir,
-        sim_type=typ.oxDNASimulatorType.DNA1,
-        energy_configs=[],
-    )
-    sim._restore_params()
-
-    assert (tmp_src / "model.h").read_text() == expected_text
-    assert not (tmp_src / "model.h.old").exists()
-
-    tear_down_test_dir(test_dir)
+    tmp_src_dir = tmp_path / "src"
+    tmp_src_dir.mkdir(parents=True, exist_ok=True)
+    (tmp_src_dir / "model.h").write_text(model_h.read_text())
+    tmp_path.joinpath("input").write_text("backend = CPU\n")
 
 
-def test_oxdna_update_params_raises() -> None:
-    """Test for oxdna _update_params, fails for missing build dir"""
-
-    test_dir = setup_test_dir()
-
-    if os.environ.get(oxdna.BUILD_PATH_ENV_VAR):
-        del os.environ[oxdna.BUILD_PATH_ENV_VAR]
-
-    sim = oxdna.oxDNASimulator(
-        input_dir=test_dir,
-        sim_type=typ.oxDNASimulatorType.DNA1,
-        energy_configs=[],
-    )
-
-    with pytest.raises(ValueError, match=oxdna.ERR_BUILD_PATH_NOT_SET[:10]):
-        sim._update_params(new_params=[{}])
-
-    tear_down_test_dir(test_dir)
-
-
-def test_oxdna_update_params() -> None:
-    """Test for oxdna _update_params, fails for missing build dir"""
-
-    test_dir = setup_test_dir()
-    build_dir = Path(test_dir) / "build"
-    build_dir.mkdir()
-    src_dir = Path(test_dir) / "src"
-    src_dir.mkdir()
-
-    model_h = test_dir.parent.parent / "test_data/test.model.h"
-
-    (src_dir / "model.h").write_text(model_h.read_text())
-
-    os.environ[oxdna.BUILD_PATH_ENV_VAR] = str(build_dir)
-    os.environ[oxdna.CMAKE_BIN_ENV_VAR] = "echo"
-    os.environ[oxdna.MAKE_BIN_ENV_VAR] = "echo"
+    monkeypatch.setenv(oxdna.CMAKE_BIN_ENV_VAR, "echo")
+    monkeypatch.setenv(oxdna.MAKE_BIN_ENV_VAR, "echo")
 
     class MockEnergyConfig:
         def __init__(self, params):
@@ -186,11 +190,14 @@ def test_oxdna_update_params() -> None:
         def __or__(self, other: dict):
             return MockEnergyConfig(self.params | other)
 
-    oxdna.oxDNASimulator(
-        input_dir=test_dir,
+    sim = oxdna.oxDNASimulator(
+        input_dir=tmp_path,
         sim_type=typ.oxDNASimulatorType.DNA1,
         energy_configs=[MockEnergyConfig({}), MockEnergyConfig({})],
-    )._update_params(
+        source_path=tmp_path,
+    )
+
+    sim.build(
         new_params=[
             {
                 "FENE_DELTA": 5.0,
@@ -201,17 +208,12 @@ def test_oxdna_update_params() -> None:
             {},
         ]
     )
+    assert sim.build_dir.is_dir()
+    assert (sim.build_dir / "model.h").read_text().splitlines()[-10:] != excepted_model_h.read_text().splitlines()[-10:]
 
-    assert (src_dir / "model.h.old").read_text().splitlines()[-10:] == model_h.read_text().splitlines()[-10:]
-    assert (src_dir / "model.h").read_text().splitlines()[-10:] != (
-        test_dir.parent / "expected.model.h"
-    ).read_text().splitlines()[-10:]
-
-    for env_var in [oxdna.BUILD_PATH_ENV_VAR, oxdna.CMAKE_BIN_ENV_VAR, oxdna.MAKE_BIN_ENV_VAR]:
-        del os.environ[env_var]
-
-    tear_down_test_dir(test_dir)
+    sim.cleanup_build()
+    assert not sim.build_dir.exists()
 
 
 if __name__ == "__main__":
-    test_oxdna_update_params()
+    test_oxdna_build()

@@ -12,9 +12,6 @@ import jax_dna.input.topology as jdna_top
 import jax_dna.simulators.oxdna as jdna_oxdna
 import jax_dna.utils.types as jdna_types
 
-# This depends on a working oxDNA installation and the `oxdna` executable
-# should be set using the following environment variable:
-# jdna_oxdna.BIN_PATH_ENV_VAR
 
 def main():
 
@@ -23,9 +20,12 @@ def main():
     simulator = jdna_oxdna.oxDNASimulator(
         input_dir=input_dir,
         sim_type=jdna_types.oxDNASimulatorType.DNA1,
+        source_path="../oxDNA",
+        energy_configs=[],
     )
 
     simulator.run()
+    simulator.cleanup_build()
 
     trajectory = jdna_traj.from_file(
         input_dir / "output.dat",

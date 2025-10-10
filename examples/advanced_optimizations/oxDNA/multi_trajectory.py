@@ -82,6 +82,7 @@ def main():
         "oxdna_build_threads": 4,
         "log_every": 10,
         "n_oxdna_runs": 3,
+        "oxdna_use_cached_build": False,
     }
 
     simulator_logging_config = {
@@ -147,14 +148,12 @@ def main():
         )
     # ==========================================================================
 
-    run_flag = oxdna.oxDNABinarySemaphoreActor.remote()
-
 
     # Simulators ================================================================
     sim_outputs_dir = cwd / "sim_outputs"
     sim_outputs_dir.mkdir(parents=True, exist_ok=True)
 
-    def make_simulator(id:str, disable_build:bool) -> jdna_simulator.BaseSimulator:
+    def make_simulator(id:str, oxdna_bin: Path = None, oxdna_src: Path = None) -> jdna_simulator.BaseSimulator:
         sim_dir = sim_outputs_dir / id
 
         if sim_dir.exists():
@@ -171,9 +170,9 @@ def main():
             energy_configs=energy_configs,
             n_build_threads=optimization_config["oxdna_build_threads"],
             logger_config=simulator_logging_config | {"filename": f"simulator_{id}.log"},
-            disable_build=disable_build,
-            check_build_ready=lambda: ray.get(run_flag.check.remote()),
-            set_build_ready=run_flag.set.remote,
+            source_path=oxdna_src,
+            binary_path=oxdna_bin,
+            ignore_params=bool(oxdna_bin),  # we handle the build using same params
         )
 
         output_dir = sim_dir / "trajectory"
@@ -198,17 +197,10 @@ def main():
             jdna_tree.save_pytree(traj, trajectory_loc)
             return [trajectory_loc]
 
-        return jdna_simulator.SimulatorActor.options(
-            runtime_env={
-                "env_vars": {
-                    oxdna.BIN_PATH_ENV_VAR: str(Path("../oxDNA/build/bin/oxDNA").resolve()),
-                    oxdna.BUILD_PATH_ENV_VAR: str(Path("../oxDNA/build").resolve()),
-                },
-            },
-        ).remote(
+        return jdna_simulator.SimulatorActor.remote(
             name=id,
             fn=simulator_fn,
-            exposes=[f"traj-{id}",],
+            exposes=[f"traj-{id}"],
             meta_data={},
         )
 
@@ -216,7 +208,15 @@ def main():
     sim_ids = [f"sim{i}" for i in range(optimization_config["n_oxdna_runs"])]
     traj_ids = [f"traj-{id}" for id in sim_ids]
 
-    simulators = [make_simulator(*id_db) for id_db in zip(sim_ids, [False] + [True]*(len(sim_ids)-1))]
+    # If we share the same source path (e.g. we run on a single machine or a
+    # cluster with a shared file system), we can pre-build the binary once and
+    # provide the location of that binary to each simulator. Note it is the
+    # users responsibility to call the build function at each step.
+    if optimization_config["oxdna_use_cached_build"]:
+        builder = oxdna.oxDNASimulator(source_path="../oxDNA/", input_dir=None, energy_configs=energy_configs, sim_type=None)
+        simulators = [make_simulator(id, oxdna_bin=builder.binary_path) for id in sim_ids]
+    else:
+        simulators = [make_simulator(id, oxdna_src="../oxDNA/") for id in sim_ids]
     # ==========================================================================
 
 
@@ -278,7 +278,10 @@ def main():
 
     # Run optimization =========================================================
     for i in tqdm(range(optimization_config["n_steps"]), desc="Optimizing"):
-        opt_state, opt_params, grads = opt.step(opt_params)
+        if optimization_config["oxdna_use_cached_build"]:
+            builder.build(new_params=opt_params)
+
+        opt_state, opt_params, _ = opt.step(opt_params)
 
         for objective in opt.objectives:
             log_values = ray.get(objective.logging_observables.remote())
@@ -289,5 +292,9 @@ def main():
             optimizer_state=opt_state,
             opt_params=opt_params,
         )
-        # block the oxdna builds so that the simulator that builds can do so
-        run_flag.set_bin_status.remote(False)
+
+    if optimization_config["oxdna_use_cached_build"]:
+        builder.cleanup()
+
+if __name__ == "__main__":
+    main()
