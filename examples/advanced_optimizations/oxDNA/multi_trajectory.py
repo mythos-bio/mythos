@@ -154,18 +154,9 @@ def main():
     sim_outputs_dir.mkdir(parents=True, exist_ok=True)
 
     def make_simulator(id:str, oxdna_bin: Path = None, oxdna_src: Path = None) -> jdna_simulator.BaseSimulator:
-        sim_dir = sim_outputs_dir / id
-
-        if sim_dir.exists():
-            warnings.warn(f"Directory {sim_dir} already exists. Assuming that's fine.")
-
-        sim_dir.mkdir(parents=True, exist_ok=True)
-
-        for f in template_dir.iterdir():
-            shutil.copy(f, sim_dir)
 
         simulator = oxdna.oxDNASimulator(
-            input_dir=sim_dir,
+            input_dir=template_dir,
             sim_type=jdna_types.oxDNASimulatorType.DNA1,
             energy_configs=energy_configs,
             n_build_threads=optimization_config["oxdna_build_threads"],
@@ -175,24 +166,13 @@ def main():
             ignore_params=bool(oxdna_bin),  # we handle the build using same params
         )
 
-        output_dir = sim_dir / "trajectory"
-        trajectory_loc = output_dir / "trajectory.pkl"
-        if not output_dir.exists():
-            output_dir.mkdir(parents=True, exist_ok=True)
+        trajectory_loc =  simulator.base_dir / "trajectory.pkl"
 
         def simulator_fn(
             params: jdna_types.Params,
             meta: jdna_types.MetaData,
         ) -> tuple[str, str]:
-            simulator.run(params)
-
-            ox_traj = jdna_traj.from_file(
-                sim_dir / "output.dat",
-                strand_lengths=top.strand_counts,
-            )
-            traj = jdna_sio.SimulatorTrajectory(
-                rigid_body=ox_traj.state_rigid_body,
-            )
+            traj = simulator.run(params)
 
             jdna_tree.save_pytree(traj, trajectory_loc)
             return [trajectory_loc]
@@ -213,7 +193,12 @@ def main():
     # provide the location of that binary to each simulator. Note it is the
     # users responsibility to call the build function at each step.
     if optimization_config["oxdna_use_cached_build"]:
-        builder = oxdna.oxDNASimulator(source_path="../oxDNA/", input_dir=None, energy_configs=energy_configs, sim_type=None)
+        builder = oxdna.oxDNASimulator(
+            source_path="../oxDNA/",
+            input_dir=template_dir,
+            energy_configs=energy_configs,
+            sim_type=None
+        )
         simulators = [make_simulator(id, oxdna_bin=builder.binary_path) for id in sim_ids]
     else:
         simulators = [make_simulator(id, oxdna_src="../oxDNA/") for id in sim_ids]
