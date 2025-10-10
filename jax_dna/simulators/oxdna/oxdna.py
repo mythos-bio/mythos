@@ -125,7 +125,6 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         **_,
     ) -> jd_traj.Trajectory:
         """Run an oxDNA simulation."""
-
         if opt_params is not None:
             if self.source_path:
                 self.build(new_params=opt_params)
@@ -157,12 +156,12 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         with std_out_file.open("w") as f_std, std_err_file.open("w") as f_err:
             cmd = [self.binary_path, "input"]
             logger.debug("running command: %s", cmd)
-            subprocess.check_call(cmd, stdout=f_std, stderr=f_err, cwd=self.base_dir)
+            subprocess.check_call(cmd, stdout=f_std, stderr=f_err, cwd=self.base_dir) #noqa: S603 false positive
         logger.info("oxDNA simulation complete")
 
         return self._read_trajectory()
 
-    def _read_trajectory(self):
+    def _read_trajectory(self) -> jd_sio.SimulatorTrajectory:
         trajectory_file = self.base_dir / self.input_config["trajectory_file"]
         topology_file = self.base_dir / self.input_config["topology"]
 
@@ -184,7 +183,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         cmake_bin = _guess_binary_location("cmake", CMAKE_BIN_ENV_VAR)
         make_bin = _guess_binary_location("make", MAKE_BIN_ENV_VAR)
 
-        logger.info(f"Updating oxDNA parameters (build path: {self.build_dir})")
+        logger.info("Updating oxDNA parameters (build path: %s)", str(self.build_dir))
 
         self.build_dir.mkdir(parents=True, exist_ok=True)
         logger.debug("build_dir: %s", self.build_dir)
@@ -206,7 +205,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
                 if self.input_config["backend"] == "CUDA":
                     cmd = [*cmd, "-DCUDA=ON", "-DCUDA_COMMON_ARCH=OFF"]
                 logger.debug("Attempting cmake using (std_out->%s, std_err->%s): %s", std_out, std_err, cmd)
-                subprocess.check_call(cmd, shell=False, cwd=self.build_dir, stdout=f_std, stderr=f_err)
+                subprocess.check_call(cmd, shell=False, cwd=self.build_dir, stdout=f_std, stderr=f_err)  # noqa: S603 false positive
 
             logger.debug("cmake completed")
 

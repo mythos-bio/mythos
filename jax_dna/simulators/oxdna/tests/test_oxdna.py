@@ -20,7 +20,7 @@ def test_guess_binary_location() -> None:
         oxdna._guess_binary_location("zamboomafoo", "MAKE_BIN_PATH")
 
 
-def setup_test_dir(test_dir: Path = None, add_input: bool = True):  # noqa: FBT001,FBT002
+def setup_test_dir(test_dir: Path | None = None, add_input: bool = True):  # noqa: FBT001,FBT002
     """Setup the test directory."""
     if not test_dir:
         test_dir = file_dir / f"test_data/{uuid.uuid4()}"
@@ -55,7 +55,7 @@ def test_oxdna_init():
         input_dir=test_dir,
         sim_type=typ.oxDNASimulatorType.DNA1,
         energy_configs=[],
-        source_path='src',
+        source_path="src",
     )
     tear_down_test_dir(test_dir)
     assert str(sim["input_dir"]) == str(test_dir)
@@ -69,7 +69,7 @@ def test_oxdna_run_raises_fnf():
             input_dir=test_dir,
             sim_type=typ.oxDNASimulatorType.DNA1,
             energy_configs=[],
-            source_path='src',
+            source_path="src",
         )
     tear_down_test_dir(test_dir)
 
@@ -147,7 +147,6 @@ def test_oxdna_run_raises_on_non_exclusive_bin_source_paths(bin_path, source_pat
 
 def test_oxdna_run():
     """Test the oxDNA simulator run function."""
-    # os.environ[oxdna.BIN_PATH_ENV_VAR] = "echo"
     test_dir = setup_test_dir()
     sim = oxdna.oxDNASimulator(
         input_dir=test_dir,
