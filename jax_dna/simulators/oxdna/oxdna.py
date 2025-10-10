@@ -64,7 +64,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
 
     def __post_init__(self, *args, **kwds) -> None:
         """Check the validity of the configuration."""
-        if sum([self.binary_path is None, self.source_path is None]) != 1:
+        if not (bool(self.binary_path) ^ bool(self.source_path)):
             raise ValueError("Must set one and only one of binary_path or source_path")
 
         self.input_dir = Path(self.input_dir).resolve()
