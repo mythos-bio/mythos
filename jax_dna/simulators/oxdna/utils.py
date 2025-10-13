@@ -8,7 +8,9 @@ from pathlib import Path
 import jax
 import jax.numpy as jnp
 import sympy
+import pandas as pd
 
+from jax_dna.input import oxdna_input
 import jax_dna.utils.types as jd_types
 from jax_dna.utils.types import oxDNAModelHType
 
@@ -323,3 +325,46 @@ def update_params(src_h: Path, new_params: list[jd_types.Params]) -> None:
             raise ValueError(f"Parameter {np} not found in src/model.h")
 
     write_src_h(src_h, params)
+
+
+def read_energy(simulation_dir: Path) -> pd.DataFrame:
+    """Read the energy.dat file from an oxDNA simulation.
+
+    Args:
+        simulation_dir: Path to the simulation directory containing the
+            energy.dat and other simulation files. this directory must also
+            contain the input file, which is read to determine the shape of the
+            energy file.
+
+    Returns:
+        A pandas DataFrame containing the energy data. When umbrella sampling is
+        enabled, the order parameter columns and weight column are also
+        included, where the order parameter name comes from the
+        "order_parameter" specification in the "op_file".
+    """
+    inputs = oxdna_input.read(simulation_dir / "input")
+    energy_file = simulation_dir / inputs["energy_file"]
+    energy_df_columns_base = [
+        "time", "potential_energy", "acc_ratio_trans", "acc_ratio_rot", "acc_ratio_vol"
+    ]
+
+    # This is a space separated file, no header and the first row corresponds to
+    # the 0th step, which does not match the trajectory file, so we skip it. The
+    # resulting energy file should then be the same length as the trajectory and
+    # each row corresponsds to the same step.
+    energy_df = pd.read_table(energy_file, sep=r"\s+", header=None, skiprows=1)
+    if not inputs.get("umbrella_sampling"):
+        energy_df.columns = energy_df_columns_base
+        return energy_df
+
+    # get the order parameter types from the op_file
+    with simulation_dir.joinpath(inputs["op_file"]).open("r") as f:
+        order_param_types = [
+            line.strip().split("=")[1].strip()
+            for line in f
+            if line.strip().startswith("order_parameter")
+        ]
+
+    energy_df_columns = energy_df_columns_base + order_param_types + ["weight"]
+    energy_df.columns = energy_df_columns
+    return energy_df
