@@ -5,16 +5,15 @@ import itertools
 import math
 import typing
 import warnings
-from pathlib import Path
 
 import ipywidgets as widgets
 import plotly
 import plotly.graph_objects as go
 import plotly.subplots
-import typing_extensions
+from typing_extensions import override
 
 from jax_dna.ui.loggers import logger
-from jax_dna.ui.loggers.logger import Status
+from jax_dna.ui.loggers.logger import Status, StatusKind
 
 LBL_TOP_HEADER = "Optimization Status"
 LBL_PROG_BAR = "Optimizing"
@@ -103,7 +102,7 @@ def setup_figure_layout(
         )
 
 
-class PlotlyLogger:
+class PlotlyLogger(logger.Logger):
     """A logger for use in Jupyter notebooks that uses plotly."""
 
     def __init__(
@@ -122,7 +121,6 @@ class PlotlyLogger:
             ncols (int | None): the number of columns in the plot
             width_px (int | None): the width of the figure in pixels
             height_px (int | None): the height of the figure in pixels
-            log_dir (str|Path|None): the directory to save the logs to
         """
         nrows, ncols = calc_rows_and_columns(len(observable_plots), nrows, ncols)
         self.fig = figure_widget_f(make_subplots_f(rows=nrows, cols=ncols))
@@ -136,11 +134,15 @@ class PlotlyLogger:
         self.observable_plots = observable_plots
         setup_figure_layout(self.fig, nrows, ncols, observable_plots)
 
+    @override
     def log_metric(self, name: str, value: float, step: int) -> None:
         """Log a metric to the plotly figure."""
         graph_obj = next(filter(lambda f: f.name == name, self.fig.data))
         graph_obj.x += (step,)
         graph_obj.y += (value,)
+
+    def update_status(self, name: str, status: Status) -> None:
+        """Null operation."""
 
     def change_size(
         self,
@@ -183,7 +185,6 @@ class JupyterLogger(logger.Logger):
         max_opt_steps: int,
         plots_size_px: tuple[int, int] | None = None,
         plots_nrows_ncols: tuple[int, int] | None = None,
-        log_dir: str | Path | None = None,
     ) -> "JupyterLogger":
         """Initialize the Jupyter dashboard.
 
@@ -195,10 +196,7 @@ class JupyterLogger(logger.Logger):
             max_opt_steps (int): the maximum number of optimization steps
             plots_size_px (tuple[int,int]|None): the size of the plots in pixels
             plots_nrows_ncols (tuple[int,int]|None): the number of rows and columns in the plots
-            log_dir (str|Path|None): the directory to save the logs to, passed to logger.Logger
         """
-        super().__init__(log_dir)
-
         self.prog_bar = widgets.IntProgress(
             min=0, max=max_opt_steps, description=LBL_PROG_BAR, bar_style="info", orientation="horizontal"
         )
@@ -217,6 +215,12 @@ class JupyterLogger(logger.Logger):
         ]
         self.obs_btns = [btn_f(description=obs) for obs in observables]
         self.obj_btns = [btn_f(description=obj) for obj in objectives]
+
+        self.btn_map = {
+            StatusKind.SIMULATOR: { btn.description: btn for btn in self.sim_btns },
+            StatusKind.OBJECTIVE: { btn.description: btn for btn in self.obj_btns },
+            StatusKind.OBSERVABLE: { btn.description: btn for btn in self.obs_btns },
+        }
 
         nrows, ncols = plots_nrows_ncols if plots_nrows_ncols else (None, None)
         width_px, height_px = plots_size_px if plots_size_px else (None, None)
@@ -268,71 +272,13 @@ class JupyterLogger(logger.Logger):
         self.prog_bar.value += value
         self.percent_complete.value = f"{(self.prog_bar.value / self.prog_bar.max) * 100:.2f}%"
 
-    @typing_extensions.override
+    @override
     def log_metric(self, name: str, value: float, step: int) -> None:
         self.plots.log_metric(name, value, step)
 
-    def _update_status(self, btns: list[widgets.Button], name: str, status: Status) -> None:
+    @override
+    def update_status(self, name: str, kind: StatusKind, status: Status) -> None:
         """Updates the status of a simulator, objective, or observable."""
-        next(filter(lambda btn: btn.description == name, btns)).set_state(JupyterLogger.STATUS_STYLE[status])
-
-    @typing_extensions.override
-    def update_simulator_status(self, name: str, status: Status) -> None:
-        """Updates the status of a simulator."""
-        self._update_status(self.sim_btns, name, status)
-
-    @typing_extensions.override
-    def set_simulator_started(self, name: str) -> None:
-        self.update_simulator_status(name, Status.STARTED)
-
-    @typing_extensions.override
-    def set_simulator_running(self, name: str) -> None:
-        self.update_simulator_status(name, Status.RUNNING)
-
-    @typing_extensions.override
-    def set_simulator_complete(self, name: str) -> None:
-        self.update_simulator_status(name, Status.COMPLETE)
-
-    @typing_extensions.override
-    def set_simulator_error(self, name: str) -> None:
-        self.update_simulator_status(name, Status.ERROR)
-
-    @typing_extensions.override
-    def update_objective_status(self, name: str, status: Status) -> None:
-        self._update_status(self.obj_btns, name, status)
-
-    @typing_extensions.override
-    def set_objective_started(self, name: str) -> None:
-        self.update_objective_status(name, Status.STARTED)
-
-    @typing_extensions.override
-    def set_objective_running(self, name: str) -> None:
-        self.update_objective_status(name, Status.RUNNING)
-
-    @typing_extensions.override
-    def set_objective_complete(self, name: str) -> None:
-        self.update_objective_status(name, Status.COMPLETE)
-
-    @typing_extensions.override
-    def set_objective_error(self, name: str) -> None:
-        self.update_objective_status(name, Status.ERROR)
-
-    @typing_extensions.override
-    def update_observable_status(self, name: str, status: Status) -> None:
-        self._update_status(self.obs_btns, name, status)
-
-    @typing_extensions.override
-    def set_observable_started(self, name: str) -> None:
-        self.update_observable_status(name, Status.STARTED)
-
-    @typing_extensions.override
-    def set_observable_running(self, name: str) -> None:
-        self.update_observable_status(name, Status.RUNNING)
-
-    @typing_extensions.override
-    def set_observable_complete(self, name: str) -> None:
-        self.update_observable_status(name, Status.COMPLETE)
-
-    @typing_extensions.override
-    def set_observable_error(self, name: str) -> None:
-        self.update_observable_status(name, Status.ERROR)
+        btn = self.btn_map[kind].get(name)
+        if btn:
+            btn.set_state(JupyterLogger.STATUS_STYLE[status])

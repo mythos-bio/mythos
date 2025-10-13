@@ -125,7 +125,7 @@ def test_ComposedEnergyFunction_add_energy_function(
     cef = base.ComposedEnergyFunction(energy_fns=[be], weights=init_weights)
     cef = cef.add_energy_fn(be, 1.0 if init_weights is None else init_weights[0])
 
-    assert len(cef.energy_fns) == 2  # noqa: PLR2004 ignore magic number error
+    assert len(cef.energy_fns) == 2
     if init_weights is None:
         assert cef.weights is None
     else:
@@ -157,7 +157,7 @@ def test_ComposedEnergyFunction_add_composable_energy_function(
         )
     )
 
-    assert len(cef.energy_fns) == 2  # noqa: PLR2004 ignore magic number error
+    assert len(cef.energy_fns) == 2
     if init_weights is None:
         assert cef.weights is None
     else:
@@ -191,7 +191,7 @@ def test_ComposedEnergyFunction_add(
     else:
         cef = cef + other
 
-        assert len(cef.energy_fns) == 2  # noqa: PLR2004 ignore magic number error
+        assert len(cef.energy_fns) == 2
         if init_weights is None:
             assert cef.weights is None
         else:
@@ -225,7 +225,7 @@ def test_ComposedEnergyFunction_radd(
     else:
         cef = other + cef
 
-        assert len(cef.energy_fns) == 2  # noqa: PLR2004 ignore magic number error
+        assert len(cef.energy_fns) == 2
         if init_weights is None:
             assert cef.weights is None
         else:
