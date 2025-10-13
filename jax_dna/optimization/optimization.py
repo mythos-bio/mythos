@@ -182,7 +182,7 @@ class SimpleOptimizer:
     simulator: jdna_actor.SimulatorActor
     optimizer: optax.GradientTransformation
     optimizer_state: optax.OptState | None = None
-    logger: jdna_logger.Logger = dc.field(default_factory=jdna_logger.NullLogger())
+    logger: jdna_logger.Logger = dc.field(default_factory=jdna_logger.NullLogger)
 
     def step(self, params: jdna_types.Params) -> tuple[optax.OptState, list[jdna_types.Grads], list[jdna_types.Grads]]:
         """Perform a single optimization step.
