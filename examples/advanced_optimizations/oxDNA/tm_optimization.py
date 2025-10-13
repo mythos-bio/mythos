@@ -57,6 +57,12 @@ def main(
     top = jdna_top.from_oxdna_file(input_dir / "sys.top")
     sim_config = oxdna_input.read(input_dir / "input")
     kT = get_kt_from_string(sim_config["T"])
+    with input_dir.joinpath(sim_config["conf_file"]).open("r") as f:
+        for line in f:
+            if line.startswith("b ="):
+                box_size = line.split("=")[1].strip().split()
+                box_size = jnp.array([float(i) for i in box_size])
+                break
 
     # Setup the energy functions and configs
     _, energy_config = jdna1_energy.default_configs()
@@ -93,6 +99,7 @@ def main(
         energy_fns=energy_fns,
         energy_configs=energy_configs,
         transform_fn=transform_fn,
+        displacement_fn=jax_md.space.periodic(box_size)[0]
     )
 
     # This seems like a common pattern
