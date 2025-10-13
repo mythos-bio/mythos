@@ -5,16 +5,14 @@ Run an jax_dna simulation using an oxDNA sampler.
 
 import logging
 import os
+import shutil
 import subprocess
-import time
+import tempfile
 import typing
-import warnings
-from collections.abc import Callable
 from pathlib import Path
 
 import chex
 import numpy as np
-import ray
 
 import jax_dna.energy.configuration as jd_energy
 import jax_dna.input.oxdna_input as jd_oxdna
@@ -25,11 +23,6 @@ import jax_dna.simulators.io as jd_sio
 import jax_dna.simulators.oxdna.utils as oxdna_utils
 import jax_dna.utils.types as jd_types
 
-REQUIRED_KEYS = {
-    "oxdna_bin",
-    "input_directory",
-}
-
 ERR_OXDNA_NOT_FOUND = "OXDNA binary not found at: {}"
 ERR_MISSING_REQUIRED_KEYS = "Missing required keys: {}"
 ERR_INPUT_FILE_NOT_FOUND = "Input file not found: {}"
@@ -37,25 +30,11 @@ ERR_OXDNA_FAILED = "OXDNA simulation failed"
 OXDNA_TRAJECTORY_FILE_KEY = "trajectory_file"
 OXDNA_TOPOLOGY_FILE_KEY = "topology"
 
-BIN_PATH_ENV_VAR = "OXDNA_BIN_PATH"
-ERR_BIN_PATH_NOT_SET = "OXDNA_BIN_PATH environment variable not set"
-BUILD_PATH_ENV_VAR = "OXDNA_BUILD_PATH"
-ERR_BUILD_PATH_NOT_SET = "OXDNA_BUILD_PATH environment variable not set"
 ERR_BUILD_SETUP_FAILED = "OXDNA build setup failed wiht return code: {}"
-WARN_CANT_GUESS_BIN_LOC = (
-    "Could not guess the location of the {} binary, be sure {} is set to its location for oxDNA recompilation."
-)
 ERR_ORIG_MODEL_H_NOT_FOUND = "Original model.h file not found, looked at {}"
 
 MAKE_BIN_ENV_VAR = "MAKE_BIN_PATH"
 CMAKE_BIN_ENV_VAR = "CMAKE_BIN_PATH"
-
-CMAKE_MAKE_BIN_LOC_GUESSES = [
-    "/bin/{}",
-    "/usr/bin/{}",
-    "/snap/bin/{}",
-    r"C:\Program Files (x86)\GnuWin32\bin\{}.exe",
-]
 
 logger = logging.getLogger(__name__)
 
@@ -63,64 +42,48 @@ logger = logging.getLogger(__name__)
 # We do not force the user the set this because they may not be recompiling oxDNA
 def _guess_binary_location(bin_name: str, env_var: str) -> Path | None:
     """Guess the location of a binary."""
-    guessed_path = None
-    for guess in CMAKE_MAKE_BIN_LOC_GUESSES:
-        pth = Path(guess.format(bin_name))
-        if pth.exists():
-            guessed_path = pth
-            break
-
-    if guessed_path is None:
-        warnings.warn(WARN_CANT_GUESS_BIN_LOC.format(bin_name, env_var), stacklevel=2)
-        logger.debug(WARN_CANT_GUESS_BIN_LOC.format(bin_name, env_var))
-    return os.environ.get(env_var, None) or guessed_path
-
-
-def _default_build_ready() -> bool:
-    return True
-
-
-def _default_set_build_ready(_: bool) -> None:  # noqa: FBT001
-    pass
-
-
-class oxDNABinarySemaphore:  # noqa: N801 oxDNA is a special word
-    """A semaphore for the oxDNA binary."""
-
-    def __init__(self) -> None:
-        """Initialize the semaphore, defaults to False."""
-        self._ready = False
-
-    def check(self) -> bool:
-        """Check if the semaphore is ready."""
-        return self._ready
-
-    def set(self, ready: bool) -> None:  # noqa: FBT001 -- The way this gets used is easier this way
-        """Set the value of the semaphore."""
-        self._ready = ready
-
-
-@ray.remote
-class oxDNABinarySemaphoreActor(oxDNABinarySemaphore):  # noqa: N801 oxDNA is a special word
-    """A ray actor wrapped oxDNA binary semaphore."""
+    if bin_loc := os.environ.get(env_var, shutil.which(bin_name)):
+        return bin_loc
+    raise FileNotFoundError(f"executable {bin_loc}")
 
 
 @chex.dataclass
 class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special word
     """A sampler base on running an oxDNA simulation."""
 
-    input_dir: str
+    input_dir: Path
     sim_type: jd_types.oxDNASimulatorType
     energy_configs: list[jd_energy.BaseConfiguration] | None = None
     n_build_threads: int = 4
     logger_config: dict[str, typing.Any] | None = None
-    disable_build: bool = False
-    check_build_ready: Callable[[None], bool] = _default_build_ready
-    set_build_ready: Callable[[bool], None] = _default_set_build_ready
-    build_wait_interval: int = 15
+    binary_path: Path | None = None
+    source_path: Path | None = None
+    ignore_params: bool = False
+    overwrite_input: bool = False
+
 
     def __post_init__(self, *args, **kwds) -> None:
         """Check the validity of the configuration."""
+        if not (bool(self.binary_path) ^ bool(self.source_path)):
+            raise ValueError("Must set one and only one of binary_path or source_path")
+
+        self.input_dir = Path(self.input_dir).resolve()
+        self.base_dir = self.input_dir
+        if self.source_path or not self.overwrite_input:
+            self.base_dir = Path(tempfile.mkdtemp(prefix="jaxdna-oxdna-sim-")).resolve()
+
+        self.build_dir = None
+        if self.source_path:
+            self.source_path = Path(self.source_path).resolve()
+            self.build_dir = self.base_dir / "oxdna-build"
+            self.binary_path = self.build_dir / "bin" / "oxDNA"
+        self.binary_path = Path(self.binary_path).resolve()
+
+        if not self.overwrite_input:
+            shutil.copytree(self.input_dir, self.base_dir, dirs_exist_ok=True)
+
+        self.input_file = Path(self.base_dir) / "input"
+        self.input_config = jd_oxdna.read(self.input_file)
         self._initialize_logger()
 
     def _initialize_logger(self) -> None:
@@ -140,181 +103,133 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         logger.addHandler(handler)
         self._logger = logger
 
+    def use_cached_build(self, binary_path: Path) -> None:
+        """Switch to use a precompiled binary.
+
+        This may be useful when running on a cluster with a shared file system,
+        or running on a single machine, particularly in cases where:
+            N_simulators * n_build_threads > N_cpu_cores.
+
+        Caution: the user is responsible for ensuring that the binary at
+        provided path is pre-built for the appropriate parameter set, there is
+        no check performed at simulation run-time to verify this.
+        """
+        self.source_path = None
+        self.binary_path = binary_path
+        self.ignore_params = True
+
     def run(
         self,
         opt_params: list[jd_types.Params] | None = None,
         seed: np.ndarray | None = None,
-        **kwargs,  # noqa: ARG002 we want to satisfy the interface
+        **_,
     ) -> jd_traj.Trajectory:
         """Run an oxDNA simulation."""
-        # The user may want to override the current parameters in the oxdna binary
-        # If so, we need to update the parameters in the src/model.h file
-        if not self._logger.handlers:
-            self._initialize_logger()
+        if opt_params is not None:
+            if self.source_path:
+                self.build(new_params=opt_params)
+            elif not self.ignore_params:
+                raise ValueError("params provided without source_path. Set ignore_params to override")
+        elif self.source_path and not self.binary_path.exists():
+            self.build(new_params=[])
 
-        # It's possible that there are multiple oxDNA simulators sharing the same
-        # binary per step. We need to ensure that all of the other simulators
-        # that aren't responsible for building the binary wait for the
-        # recompilation to finish before running.
-        while not self.check_build_ready() and self.disable_build:
-            self._logger.debug("Waiting for build to be ready")
-            time.sleep(self.build_wait_interval)
-
-        # if we are the building simulator, we need to update the src/model.h file
-
-        if opt_params is not None and not self.disable_build:
-            self._update_params(new_params=opt_params)
-            # after building the binary, put the original model file back.
-            self._restore_params()
-            # let the other simulators know that the binary is ready
-            self._logger.debug("Setting build ready")
-            self.set_build_ready(True)
-
-        init_dir = Path(self.input_dir)
-        input_file = init_dir / "input"
-
-        self._logger.info("oxDNA input file: %s", input_file)
-
-        if not input_file.exists():
-            raise FileNotFoundError(ERR_INPUT_FILE_NOT_FOUND.format(input_file))
+        logger.info("oxDNA input file: %s", self.input_file)
 
         # overwrite the seed
-        input_config = jd_oxdna.read(input_file)
-        input_config["seed"] = seed or np.random.default_rng().integers(0, 2**32)
-        jd_oxdna.write(input_config, input_file)
+        self.input_config["seed"] = seed or np.random.default_rng().integers(0, 2**32)
+        jd_oxdna.write(self.input_config, self.input_file)
 
-        if BIN_PATH_ENV_VAR not in os.environ:
-            raise ValueError(ERR_BIN_PATH_NOT_SET)
+        # remove existing trajectory and energy files (others?), otherwise they
+        # will be appended to
+        for output in ["trajectory_file", "energy_file"]:
+            if file := self.input_config.get(output, None):
+                self.base_dir.joinpath(file).unlink(missing_ok=True)
 
-        oxdna_config = jd_oxdna.read(init_dir / "input")
-        output_file = init_dir / oxdna_config["trajectory_file"]
-
-        std_out_file = init_dir / "oxdna.out.log"
-        std_err_file = init_dir / "oxdna.err.log"
-        self._logger.info("Starting oxDNA simulation")
-        self._logger.debug(
+        std_out_file = self.base_dir / "oxdna.out.log"
+        std_err_file = self.base_dir / "oxdna.err.log"
+        logger.info("Starting oxDNA simulation")
+        logger.debug(
             "oxDNA std_out->%s, std_err->%s",
             std_out_file,
             std_err_file,
         )
         with std_out_file.open("w") as f_std, std_err_file.open("w") as f_err:
-            subprocess.run(
-                [  # noqa: S603
-                    os.environ[BIN_PATH_ENV_VAR],
-                    "input",
-                ],
-                stdout=f_std,
-                stderr=f_err,
-                check=True,
-                cwd=init_dir,
-            )
-        self._logger.info("oxDNA simulation complete")
+            cmd = [self.binary_path, "input"]
+            logger.debug("running command: %s", cmd)
+            subprocess.check_call(cmd, stdout=f_std, stderr=f_err, cwd=self.base_dir) #noqa: S603 false positive
+        logger.info("oxDNA simulation complete")
 
-        # read the output trajectory file
-        topology = jd_top.from_oxdna_file(init_dir / oxdna_config["topology"])
-        # return the trajectory
-        trajectory = jd_traj.from_file(output_file, topology.strand_counts, is_oxdna=True)
+        return self._read_trajectory()
 
-        self._logger.debug(
-            "oxDNA trajectory com size: %s",
-            str(trajectory.state_rigid_body.center.shape),
-        )
+    def _read_trajectory(self) -> jd_sio.SimulatorTrajectory:
+        trajectory_file = self.base_dir / self.input_config["trajectory_file"]
+        topology_file = self.base_dir / self.input_config["topology"]
+
+        topology = jd_top.from_oxdna_file(topology_file)
+        trajectory = jd_traj.from_file(trajectory_file, topology.strand_counts, is_oxdna=False)
+
+        logger.debug("oxDNA trajectory com size: %s", trajectory.state_rigid_body.center.shape)
+
         return jd_sio.SimulatorTrajectory(
             rigid_body=trajectory.state_rigid_body,
         )
 
-    def _update_params(self, *, new_params: list[dict]) -> None:
+
+    def build(self, *, new_params: list[dict]) -> None:
         """Update the simulation.
 
         This function will recompile the oxDNA binary with the new parameters.
         """
-        if BUILD_PATH_ENV_VAR not in os.environ:
-            raise ValueError(ERR_BUILD_PATH_NOT_SET)
-        _cmake_bin = _guess_binary_location("cmake", CMAKE_BIN_ENV_VAR)
-        _make_bin = _guess_binary_location("make", MAKE_BIN_ENV_VAR)
+        cmake_bin = _guess_binary_location("cmake", CMAKE_BIN_ENV_VAR)
+        make_bin = _guess_binary_location("make", MAKE_BIN_ENV_VAR)
 
-        logger.debug("cmake_bin: %s", _cmake_bin)
-        logger.debug("make_bin: %s", _make_bin)
+        logger.info("Updating oxDNA parameters (build path: %s)", str(self.build_dir))
 
-        self._logger.info("Updating oxDNA parameters")
+        self.build_dir.mkdir(parents=True, exist_ok=True)
+        logger.debug("build_dir: %s", self.build_dir)
 
-        build_dir = Path(os.environ[BUILD_PATH_ENV_VAR])
-        self._logger.debug("build_dir: %s", build_dir)
-
-        std_out = build_dir / "jax_dna.cmake.std.log"
-        std_err = build_dir / "jax_dna.cmake.err.log"
-        self._logger.debug(
-            "running cmake: std_out->%s, std_err->%s",
-            std_out,
-            std_err,
-        )
-        with std_out.open("w") as f_std, std_err.open("w") as f_err:
-            if _cmake_bin is None:
-                raise FileNotFoundError(ERR_OXDNA_NOT_FOUND.format("cmake"))
-
-            completed_proc = subprocess.run(
-                [_cmake_bin, ".."],
-                shell=False,  # noqa: S603 false positive
-                cwd=build_dir,
-                stdout=f_std,
-                stderr=f_err,
-                check=True,
-            )
-        self._logger.debug("cmake completed")
-
-        if completed_proc.returncode != 0:
-            raise ValueError(ERR_BUILD_SETUP_FAILED.format(completed_proc.returncode))
+        model_h = self.build_dir / "model.h"
+        if not model_h.exists():
+            model_h.write_text(self.source_path.joinpath("src/model.h").read_text())
 
         updated_params = [(ec | np).init_params() for ec, np in zip(self.energy_configs, new_params, strict=True)]
-
-        # check for existing src/model.h file save a copy if we haven't already
-        old_model_h = build_dir.parent.joinpath("src/model.h.old")
-        model_h = build_dir.parent.joinpath("src/model.h")
-        orig_text = model_h.read_text()
-        if not old_model_h.exists():
-            # copy the original, so we can restore it later
-            old_model_h.write_text(orig_text)
-
-        # update the values in the src/model.h
-
         new_params = [up.to_dictionary(include_dependent=True, exclude_non_optimizable=True) for up in updated_params]
-
         oxdna_utils.update_params(model_h, new_params)
 
+        std_out = self.build_dir / "jax_dna.cmake.std.log"
+        std_err = self.build_dir / "jax_dna.cmake.err.log"
+
+        if not (self.build_dir / "CMakeLists.txt").exists():
+            with std_out.open("w") as f_std, std_err.open("w") as f_err:
+                cmd = [cmake_bin, self.source_path, f"-DCMAKE_CXX_FLAGS=--include {model_h}"]
+                if self.input_config["backend"] == "CUDA":
+                    cmd = [*cmd, "-DCUDA=ON", "-DCUDA_COMMON_ARCH=OFF"]
+                logger.debug("Attempting cmake using (std_out->%s, std_err->%s): %s", std_out, std_err, cmd)
+                subprocess.check_call(cmd, shell=False, cwd=self.build_dir, stdout=f_std, stderr=f_err)  # noqa: S603 false positive
+
+            logger.debug("cmake completed")
+
         # rebuild the binary
-        std_out = build_dir / "jax_dna.make.std.log"
-        std_err = build_dir / "jax_dna.make.err.log"
-        self._logger.debug(
+        std_out = self.build_dir / "jax_dna.make.std.log"
+        std_err = self.build_dir / "jax_dna.make.err.log"
+        logger.debug(
             "running make with %d processes: std_out->%s, std_err->%s",
             self.n_build_threads,
             std_out,
             std_err,
         )
         with std_out.open("w") as f_std, std_err.open("w") as f_err:
-            completed_proc = subprocess.run(
-                [_make_bin, f"-j{self.n_build_threads}"],
+            subprocess.check_call(
+                [make_bin, f"-j{self.n_build_threads}", "clean", "oxDNA"],  # clean since model.h is not tracked
                 shell=False,  # noqa: S603 false positive
-                cwd=build_dir,
-                check=True,
+                cwd=self.build_dir,
                 stdout=f_std,
                 stderr=f_err,
             )
 
-        if completed_proc.returncode != 0:
-            # restore the original src/model.h
-            model_h.write_text(orig_text)
-            raise ValueError(ERR_BUILD_SETUP_FAILED.format(completed_proc.returncode))
+        logger.info("oxDNA binary rebuilt")
 
-        self._logger.info("oxDNA binary rebuilt")
-
-    def _restore_params(self) -> None:
-        """Restore the original parameters."""
-        logger.debug("Restoring oxDNA parameters to original values")
-        build_dir = Path(os.environ[BUILD_PATH_ENV_VAR])
-        old_model_h = build_dir.parent.joinpath("src/model.h.old")
-        model_h = build_dir.parent.joinpath("src/model.h")
-        if old_model_h.exists():
-            # restore the original src/model.h
-            old_model_h.replace(model_h)
-        else:
-            raise FileNotFoundError(ERR_ORIG_MODEL_H_NOT_FOUND.format(old_model_h))
+    def cleanup_build(self) -> None:
+        """Clean up the build directory if it exists."""
+        if self.build_dir.is_dir():
+            shutil.rmtree(self.build_dir)
