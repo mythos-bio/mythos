@@ -166,16 +166,11 @@ def main():
             ignore_params=bool(oxdna_bin),  # we handle the build using same params
         )
 
-        trajectory_loc =  simulator.base_dir / "trajectory.pkl"
-
         def simulator_fn(
             params: jdna_types.Params,
             meta: jdna_types.MetaData,
         ) -> tuple[str, str]:
-            traj = simulator.run(params)
-
-            jdna_tree.save_pytree(traj, trajectory_loc)
-            return [trajectory_loc]
+            return [simulator.run(params)]
 
         return jdna_simulator.SimulatorActor.remote(
             name=id,
@@ -216,6 +211,8 @@ def main():
         traj: jax_md.rigid_body.RigidBody,
         weights: jnp.ndarray,
         energy_model: jdna_energy.base.ComposedEnergyFunction,
+        _opt_params,
+        _observables,
     ) -> tuple[float, tuple[str, typing.Any]]:
         obs = prop_twist_fn(traj)
         expected_prop_twist = jnp.dot(weights, obs)
@@ -241,9 +238,8 @@ def main():
 
 
     # Logger ===================================================================
-    logger = console_logger.ConsoleLogger(
-        log_dir="logs",
-    )
+    logger = console_logger.ConsoleLogger()
+
     # ==========================================================================
 
 

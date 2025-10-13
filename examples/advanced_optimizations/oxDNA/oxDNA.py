@@ -64,8 +64,8 @@ def main():
         energy_configs=energy_fn_configs,
         transform_fn=transform_fn,
     )
-
-    topology_fname = "data/templates/simple-helix/sys.top"
+    input_dir = Path("data/templates/simple-helix")
+    topology_fname = input_dir / "sys.top"
     top = topology.from_oxdna_file(topology_fname)
 
     def energy_fn_builder(params: jdna_types.Params) -> callable:
@@ -79,32 +79,18 @@ def main():
         )
 
     # setup the simulator
-    input_dir = "data/templates/simple-helix"
     simulator = oxdna.oxDNASimulator(
         input_dir=input_dir,
         sim_type=jdna_types.oxDNASimulatorType.DNA1,
         energy_configs=energy_fn_configs,
-        n_build_threads=4,
-        source_path="../oxDNA",
+        source_path=Path("../oxDNA").resolve(),
     )
-
-    cwd = Path.cwd()
-    output_dir = cwd / "basic_trajectory"
-    trajectory_loc = output_dir / "trajectory.pkl"
-    if not output_dir.exists():
-        output_dir.mkdir(parents=True, exist_ok=True)
 
     def simulator_fn(
         params: jdna_types.Params,
         meta: jdna_types.MetaData,
     ) -> tuple[str, str]:
-        traj = simulator.run(params)
-        p = Path("energies")
-        p.mkdir(parents=True, exist_ok=True)
-        n = len(list(p.glob("*.npy")))
-        jnp.save(f"energies-{n}.npy", energy_fn_builder(params)(traj))
-        jdna_tree.save_pytree(traj, trajectory_loc)
-        return [trajectory_loc]
+        return [simulator.run(params)]
 
     obs_trajectory = "trajectory"
 
@@ -124,6 +110,8 @@ def main():
         traj: jax_md.rigid_body.RigidBody,
         weights: jnp.ndarray,
         energy_model: jdna_energy.base.ComposedEnergyFunction,
+        _opt_params,
+        _observables,
     ) -> tuple[float, tuple[str, typing.Any]]:
         obs = prop_twist_fn(traj)
         expected_prop_twist = jnp.dot(weights, obs)
