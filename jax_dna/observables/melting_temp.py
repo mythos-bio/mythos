@@ -11,12 +11,12 @@ import jax_dna.observables.base as jd_obs
 import jax_dna.simulators.io as jd_sio
 import jax_dna.utils.types as jd_types
 from jax_dna.energy import configuration
-from jax_dna.utils.units import get_kt_from_C
+from jax_dna.utils.units import get_kt_from_c
 
 TARGETS = {
-    "SL_avg_6bp": get_kt_from_C(31.2),  # degrees
-    "SL_avg_8bp": get_kt_from_C(48.2),  # degrees
-    "SL_avg_12bp": get_kt_from_C(64.7),  # degrees
+    "SL_avg_6bp": get_kt_from_c(31.2),  # degrees
+    "SL_avg_8bp": get_kt_from_c(48.2),  # degrees
+    "SL_avg_12bp": get_kt_from_c(64.7),  # degrees
 }
 
 
@@ -74,19 +74,28 @@ def compute_curve_width(temperatures: jnp.ndarray, ratios: jnp.ndarray) -> float
 # has access to rigid_body_transform_fn
 @chex.dataclass(frozen=True)
 class MeltingTemp(jd_obs.BaseObservable):
-    """Computes the melting temperature of a duplex from trajectory data and umbrella sampling weights.
+    """Computes the melting temperature of a duplex using umbrella sampling.
 
-    The melting temperature is defined as the temperature at which the concentration
-    of DNA duplexes is double that of the concentration of single strands.
+    The melting temperature is defined as the temperature at which the
+    concentration of DNA duplexes is double that of the concentration of single
+    strands.
 
     Args:
-    - sim_temperature: float. the temperature at which the SimulatorTrajectory was collected, in sim. units
-    - temperature range: a vector containing the temperatures to extrapolate the SimulatorTrajectory data to (via histogram reweighting) in Kelvin
+        sim_temperature: float. the temperature at which the SimulatorTrajectory
+            was collected, in sim. units.
+
+        temperature_range: a vector containing the temperatures to extrapolate
+            the SimulatorTrajectory data to (via histogram reweighting), in sim.
+            units.
+
+        energy_config: Energy configurations.
+
+        energy_fn_builder: Energy function builder.
     """
 
     sim_temperature: float  # Temperature at which the simulation was conducted in sim. units
     temperature_range: jnp.ndarray = dc.field(hash=False)
-    energy_config: list[configuration.BaseConfiguration] #we need this so we know where to replace Ts during temp extrapolation
+    energy_config: list[configuration.BaseConfiguration] # needed for kt replacement in energy funcs
     energy_fn_builder: Callable[[jd_types.Params], Callable[[jnp.ndarray], jnp.ndarray]]
 
     def __call__(
@@ -122,7 +131,7 @@ class MeltingTemp(jd_obs.BaseObservable):
         energies_t0 = self.energy_fn_builder(opt_params)(trajectory)
 
         #find the unbiased ratio of bound:unbound across the temperature range
-        def finf_at_t(extrapolated_temp: float):
+        def finf_at_t(extrapolated_temp: float) -> float:
             updates = [{"kt": extrapolated_temp} if "kt" in ec else {} for ec in self.energy_config]
             merged_params = [op | up for op, up in zip(opt_params, updates, strict=True)]
 

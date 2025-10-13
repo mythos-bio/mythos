@@ -1,22 +1,22 @@
 import functools
 import importlib
+
 import jax
 import jax.numpy as jnp
 import jax_md
 import pytest
 
-from jax_dna.input.trajectory import from_file
-from jax_dna.observables.melting_temp import jax_interp1d, MeltingTemp
+import jax_dna.energy as jdna_energy
 import jax_dna.energy.dna1 as jdna1_energy
 import jax_dna.input.topology as jdna_top
-import jax_dna.energy as jdna_energy
+import jax_dna.utils.types as jdna_types
+from jax_dna.input.trajectory import from_file
+from jax_dna.observables.melting_temp import MeltingTemp, jax_interp1d
 from jax_dna.simulators.io import SimulatorTrajectory
 from jax_dna.simulators.oxdna.utils import read_energy
-import jax_dna.utils.types as jdna_types
 from jax_dna.utils.units import get_kt
 
-
-jax.config.update("jax_enable_x64", True)
+jax.config.update("jax_enable_x64", val=True)
 
 
 KT_RANGE = get_kt(jnp.linspace(280, 350, 20))
@@ -37,17 +37,17 @@ def energy_info():
     opt_params = []
     for ec in jdna1_energy.default_energy_configs():
         if isinstance(ec, jdna1_energy.StackingConfiguration):
-            ec = ec.replace( non_optimizable_required_params=(
+            new_ec = ec.replace( non_optimizable_required_params=(
                     "ss_stack_weights",
                     "kt",
                 ),
                 kt=KT)
-            opt_params.append(ec.opt_params)
-            energy_configs.append(ec)
+            opt_params.append(new_ec.opt_params)
+            energy_configs.append(new_ec)
         elif isinstance(ec, jdna1_energy.HydrogenBondingConfiguration):
-            ec = ec.replace(non_optimizable_required_params=("ss_hb_weights") )
-            opt_params.append(ec.opt_params)
-            energy_configs.append(ec)
+            new_ec = ec.replace(non_optimizable_required_params=("ss_hb_weights") )
+            opt_params.append(new_ec.opt_params)
+            energy_configs.append(new_ec)
         else:
             energy_configs.append(ec)
             opt_params.append(ec.opt_params)

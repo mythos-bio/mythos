@@ -7,11 +7,11 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
-import sympy
 import pandas as pd
+import sympy
 
-from jax_dna.input import oxdna_input
 import jax_dna.utils.types as jd_types
+from jax_dna.input import oxdna_input
 from jax_dna.utils.types import oxDNAModelHType
 
 ERR_CANNOT_PROCESS_SRC_H = "Cannot process src/model.h file. Failed parsing: {}"

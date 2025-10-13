@@ -13,7 +13,7 @@ def get_kt(t_kelvin: jd_types.ARR_OR_SCALAR) -> jd_types.ARR_OR_SCALAR:
     """Converts a temperature in Kelvin to kT in simulation units."""
     return 0.1 * t_kelvin / 300.0
 
-def get_kt_from_C(t_celsius: jd_types.ARR_OR_SCALAR) -> jd_types.ARR_OR_SCALAR:
+def get_kt_from_c(t_celsius: jd_types.ARR_OR_SCALAR) -> jd_types.ARR_OR_SCALAR:
     """Converts a temperature in Celsius to kT in simulation units."""
     return get_kt(t_celsius + 273.15)
 
@@ -22,11 +22,10 @@ def get_kt_from_string(temp_str: str) -> float:
     if temp_str.endswith("K"):
         t_kelvin = float(temp_str.replace("K", ""))
         return get_kt(t_kelvin)
-    elif temp_str.endswith("C"):
+    if temp_str.endswith("C"):
         t_celsius = float(temp_str.replace("C", ""))
-        return get_kt_from_C(t_celsius)
-    else:
-        raise ValueError(f"Invalid temperature string: {temp_str}")
+        return get_kt_from_c(t_celsius)
+    raise ValueError(f"Invalid temperature string: {temp_str}")
 
 def from_kt(kt: jd_types.ARR_OR_SCALAR) -> jd_types.ARR_OR_SCALAR:
     """Converts kT in simulation units to temperature in Kelvin."""
