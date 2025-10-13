@@ -56,7 +56,7 @@ class Optimization:
     aggregate_grad_fn: typing.Callable[[list[jdna_types.Grads]], jdna_types.Grads]
     optimizer: optax.GradientTransformation
     optimizer_state: optax.OptState | None = None
-    logger: jdna_logger.Logger = dc.field(default_factory=lambda: jdna_logger.Logger())
+    logger: jdna_logger.Logger = dc.field(default_factory=jdna_logger.NullLogger)
 
     def __post_init__(self) -> None:
         """Validate the initialization of the Optimization."""
@@ -182,7 +182,7 @@ class SimpleOptimizer:
     simulator: jdna_actor.SimulatorActor
     optimizer: optax.GradientTransformation
     optimizer_state: optax.OptState | None = None
-    logger: jdna_logger.Logger = dc.field(default_factory=lambda: jdna_logger.Logger())
+    logger: jdna_logger.Logger = dc.field(default_factory=jdna_logger.NullLogger)
 
     def step(self, params: jdna_types.Params) -> tuple[optax.OptState, list[jdna_types.Grads], list[jdna_types.Grads]]:
         """Perform a single optimization step.
