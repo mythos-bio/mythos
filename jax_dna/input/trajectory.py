@@ -209,34 +209,10 @@ def from_file(
     if not path.exists():
         raise FileNotFoundError(ERR_TRAJECTORY_FILE_NOT_FOUND.format(path))
 
-    boundaries = np.linspace(0, path.stat().st_size, n_processes + 1, dtype=np.int64)
-    n_runs = len(boundaries) - 1
-    with cf.ProcessPoolExecutor(n_processes, mp_context=mp.get_context("spawn")) as pool:
-        vals = list(
-            pool.map(
-                _read_file_process_wrapper,
-                zip(
-                    itertools.repeat(path, times=n_runs),
-                    boundaries[:-1],
-                    boundaries[1:],
-                    itertools.repeat(strand_lengths, times=n_runs),
-                    itertools.repeat(is_oxdna, times=n_runs),
-                    strict=True,
-                ),
-            ),
-        )
-
-    # this is now an list of iterables where each iterable is a concatenated
-    # list of the output of _read_file for each process
-    concatenated_vals = list(
-        map(
-            itertools.chain.from_iterable,
-            zip(*vals, strict=False),
-        )
-    )
-
-    # convert the iterables to lists and unpack list
-    ts, bs, es, states = list(map(list, concatenated_vals))
+    if n_processes == 1:
+        ts, bs, es, states = _read_file(path, 0, path.stat().st_size, strand_lengths, is_3p_5p=is_oxdna)
+    else:
+        ts, bs, es, states = _from_file_parallel(path, strand_lengths, is_oxdna, n_processes)
 
     validate_box_size(bs)
 
@@ -247,6 +223,20 @@ def from_file(
         energies=np.array(es, dtype=np.float64),
         states=[NucleotideState(array=s) for s in states],
     )
+
+
+def _from_file_parallel(path: Path, strand_lengths: list[int], is_oxdna: bool, n_processes: int):
+    boundaries = np.linspace(0, path.stat().st_size, n_processes + 1, dtype=np.int64)
+    n_runs = len(boundaries) - 1
+    with cf.ProcessPoolExecutor(n_processes, mp_context=mp.get_context("spawn")) as pool:
+        vals = pool.map(
+            _read_file_process_wrapper,
+            [(path, boundaries[i], boundaries[i + 1], strand_lengths, is_oxdna) for i in range(n_runs)],
+        )
+
+    # this is now an list of iterables where each iterable is a concatenated
+    # list of the output of _read_file for each process
+    return (list(itertools.chain.from_iterable(v)) for v in zip(*vals, strict=True))
 
 
 def _read_file_process_wrapper(
