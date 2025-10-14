@@ -43,16 +43,14 @@ def main(
         learning_rate: float = 1e-3,
         opt_steps: int = 100,
         input_dir: str = "data/templates/tm-6bp-2op",
-        target_temp: str = "31.2C",
+        target_temp: str | float = "31.2C",
         oxdna_src: str = "../oxDNA",
         use_aim: bool = False,
     ):
     input_dir = Path(input_dir)
     oxdna_src = Path(oxdna_src).resolve()
-    try:
+    if isinstance(target_temp, str):
         target_temp = get_kt_from_string(target_temp)
-    except ValueError:  # assume it is in simulation units
-        target_temp = float(target_temp)
     kt_range = get_kt(jnp.linspace(280, 350, 20))
     top = jdna_top.from_oxdna_file(input_dir / "sys.top")
     sim_config = oxdna_input.read(input_dir / "input")
