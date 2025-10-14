@@ -111,7 +111,6 @@ class MeltingTemp(jd_obs.BaseObservable):
             trajectory (jd_traj.Trajectory): the trajectory to calculate the melting temperature for
             bind_states (jnp.ndarray): an array of the sampled states of the "bond" order parameter
             umbrella_weights (jnp.ndarray): an N-dimensional array containing umbrella sampling weights
-            energy_fn_builder_fn: the function that builds a energy function at sim_temperature
             opt_params: the parameters to optimize; use the current vals in building the energy functions
 
         Returns:
@@ -122,20 +121,19 @@ class MeltingTemp(jd_obs.BaseObservable):
     def get_extrap_ratios(
         self,
         trajectory: jd_sio.SimulatorTrajectory,
-        bind_states: jnp.ndarray, #an array of tuples
+        bind_states: jnp.ndarray,
         umbrella_weights: jnp.ndarray,
         opt_params: jd_types.PyTree,
     ) -> float:
         """Calculate the bound:unbound ratios at the extrapolated temperatures."""
-        # convert all Kelvin to oxDNA sim units
         energies_t0 = self.energy_fn_builder(opt_params)(trajectory)
 
-        #find the unbiased ratio of bound:unbound across the temperature range
+        # find the unbiased ratio of bound:unbound across the temperature range
         def finf_at_t(extrapolated_temp: float) -> float:
             updates = [{"kt": extrapolated_temp} if "kt" in ec else {} for ec in self.energy_config]
             merged_params = [op | up for op, up in zip(opt_params, updates, strict=True)]
 
-            energies_tx = self.energy_fn_builder(merged_params)(trajectory) #might need to be trajectory.rigid_body
+            energies_tx = self.energy_fn_builder(merged_params)(trajectory)
 
             boltz_factor = jnp.exp((energies_t0/self.sim_temperature) - (energies_tx/extrapolated_temp))
             unbiased_counts = (1 / umbrella_weights) * boltz_factor
@@ -172,7 +170,7 @@ class MeltingTemp(jd_obs.BaseObservable):
     def get_melting_curve_width(
         self,
         trajectory: jd_sio.SimulatorTrajectory,
-        bind_states: jnp.ndarray, #an array of tuples
+        bind_states: jnp.ndarray,
         umbrella_weights: jnp.ndarray,
         opt_params: jd_types.PyTree,
     ) -> float:
