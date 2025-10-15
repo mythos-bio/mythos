@@ -24,6 +24,7 @@ from jax_dna.ui.loggers.console import ConsoleLogger
 from jax_dna.ui.loggers.logger import NullLogger
 from jax_dna.ui.loggers.multilogger import MultiLogger
 from tqdm import tqdm
+import fire
 
 jax.config.update("jax_enable_x64", True)
 
@@ -210,8 +211,8 @@ def main(
         aim_logger.aim_run.set("lp_target", target_lp)
         aim_logger.aim_run.set("lp_learning_rate", learning_rate)
         aim_logger.aim_run.set("lp_num_sims", num_sims)
-        aim_logger.aim_run.set("lp_input_dir", input_dir)
-        aim_logger.aim_run.set("lp_oxdna_path", oxdna_path)
+        aim_logger.aim_run.set("lp_input_dir", str(input_dir))
+        aim_logger.aim_run.set("lp_oxdna_path", str(oxdna_path))
     else:
         aim_logger = NullLogger()
     console_logger = ConsoleLogger()
@@ -231,4 +232,4 @@ def main(
         )
 
 if __name__=="__main__":
-    main()
+    fire.Fire(main)
