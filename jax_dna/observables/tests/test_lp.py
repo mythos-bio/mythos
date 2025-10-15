@@ -1,8 +1,6 @@
 import functools
 import importlib
-from pathlib import Path
 
-import jax
 import jax.numpy as jnp
 import jax_md
 import numpy as np
@@ -68,8 +66,7 @@ def test_persistence_length_fit_weights(lp_fun, sim_traj):
 
     # check with only the first frame weighted
     first_frame_baseline = lp_fun(sim_traj.slice(slice(0, 1)))
-    weights = jnp.zeros(sim_traj.length())
-    weights = weights.at[0].set(1.0)
+    weights = jnp.array([1] + [0]*(sim_traj.length() - 1))
     lp = lp_fun(sim_traj, weights=weights)
     assert jnp.isclose(lp, first_frame_baseline)
 
