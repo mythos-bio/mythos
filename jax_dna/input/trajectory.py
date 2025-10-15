@@ -5,6 +5,7 @@ import functools
 import itertools
 import multiprocessing as mp
 from pathlib import Path
+from typing import TypeAlias
 
 import chex
 import jax.numpy as jnp
@@ -30,6 +31,9 @@ ERR_NUCLEOTIDE_STATE_TYPE = "Invalid type for nucleotide states:"
 ERR_NUCLEOTIDE_STATE_SHAPE = "Invalid shape for nucleotide states:"
 
 ERR_FIXED_BOX_SIZE = "Only trajecories in a fixed box size are supported"
+
+
+RawTrajectory: TypeAlias = tuple[list[typ.Scalar], list[typ.Vector3D], list[typ.Vector3D], list[typ.Arr_Nucleotide_15]]
 
 
 @chex.dataclass(frozen=True)
@@ -209,34 +213,10 @@ def from_file(
     if not path.exists():
         raise FileNotFoundError(ERR_TRAJECTORY_FILE_NOT_FOUND.format(path))
 
-    boundaries = np.linspace(0, path.stat().st_size, n_processes + 1, dtype=np.int64)
-    n_runs = len(boundaries) - 1
-    with cf.ProcessPoolExecutor(n_processes, mp_context=mp.get_context("spawn")) as pool:
-        vals = list(
-            pool.map(
-                _read_file_process_wrapper,
-                zip(
-                    itertools.repeat(path, times=n_runs),
-                    boundaries[:-1],
-                    boundaries[1:],
-                    itertools.repeat(strand_lengths, times=n_runs),
-                    itertools.repeat(is_oxdna, times=n_runs),
-                    strict=True,
-                ),
-            ),
-        )
-
-    # this is now an list of iterables where each iterable is a concatenated
-    # list of the output of _read_file for each process
-    concatenated_vals = list(
-        map(
-            itertools.chain.from_iterable,
-            zip(*vals, strict=False),
-        )
-    )
-
-    # convert the iterables to lists and unpack list
-    ts, bs, es, states = list(map(list, concatenated_vals))
+    if n_processes == 1:
+        ts, bs, es, states = _read_file(path, 0, path.stat().st_size, strand_lengths, is_3p_5p=is_oxdna)
+    else:
+        ts, bs, es, states = _read_parallel(path, strand_lengths, is_oxdna=is_oxdna, n_processes=n_processes)
 
     validate_box_size(bs)
 
@@ -249,32 +229,27 @@ def from_file(
     )
 
 
-def _read_file_process_wrapper(
-    args: tuple[Path, int, int, list[int], bool],
-) -> tuple[
-    list[typ.Scalar],
-    list[typ.Vector3D],
-    list[typ.Vector3D],
-    list[typ.Arr_Nucleotide_15],
-]:
+def _read_parallel(path: Path, strand_lengths: list[int], *, is_oxdna: bool, n_processes: int) -> RawTrajectory:
+    boundaries = np.linspace(0, path.stat().st_size, n_processes + 1, dtype=np.int64)
+    n_runs = len(boundaries) - 1
+    with cf.ProcessPoolExecutor(n_processes, mp_context=mp.get_context("spawn")) as pool:
+        vals = pool.map(
+            _read_file_process_wrapper,
+            [(path, boundaries[i], boundaries[i + 1], strand_lengths, is_oxdna) for i in range(n_runs)],
+        )
+
+    # this is now an list of iterables where each iterable is a concatenated
+    # list of the output of _read_file for each process
+    return (list(itertools.chain.from_iterable(v)) for v in zip(*vals, strict=True))
+
+
+def _read_file_process_wrapper(args: tuple[Path, int, int, list[int], bool]) -> RawTrajectory:
     """Wrapper for reading a trajectory file."""
     file_path, start, end, strand_lengths, is_3p_5p = args
     return _read_file(file_path, start, end, strand_lengths, is_3p_5p=is_3p_5p)
 
 
-def _read_file(
-    file_path: Path,
-    start: int,
-    end: int,
-    strand_lengths: list[int],
-    *,
-    is_3p_5p: bool,
-) -> tuple[
-    list[typ.Scalar],
-    list[typ.Vector3D],
-    list[typ.Vector3D],
-    list[typ.Arr_Nucleotide_15],
-]:
+def _read_file(file_path: Path, start: int, end: int, strand_lengths: list[int], *, is_3p_5p: bool) -> RawTrajectory:
     """Read a trajectory file object."""
     # we don't know where we are in the file, but we can be only in one of two
     # situations: We are at the start of the state or we are in the midle of a
