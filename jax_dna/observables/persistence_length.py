@@ -43,32 +43,6 @@ def persistence_length_fit(correlations: jnp.ndarray, l0_av: float) -> tuple[flo
     return lp, offset
 
 
-# Is the below function actually basically base.local_helical_axis (but also
-# returning norm)
-def compute_l_vector(
-    base_sites: jnp.ndarray, quartet: jnp.ndarray, displacement_fn: Callable
-) -> tuple[jnp.ndarray, float]:
-    """Computes the distance between two adjacent base pairs."""
-    # Extract the two base pairs defined by a quartet
-    bp1, bp2 = quartet
-    (a1, b1), (a2, b2) = bp1, bp2  # a1 and b1, and a2 and b2 are base paired
-
-    # Compute midpoints for each base pair
-    mp1 = (base_sites[b1] + base_sites[a1]) / 2.0
-    mp2 = (base_sites[b2] + base_sites[a2]) / 2.0
-
-    # Compute vector between midpoints
-    midpoint_diff = displacement_fn(mp2, mp1) # OR is it mp2 - mp1 (ignore displacement_fn)?
-    l0 = jnp.linalg.norm(midpoint_diff)
-    midpoint_diff /= l0
-
-    # Return vector and its norm
-    return midpoint_diff, l0
-
-
-get_all_l_vectors = vmap(compute_l_vector, in_axes=(None, 0, None))
-
-
 def vector_autocorrelate(vecs: jnp.ndarray) -> jnp.ndarray:
     """Computes the average correlations in alignment decay between a list of vector.
 
@@ -100,11 +74,14 @@ def vector_autocorrelate(vecs: jnp.ndarray) -> jnp.ndarray:
     return all_correlations
 
 
+get_all_l_vectors = vmap(jd_obs.local_helical_axis_with_norm, in_axes=(0, None, None))
+
+
 def compute_metadata(
     base_sites: jnp.ndarray, quartets: jnp.ndarray, displacement_fn: Callable
 ) -> tuple[jnp.ndarray, float]:
     """Computes (i) average correlations in alignment decay and (ii) average distance between base pairs."""
-    all_l_vectors, l0_vals = get_all_l_vectors(base_sites, quartets, displacement_fn)
+    all_l_vectors, l0_vals = get_all_l_vectors(quartets, base_sites, displacement_fn)
     autocorr = vector_autocorrelate(all_l_vectors)
     return autocorr, jnp.mean(l0_vals)
 
