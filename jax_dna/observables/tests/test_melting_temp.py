@@ -30,7 +30,7 @@ EXAMPLE_FINF = jnp.array([
 KT = 0.10238333333333333 # corresponds to temp in example data
 DATA_PATH = importlib.resources.files("jax_dna") / ".." / "data" / "test-data" / "melting_temp"
 
-@pytest.fixture()
+@pytest.fixture
 def energy_info():
     energy_fns = jdna1_energy.default_energy_fns()
     energy_configs = []
@@ -80,7 +80,7 @@ def energy_info():
     return obj_energy_fn_builder, energy_configs, transform_fn, opt_params
 
 
-@pytest.fixture()
+@pytest.fixture
 def melting_temp_fn(energy_info):
     energy_fn, energy_config, transform_fn, opt_params = energy_info
     melting_temp = MeltingTemp(
@@ -93,7 +93,7 @@ def melting_temp_fn(energy_info):
     return melting_temp, opt_params
 
 
-@pytest.fixture()
+@pytest.fixture
 def traj_info():
     def read_traj():
         top = jdna_top.from_oxdna_file(DATA_PATH / "sys.top")
