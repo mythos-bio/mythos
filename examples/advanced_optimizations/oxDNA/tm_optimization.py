@@ -3,7 +3,7 @@
 Important: This assumes that the current working is the root directory of the
 repository. i.e. this file was invoked using:
 
-python tm_opt_ray.py
+python examples/advanced_optimizations/oxDNA/tm_optimization.py
 """
 import functools
 import itertools

@@ -162,7 +162,7 @@ class MeltingTemp(jd_obs.BaseObservable):
        bind_states: jnp.ndarray,
        umbrella_weights: jnp.ndarray,
        opt_params: jd_types.PyTree,
-   ) -> float:
+   ) -> tuple[jnp.ndarray, jnp.ndarray]:
        """Calculate the melting curve."""
        extrap_ratios = self.get_extrap_ratios(trajectory, bind_states, umbrella_weights, opt_params)
        return self.temperature_range, extrap_ratios
