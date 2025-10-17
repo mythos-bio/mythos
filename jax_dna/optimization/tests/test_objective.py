@@ -9,7 +9,6 @@ import jax_md
 import numpy as np
 import pytest
 
-import jax_dna.input.tree as jdna_tree
 import jax_dna.optimization.objective as o
 import jax_dna.simulators.io as jdna_sio
 import jax_dna.utils.types as jdna_types
@@ -138,8 +137,8 @@ def test_objective_is_ready(
 @pytest.mark.parametrize(
     ("required_observables", "needed_observables", "update_collection", "expected_obtained", "expected_needed"),
     [
-        (["a", "b"], ["a", "b"], [("a", ("test_a", {"test": 1.0}))], [("a", {"test": 1.0})], ["b"]),
-        (["a"], ["a"], [("a", ("test_a", {"test": 1.0}))], [("a", {"test": 1.0})], []),
+        (["a", "b"], ["a", "b"], [("a", {"test": 1.0})], [("a", {"test": 1.0})], ["b"]),
+        (["a"], ["a"], [("a", {"test": 1.0})], [("a", {"test": 1.0})], []),
     ],
 )
 def test_objective_update(
@@ -156,9 +155,8 @@ def test_objective_update(
 
     updates = []
     for update in update_collection:
-        observable, (file_name, data) = update
-        updates.append(([observable], [data_dir / file_name]))
-        jdna_tree.save_pytree(data, data_dir / file_name)
+        observable, data = update
+        updates.append(([observable], [data]))
 
     obj = o.Objective(
         name="test",
@@ -276,7 +274,7 @@ def test_compute_loss(
     expected_aux = (np.array(1.0), expected_measured_value, np.array([1, 2, 3]))
     loss_fn = mock_return_function((expected_loss, (expected_measured_value, {})))
 
-    loss, aux = o.compute_loss(opt_params, energy_fn_builder, beta, loss_fn, ref_states, ref_energies)
+    loss, aux = o.compute_loss(opt_params, energy_fn_builder, beta, loss_fn, ref_states, ref_energies, observables=[])
 
     assert loss == expected_loss
 
