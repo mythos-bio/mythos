@@ -21,8 +21,10 @@ class BaseObservable:
         """Calculate the observable."""
 
 
-def local_helical_axis(quartet: jnp.ndarray, base_sites: jnp.ndarray, displacement_fn: Callable) -> jnp.ndarray:
-    """Computes the normalized local helical axis defined by two base pairs."""
+def local_helical_axis_with_norm(
+        quartet: jnp.ndarray, base_sites: jnp.ndarray, displacement_fn: Callable
+    ) -> jnp.ndarray:
+    """Computes the norm and normalized local helical axis defined by two base pairs."""
     # Extract the two base pairs. a1 is h-bonded to b1, a2 is h-bonded to b2
     bp1, bp2 = quartet
     (a1, b1), (a2, b2) = bp1, bp2
@@ -33,7 +35,14 @@ def local_helical_axis(quartet: jnp.ndarray, base_sites: jnp.ndarray, displaceme
 
     # Compute the normalized direction between the midpoints
     dr = displacement_fn(midp_a2b2, midp_a1b1)
-    return dr / jnp.linalg.norm(dr)
+    norm = jnp.linalg.norm(dr)
+    return dr / norm, norm
+
+
+def local_helical_axis(quartet: jnp.ndarray, base_sites: jnp.ndarray, displacement_fn: Callable) -> jnp.ndarray:
+    """Computes the normalized local helical axis defined by two base pairs."""
+    dr, _ = local_helical_axis_with_norm(quartet, base_sites, displacement_fn)
+    return dr
 
 
 def get_duplex_quartets(n_nucs_per_strand: int) -> jnp.ndarray:
