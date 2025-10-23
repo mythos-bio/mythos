@@ -7,6 +7,7 @@ import jax_md
 import pytest
 
 import jax_dna.energy as jdna_energy
+from jax_dna.energy.base import ComposedEnergyFunction
 import jax_dna.energy.dna1 as jdna1_energy
 import jax_dna.input.topology as jdna_top
 import jax_dna.utils.types as jdna_types
@@ -33,25 +34,7 @@ DATA_PATH = importlib.resources.files("jax_dna") / ".." / "data" / "test-data" /
 @pytest.fixture
 def energy_info():
     energy_fns = jdna1_energy.default_energy_fns()
-    energy_configs = []
-    opt_params = []
-    for ec in jdna1_energy.default_energy_configs():
-        if isinstance(ec, jdna1_energy.StackingConfiguration):
-            new_ec = ec.replace( non_optimizable_required_params=(
-                    "ss_stack_weights",
-                    "kt",
-                ),
-                kt=KT)
-            opt_params.append(new_ec.opt_params)
-            energy_configs.append(new_ec)
-        elif isinstance(ec, jdna1_energy.HydrogenBondingConfiguration):
-            new_ec = ec.replace(non_optimizable_required_params=("ss_hb_weights") )
-            opt_params.append(new_ec.opt_params)
-            energy_configs.append(new_ec)
-        else:
-            energy_configs.append(ec)
-            opt_params.append(ec.opt_params)
-
+    energy_configs = jdna1_energy.default_energy_configs()
     geometry = jdna1_energy.default_configs()[1]["geometry"]
     transform_fn = functools.partial(
         jdna1_energy.Nucleotide.from_rigid_body,
@@ -59,38 +42,30 @@ def energy_info():
         com_to_hb=geometry["com_to_hb"],
         com_to_stacking=geometry["com_to_stacking"],
     )
-
-    energy_fn_builder_fn = jdna_energy.energy_fn_builder(
+    top = jdna_top.from_oxdna_file(DATA_PATH / "sys.top")
+    energy_fn = ComposedEnergyFunction.from_lists(
         energy_fns=energy_fns,
         energy_configs=energy_configs,
         transform_fn=transform_fn,
-        displacement_fn=jax_md.space.periodic(20.0)[0]
-    )
-    top = jdna_top.from_oxdna_file(DATA_PATH / "sys.top")
-    def obj_energy_fn_builder(params: jdna_types.Params) -> callable:
-        return jax.vmap(
-            lambda trajectory: energy_fn_builder_fn(params)(
-                transform_fn(trajectory.rigid_body),
-                seq=jnp.array(top.seq),
-                bonded_neighbors=top.bonded_neighbors,
-                unbonded_neighbors=top.unbonded_neighbors.T,
-            )
-        )
+        displacement_fn=jax_md.space.periodic(20.0)[0],
+        topology=top,
+    ).with_noopt(
+        "ss_stack_weights", "ss_hb_weights", "kt"
+    ).with_params(kt=KT)
 
-    return obj_energy_fn_builder, energy_configs, transform_fn, opt_params
+    return energy_fn, energy_configs, transform_fn
 
 
 @pytest.fixture
 def melting_temp_fn(energy_info):
-    energy_fn, energy_config, transform_fn, opt_params = energy_info
+    energy_fn, energy_config, transform_fn = energy_info
     melting_temp = MeltingTemp(
         rigid_body_transform_fn=transform_fn,
         sim_temperature=KT,
         temperature_range=KT_RANGE,
-        energy_config=energy_config,
-        energy_fn_builder=energy_fn,
+        energy_fn=energy_fn,
     )
-    return melting_temp, opt_params
+    return melting_temp, energy_fn.opt_params()
 
 
 @pytest.fixture

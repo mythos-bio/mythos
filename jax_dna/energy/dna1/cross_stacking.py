@@ -193,7 +193,7 @@ class CrossStacking(je_base.BaseEnergyFunction):
         self,
         body_i: je_base.BaseNucleotide,
         body_j: je_base.BaseNucleotide,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
+        unbonded_neighbors: typ.Arr_Unbonded_Neighbors,
     ) -> typ.Arr_Unbonded_Neighbors:
         """Computes the cross stacking energy for each unbonded pair."""
         op_i = unbonded_neighbors[0]
@@ -266,12 +266,6 @@ class CrossStacking(je_base.BaseEnergyFunction):
         return jnp.where(mask, cr_stack_dg, 0.0)  # Mask for neighbors
 
     @override
-    def __call__(
-        self,
-        body: je_base.BaseNucleotide,
-        seq: typ.Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
-        dgs = self.pairwise_energies(body, body, unbonded_neighbors)
+    def compute_energy(self, nucleotide: je_base.BaseNucleotide) -> typ.Scalar:
+        dgs = self.pairwise_energies(nucleotide, nucleotide, self.unbonded_neighbors)
         return dgs.sum()

@@ -173,18 +173,16 @@ def test_fene(base_dir: str):
     terms = get_energy_terms(base_dir, "fene")
     # compute energy terms
     energy_config = jd_energy.FeneConfiguration(**(default_params["fene"] | {"nt_type": topology.nt_type}))
-    energy_fn = jd_energy.Fene(displacement_fn=displacement_fn, params=energy_config.init_params())
+    energy_fn = jd_energy.Fene(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    )
 
     states = trajectory.state_rigid_body
 
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            topology.seq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
+    energy = energy_fn.map(states)
 
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
@@ -216,18 +214,16 @@ def test_bonded_excluded_volume(base_dir: str):
     energy_config = jd_energy.BondedExcludedVolumeConfiguration(
         **(default_params["bonded_excluded_volume"] | {"nt_type": topology.nt_type})
     )
-    energy_fn = jd_energy.BondedExcludedVolume(displacement_fn=displacement_fn, params=energy_config.init_params())
+    energy_fn = jd_energy.BondedExcludedVolume(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    )
 
     states = trajectory.state_rigid_body
 
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            topology.seq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
+    energy = energy_fn.map(states)
 
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
@@ -254,7 +250,7 @@ def test_stacking(base_dir: str, t_kelvin: float):
     strand_bounds = list(itertools.pairwise([0, *itertools.accumulate(strand_counts)]))
     strand_bounds = jnp.array(strand_bounds)
 
-    seq = jnp.concat([topology.seq[:8][::-1], topology.seq[8:][::-1]])
+    # seq variable removed; not used
     nt_type = jnp.concat([topology.nt_type[:8][::-1], topology.nt_type[8:][::-1]])
 
     terms = get_energy_terms(base_dir, "stacking")
@@ -262,18 +258,16 @@ def test_stacking(base_dir: str, t_kelvin: float):
     energy_config = jd_energy.StackingConfiguration(
         **(default_params["stacking"] | {"kt": t_kelvin * 0.1 / 300.0, "nt_type": nt_type})
     )
-    energy_fn = jd_energy.Stacking(displacement_fn=displacement_fn, params=(energy_config).init_params())
+    energy_fn = jd_energy.Stacking(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    )
 
     states = trajectory.state_rigid_body
 
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            seq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
+    energy = energy_fn.map(states)
 
     energy = np.around(energy / topology.n_nucleotides, 6)
 
@@ -307,19 +301,14 @@ def test_unbonded_excluded_volume(base_dir: str):
     energy_config = jd_energy.UnbondedExcludedVolumeConfiguration(
         **(default_params["unbonded_excluded_volume"] | {"nt_type": topology.nt_type})
     )
-    energy_fn = jd_energy.UnbondedExcludedVolume(displacement_fn=displacement_fn, params=energy_config.init_params())
-
+    energy_fn = jd_energy.UnbondedExcludedVolume(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    )
     states = trajectory.state_rigid_body
-
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            topology.seq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
-
+    energy = energy_fn.map(states)
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
@@ -351,19 +340,14 @@ def test_cross_stacking(base_dir: str):
     energy_config = jd_energy.CrossStackingConfiguration(
         **(default_params["cross_stacking"] | {"nt_type": topology.nt_type})
     )
-    energy_fn = jd_energy.CrossStacking(displacement_fn=displacement_fn, params=energy_config.init_params())
-
+    energy_fn = jd_energy.CrossStacking(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    )
     states = trajectory.state_rigid_body
-
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            topology.seq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
-
+    energy = energy_fn.map(states)
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-4)  # using a higher tolerance here
 
@@ -395,19 +379,14 @@ def test_hydrogen_bonding(base_dir: str):
     energy_config = jd_energy.HydrogenBondingConfiguration(
         **(default_params["hydrogen_bonding"] | {"nt_type": topology.nt_type})
     )
-    energy_fn = jd_energy.HydrogenBonding(displacement_fn=displacement_fn, params=energy_config.init_params())
-
+    energy_fn = jd_energy.HydrogenBonding(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    )
     states = trajectory.state_rigid_body
-
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            topology.seq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
-
+    energy = energy_fn.map(states)
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-4)  # using a higher tolerance here
 
@@ -440,19 +419,14 @@ def test_coaxial_stacking(base_dir: str):
     energy_config = jd_energy.CoaxialStackingConfiguration(
         **(default_params["coaxial_stacking"] | {"nt_type": topology.nt_type})
     )
-    energy_fn = jd_energy.CoaxialStacking(displacement_fn=displacement_fn, params=energy_config.init_params())
-
+    energy_fn = jd_energy.CoaxialStacking(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    )
     states = trajectory.state_rigid_body
-
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            topology.seq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
-
+    energy = energy_fn.map(states)
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
@@ -499,19 +473,14 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
             }
         )
     )
-    energy_fn = jd_energy.Debye(displacement_fn=displacement_fn, params=energy_config.init_params())
-
+    energy_fn = jd_energy.Debye(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    )
     states = trajectory.state_rigid_body
-
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            topology.seq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
-
+    energy = energy_fn.map(states)
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-5)
 

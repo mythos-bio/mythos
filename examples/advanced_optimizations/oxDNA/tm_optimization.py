@@ -5,7 +5,6 @@ repository. i.e. this file was invoked using:
 
 python examples/advanced_optimizations/oxDNA/tm_optimization.py
 """
-import functools
 import itertools
 import logging
 import typing
@@ -62,55 +61,14 @@ def main(
                 box_size = jnp.array([float(i) for i in box_size])
                 break
 
-    # Setup the energy functions and configs
-    _, energy_config = jdna1_energy.default_configs()
-    energy_fns = jdna1_energy.default_energy_fns()
-    energy_configs = []
-    opt_params = []
-
-    for ec in jdna1_energy.default_energy_configs():
-        if isinstance(ec, jdna1_energy.StackingConfiguration):
-            ec = ec.replace( non_optimizable_required_params=(
-                    "ss_stack_weights",
-                    "kt",
-                ),
-                kt=kT)
-            opt_params.append(ec.opt_params)
-            energy_configs.append(ec)
-        elif isinstance(ec, jdna1_energy.HydrogenBondingConfiguration):
-            ec = ec.replace(non_optimizable_required_params=("ss_hb_weights") )
-            opt_params.append(ec.opt_params)
-            energy_configs.append(ec)
-        else:
-            energy_configs.append(ec)
-            opt_params.append(ec.opt_params)
-
-    geometry = energy_config["geometry"]
-    transform_fn = functools.partial(
-        jdna1_energy.Nucleotide.from_rigid_body,
-        com_to_backbone=geometry["com_to_backbone"],
-        com_to_hb=geometry["com_to_hb"],
-        com_to_stacking=geometry["com_to_stacking"],
-    )
-
-    energy_fn_builder_fn = jdna_energy.energy_fn_builder(
-        energy_fns=energy_fns,
-        energy_configs=energy_configs,
-        transform_fn=transform_fn,
-        displacement_fn=jax_md.space.periodic(box_size)[0]
-    )
-
-    # This seems like a common pattern
     top = jdna_top.from_oxdna_file(input_dir / "sys.top")
-    def obj_energy_fn_builder(params: jdna_types.Params) -> callable:
-        return jax.vmap(
-            lambda trajectory: energy_fn_builder_fn(params)(
-                trajectory.rigid_body,
-                seq=jnp.array(top.seq),
-                bonded_neighbors=top.bonded_neighbors,
-                unbonded_neighbors=top.unbonded_neighbors.T,
-            )
-        )
+    energy_fn = jdna1_energy.create_default_energy_fn(
+        topology=top,
+        displacement_fn=jax_md.space.periodic(box_size)[0],
+    ).with_noopt("ss_stack_weights", "ss_hb_weights", "kt"
+    ).with_params(kt = kT)
+
+    opt_params = energy_fn.opt_params()
 
     # This is a convenience wrapper just to use for filtering the observables
     # for the type we desire. Observables looks generic, while some objective
@@ -161,7 +119,7 @@ def main(
         def run(self, params, meta_data=None):
             # Run all the simulators in parallel and wait for all to be finished
             # before gathering results here
-            futures = [sim.run.remote(params, meta_data) for sim in self.simulators]
+            futures = [sim.run.options(max_task_retries=3, retry_exceptions=True).remote(params, meta_data) for sim in self.simulators]
             results = ray.get(futures)
             # Flatten the list, [traj, energy, traj, energy, ...]
             observables = list(itertools.chain.from_iterable(results))
@@ -191,7 +149,7 @@ def main(
         RaySimulator.options(num_cpus=1).remote(
             input_dir=input_dir,
             sim_type=jdna_types.oxDNASimulatorType.DNA1,
-            energy_configs=energy_configs,
+            energy_fn=energy_fn,
             source_path=oxdna_src,
         )
         for _ in range(num_sims)
@@ -199,11 +157,10 @@ def main(
 
     # Setup the melting temp function, loss and objective
     melting_temp_fn = MeltingTemp(
-        rigid_body_transform_fn=transform_fn,
+        rigid_body_transform_fn=1, # not used
         sim_temperature=kT,  # in sim units
         temperature_range=kt_range,  # in sim units
-        energy_config=energy_configs,
-        energy_fn_builder=obj_energy_fn_builder,
+        energy_fn=energy_fn
     )
 
     def melting_temp_loss_fn(
@@ -232,7 +189,7 @@ def main(
         needed_observables=multi_simulator.exposes(), # do we need to supply both?
         logging_observables=["loss", "melting_temp", "neff"],
         grad_or_loss_fn=melting_temp_loss_fn,
-        energy_fn_builder=obj_energy_fn_builder,
+        energy_fn=energy_fn,
         opt_params=opt_params,
         min_n_eff_factor=0.95,
         beta=jnp.array(1 / kT, dtype=jnp.float64),

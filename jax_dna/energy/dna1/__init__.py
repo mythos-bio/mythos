@@ -1,12 +1,14 @@
 """oxDNA1 energy implementation in jax_dna."""
 
+import functools
 from pathlib import Path
 from types import MappingProxyType
 
 import jax
 import jax.numpy as jnp
 
-from jax_dna.energy.base import BaseEnergyFunction
+from jax_dna.energy import DEFAULT_DISPLACEMENT
+from jax_dna.energy.base import BaseEnergyFunction, ComposedEnergyFunction, EnergyFunction
 from jax_dna.energy.configuration import BaseConfiguration
 from jax_dna.energy.dna1.bonded_excluded_volume import BondedExcludedVolume, BondedExcludedVolumeConfiguration
 from jax_dna.energy.dna1.coaxial_stacking import CoaxialStacking, CoaxialStackingConfiguration
@@ -19,6 +21,7 @@ from jax_dna.energy.dna1.nucleotide import Nucleotide
 from jax_dna.energy.dna1.stacking import Stacking, StackingConfiguration
 from jax_dna.energy.dna1.unbonded_excluded_volume import UnbondedExcludedVolume, UnbondedExcludedVolumeConfiguration
 from jax_dna.input import toml
+from jax_dna.input.topology import Topology
 from jax_dna.utils.types import PyTree
 
 
@@ -85,6 +88,42 @@ def default_energy_fns() -> list[BaseEnergyFunction]:
         CrossStacking,
         CoaxialStacking,
     ]
+
+
+def default_transform_fn() -> callable:
+    """Return the default transform function for dna1 simulations."""
+    _, default_config = default_configs()
+    geometry = default_config["geometry"]
+    return functools.partial(
+        Nucleotide.from_rigid_body,
+        com_to_backbone=geometry["com_to_backbone"],
+        com_to_hb=geometry["com_to_hb"],
+        com_to_stacking=geometry["com_to_stacking"],
+    )
+
+
+def create_default_energy_fn(
+        topology: Topology,
+        displacement_fn: callable = DEFAULT_DISPLACEMENT
+    ) -> EnergyFunction:
+    """Create the default oxDNA1 energy function.
+
+    This creates the composed energy function from the default set of function
+    classes, associated configs, and the default transform function -  built for
+    the provided topology and displacement function.
+
+    Args:
+        topology: The topology of the system.
+        displacement_fn: The displacement function to use. defaults to
+            DEFAULT_DISPLACEMENT.
+    """
+    return ComposedEnergyFunction.from_lists(
+        energy_fns=default_energy_fns(),
+        energy_configs=default_energy_configs(),
+        transform_fn=default_transform_fn(),
+        displacement_fn=displacement_fn,
+        topology=topology,
+    )
 
 
 __all__ = [

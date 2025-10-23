@@ -14,6 +14,7 @@ from pathlib import Path
 import chex
 import numpy as np
 
+from jax_dna.energy.base import EnergyFunction
 import jax_dna.energy.configuration as jd_energy
 import jax_dna.input.oxdna_input as jd_oxdna
 import jax_dna.input.topology as jd_top
@@ -53,7 +54,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
 
     input_dir: Path
     sim_type: jd_types.oxDNASimulatorType
-    energy_configs: list[jd_energy.BaseConfiguration] | None = None
+    energy_fn: EnergyFunction
     n_build_threads: int = 4
     logger_config: dict[str, typing.Any] | None = None
     binary_path: Path | None = None
@@ -192,9 +193,8 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         if not model_h.exists():
             model_h.write_text(self.source_path.joinpath("src/model.h").read_text())
 
-        updated_params = [(ec | np).init_params() for ec, np in zip(self.energy_configs, new_params, strict=True)]
-        new_params = [up.to_dictionary(include_dependent=True, exclude_non_optimizable=True) for up in updated_params]
-        oxdna_utils.update_params(model_h, new_params)
+        updated_params = self.energy_fn.with_params(new_params).params_dict(exclude_non_optimizable=True)
+        oxdna_utils.update_params(model_h, updated_params)
 
         std_out = self.build_dir / "jax_dna.cmake.std.log"
         std_err = self.build_dir / "jax_dna.cmake.err.log"

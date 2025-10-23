@@ -10,7 +10,6 @@ import jax.numpy as jnp
 import jax_dna.observables.base as jd_obs
 import jax_dna.simulators.io as jd_sio
 import jax_dna.utils.types as jd_types
-from jax_dna.energy import configuration
 from jax_dna.utils.units import get_kt_from_c
 
 TARGETS = {
@@ -71,7 +70,6 @@ def compute_curve_width(temperatures: jnp.ndarray, ratios: jnp.ndarray) -> float
     """
     return jax_interp1d(ratios, temperatures, 0.8) - jax_interp1d(ratios, temperatures, 0.2)
 
-# has access to rigid_body_transform_fn
 @chex.dataclass(frozen=True)
 class MeltingTemp(jd_obs.BaseObservable):
     """Computes the melting temperature of a duplex using umbrella sampling.
@@ -95,8 +93,7 @@ class MeltingTemp(jd_obs.BaseObservable):
 
     sim_temperature: float  # Temperature at which the simulation was conducted in sim. units
     temperature_range: jnp.ndarray = dc.field(hash=False)
-    energy_config: list[configuration.BaseConfiguration] # needed for kt replacement in energy funcs
-    energy_fn_builder: Callable[[jd_types.Params], Callable[[jnp.ndarray], jnp.ndarray]]
+    energy_fn: Callable
 
     def __call__(
         self,
@@ -126,14 +123,11 @@ class MeltingTemp(jd_obs.BaseObservable):
         opt_params: jd_types.PyTree,
     ) -> float:
         """Calculate the bound:unbound ratios at the extrapolated temperatures."""
-        energies_t0 = self.energy_fn_builder(opt_params)(trajectory)
+        energies_t0 = self.energy_fn.with_params(opt_params).map(trajectory.rigid_body)
 
         # find the unbiased ratio of bound:unbound across the temperature range
         def finf_at_t(extrapolated_temp: float) -> float:
-            updates = [{"kt": extrapolated_temp} if "kt" in ec else {} for ec in self.energy_config]
-            merged_params = [op | up for op, up in zip(opt_params, updates, strict=True)]
-
-            energies_tx = self.energy_fn_builder(merged_params)(trajectory)
+            energies_tx = self.energy_fn.with_params(opt_params, kt=extrapolated_temp).map(trajectory.rigid_body)
 
             boltz_factor = jnp.exp((energies_t0/self.sim_temperature) - (energies_tx/extrapolated_temp))
             unbiased_counts = (1 / umbrella_weights) * boltz_factor

@@ -15,6 +15,7 @@ import ray
 import typing_extensions
 
 import jax_dna.energy as jdna_energy
+from jax_dna.energy.base import EnergyFunction
 import jax_dna.utils.types as jdna_types
 from jax_dna.simulators.io import SimulatorTrajectory
 
@@ -177,7 +178,7 @@ def compute_weights_and_neff(
 
 def compute_loss(
     opt_params: jdna_types.Params,
-    energy_fn_builder: callable,
+    energy_fn: Callable,
     beta: float,
     loss_fn: Callable[
         [jax_md.rigid_body.RigidBody, jdna_types.Arr_N, EnergyFn], tuple[jnp.ndarray, tuple[str, typing.Any]]
@@ -201,8 +202,8 @@ def compute_loss(
         The grads, the loss, a tuple containing the normalized effective sample
         size and the measured value of the trajectory, and the new energies.
     """
-    energy_fn = energy_fn_builder(opt_params)
-    new_energies = energy_fn_builder(opt_params)(ref_states)
+    energy_fn = energy_fn.with_params(opt_params)
+    new_energies = energy_fn.map(ref_states.rigid_body)
     weights, neff = compute_weights_and_neff(
         beta,
         new_energies,
@@ -225,7 +226,7 @@ class DiffTReObjective(Objective):
         needed_observables: list[str],
         logging_observables: list[str],
         grad_or_loss_fn: typing.Callable[[tuple[jdna_types.SimulatorActorOutput]], jdna_types.Grads],
-        energy_fn_builder: Callable[[jdna_types.Params], Callable[[jnp.ndarray], jnp.ndarray]],
+        energy_fn: EnergyFunction,
         opt_params: jdna_types.Params,
         beta: float,
         n_equilibration_steps: int,
@@ -257,8 +258,8 @@ class DiffTReObjective(Objective):
             grad_or_loss_fn,
             logger_config=logging_config,
         )
-        if energy_fn_builder is None:
-            raise ValueError(ERR_MISSING_ARG.format(missing_arg="energy_fn_builder"))
+        if energy_fn is None:
+            raise ValueError(ERR_MISSING_ARG.format(missing_arg="energy_fn"))
         if opt_params is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="opt_params"))
         if beta is None:
@@ -266,7 +267,7 @@ class DiffTReObjective(Objective):
         if n_equilibration_steps is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="n_equilibration_steps"))
 
-        self._energy_fn_builder = energy_fn_builder
+        self._energy_fn = energy_fn
         self._opt_params = opt_params
         self._beta = beta
         self._n_eq_steps = n_equilibration_steps
@@ -291,7 +292,7 @@ class DiffTReObjective(Objective):
 
         (loss, (_, measured_value, new_energies)), grads = compute_loss_and_grad(
             self._opt_params,
-            self._energy_fn_builder,
+            self._energy_fn,
             self._beta,
             self._grad_or_loss_fn,
             self._reference_states,
@@ -329,13 +330,13 @@ class DiffTReObjective(Objective):
                     [obs.slice(slc_f(len(obs.rigid_body.center))) for obs in trajectories],
                 )
 
-                self._reference_energies = self._energy_fn_builder(self._opt_params)(self._reference_states)
+                self._reference_energies = self._energy_fn.with_params(self._opt_params).map(self._reference_states.rigid_body)
 
             self._logger.info("trajectory length is %d", len(self._reference_states.rigid_body.center))
 
             _, neff = compute_weights_and_neff(
                 beta=self._beta,
-                new_energies=self._energy_fn_builder(self._opt_params)(self._reference_states),
+                new_energies=self._energy_fn.with_params(self._opt_params).map(self._reference_states.rigid_body),
                 ref_energies=self._reference_energies,
             )
 

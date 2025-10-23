@@ -96,30 +96,20 @@ class BondedExcludedVolume(je_base.BaseEnergyFunction):
     params: BondedExcludedVolumeConfiguration
 
     @override
-    def __call__(
-        self,
-        body: na1_nucleotide.HybridNucleotide,
-        seq: typ.Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
-        nn_i = bonded_neighbors[:, 0]
-        nn_j = bonded_neighbors[:, 1]
+    def compute_energy(self, nucleotide: na1_nucleotide.HybridNucleotide) -> typ.Scalar:
+        nn_i = self.bonded_neighbors[:, 0]
+        nn_j = self.bonded_neighbors[:, 1]
 
         is_rna_bond = jax.vmap(je_utils.is_rna_pair, (0, 0, None))(nn_i, nn_j, self.params.nt_type)
 
-        dna_dgs = dna1_energy.BondedExcludedVolume(
-            displacement_fn=self.displacement_fn, params=self.params.dna_config
-        ).pairwise_energies(
-            body.dna,
-            bonded_neighbors,
+        dna_dgs = dna1_energy.BondedExcludedVolume.create_from(self, params=self.params.dna_config).pairwise_energies(
+            nucleotide.dna,
+            self.bonded_neighbors,
         )
 
-        rna_dgs = dna1_energy.BondedExcludedVolume(
-            displacement_fn=self.displacement_fn, params=self.params.rna_config
-        ).pairwise_energies(
-            body.rna,
-            bonded_neighbors,
+        rna_dgs = dna1_energy.BondedExcludedVolume.create_from(self, params=self.params.rna_config).pairwise_energies(
+            nucleotide.rna,
+            self.bonded_neighbors,
         )
 
         dgs = jnp.where(is_rna_bond, rna_dgs, dna_dgs)

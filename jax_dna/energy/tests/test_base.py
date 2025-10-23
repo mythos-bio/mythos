@@ -3,14 +3,16 @@
 
 import re
 from collections.abc import Callable
+from unittest.mock import MagicMock
 
+import chex
 import jax.numpy as jnp
 import jax_md
 import numpy as np
 import pytest
 
-import jax_dna.utils.types as typ
 from jax_dna.energy import base
+from jax_dna.energy.configuration import BaseConfiguration
 
 NOT_IMPLEMENTED_ERR = re.compile("unsupported operand type\(s\) for")  # noqa: W605 - Ignore the regex warning
 
@@ -19,8 +21,14 @@ def _make_base_energy_function(
     with_displacement: bool = False,
 ) -> base.BaseEnergyFunction | tuple[base.BaseEnergyFunction, jax_md.space.DisplacementFn]:
     """Helper function to create a BaseEnergyFunction."""
+    @chex.dataclass(frozen=True)
+    class MockBaseEF(base.BaseEnergyFunction):
+        params: None = None
+        def compute_energy(self, nucleotide):
+            return None
     displacement_fn, _ = jax_md.space.free()
-    be = base.BaseEnergyFunction(displacement_fn=displacement_fn)
+    top = MagicMock()
+    be = MockBaseEF(displacement_fn=displacement_fn, transform_fn=None, topology=top)
     vals = be
     if with_displacement:
         vals = (be, displacement_fn)
@@ -73,15 +81,6 @@ def test_BaseEnergyFunction_mul_raises() -> None:
     with pytest.raises(TypeError, match=NOT_IMPLEMENTED_ERR):
         be * be
 
-
-def test_BaseEnergyFunction_call_raises() -> None:
-    """Test the __call__ function for BaseEnergyFunction with invalid args."""
-    be = _make_base_energy_function()
-    expected_err = re.escape(base.ERR_CALL_NOT_IMPLEMENTED)
-    with pytest.raises(NotImplementedError, match=expected_err):
-        be(None, None, None, None)
-
-
 def test_ComposedEnergyFunction_init() -> None:
     """Test the initialization params of ComposedEnergyFunction"""
     be = _make_base_energy_function()
@@ -89,8 +88,6 @@ def test_ComposedEnergyFunction_init() -> None:
 
     assert cef.energy_fns == [be]
     assert cef.weights is None
-    assert cef.rigid_body_transform_fn is None
-
 
 def test_ComposedEnergyFunction_init_raises() -> None:
     """Test the invalid initialization params of ComposedEnergyFunction"""
@@ -232,15 +229,11 @@ def test_ComposedEnergyFunction_radd(
             np.testing.assert_allclose(cef.weights, expected_weights)
 
 
+@chex.dataclass(frozen=True)
 class MockEnergyFunction(base.BaseEnergyFunction):
-    def __call__(
-        self,
-        body: jax_md.rigid_body.RigidBody,
-        seq: typ.Sequence,  # noqa: ARG002
-        bonded_neighbors: jnp.ndarray,  # noqa: ARG002
-        unbonded_neighbors: jnp.ndarray,  # noqa: ARG002
-    ) -> float:
-        return body.center.sum()
+    params: dict = None
+    def compute_energy(self, nucleotide) -> float:
+        return nucleotide.center.sum()
 
 
 @pytest.mark.parametrize(
@@ -257,15 +250,134 @@ def test_ComposedEnergyFunction_call(
     """Test the __call__ function for ComposedEnergyFunction."""
 
     displacement_fn, _ = jax_md.space.free()
-    be = MockEnergyFunction(displacement_fn=displacement_fn)
-    cef = base.ComposedEnergyFunction(energy_fns=[be], rigid_body_transform_fn=rigid_body_transform_fn)
+    be = MockEnergyFunction(displacement_fn=displacement_fn, transform_fn=rigid_body_transform_fn, topology=MagicMock())
+    cef = base.ComposedEnergyFunction(energy_fns=[be])
 
     body = jax_md.rigid_body.RigidBody(
         center=jnp.array([[1.0, 1.0], [1.0, 1.0]]),
         orientation=jnp.array([[1.0, 1.0], [1.0, 1.0]]),
     )
 
-    assert cef(body, None, None, None) == expected
+    assert cef(body) == expected
+
+@pytest.fixture
+def list_of_energy_functions() -> list[base.BaseEnergyFunction]:
+    """Fixture to create a list of BaseEnergyFunction instances."""
+    @chex.dataclass(frozen=True)
+    class MockParams1(BaseConfiguration):
+        param1: float = 1.0
+        param_shared: float = 3.0
+        params_to_optimize: tuple[str] = ("*",)
+        required_params: tuple[str] = ("param1", "param_shared")
+
+    @chex.dataclass(frozen=True)
+    class MockParams2(BaseConfiguration):
+        param2: float = 2.0
+        param_shared: float = 3.0
+        params_to_optimize: tuple[str] = ("*",)
+        required_params: tuple[str] = ("param2", "param_shared")
+
+    @chex.dataclass(frozen=True)
+    class MockEnergyFunction1(base.BaseEnergyFunction):
+        params: MockParams1
+        def compute_energy(self, nucleotide) -> float:
+            return nucleotide.center.sum()
+
+    @chex.dataclass(frozen=True)
+    class MockEnergyFunction2(base.BaseEnergyFunction):
+        params: MockParams2
+        def compute_energy(self, nucleotide) -> float:
+            return nucleotide.center.sum()
+
+    return [
+        MockEnergyFunction1(
+            displacement_fn=MagicMock(),
+            transform_fn=None,
+            topology=MagicMock(),
+            params=MockParams1(),
+        ),
+        MockEnergyFunction2(
+            displacement_fn=MagicMock(),
+            transform_fn=None,
+            topology=MagicMock(),
+            params=MockParams2(),
+        ),
+    ]
+
+
+def test_composed_energy_function_params_interactions(list_of_energy_functions):
+    cef = base.ComposedEnergyFunction(energy_fns=list_of_energy_functions)
+    assert cef.params_dict() == { "param1": 1.0, "param2": 2.0, "param_shared": 3.0 }
+    assert cef.opt_params() == { "param1": 1.0, "param2": 2.0, "param_shared": 3.0 }
+    assert cef.with_noopt("param1").opt_params() == { "param2": 2.0, "param_shared": 3.0 }
+
+    cef_updated = cef.with_params({ "param1": 10.0, "param_shared": 100.0 })
+    assert cef_updated.params_dict() == { "param1": 10.0, "param2": 2.0, "param_shared": 100.0 }
+    assert all(fn.params.param_shared == 100.0 for fn in cef_updated.energy_fns)
+
+    with pytest.raises(ValueError):
+        cef.with_params({ "non_existent_param": 5.0 })
+
+    with pytest.raises(ValueError):
+        cef.with_params(non_existent_param=5.0)
+
+
+def test_qualified_composed_energy_function_params_interactions(list_of_energy_functions):
+    qualified_cef = base.QCompEnergyFunction(energy_fns=list_of_energy_functions)
+    assert qualified_cef.params_dict() == {
+        "MockEnergyFunction1.param1": 1.0,
+        "MockEnergyFunction2.param2": 2.0,
+        "MockEnergyFunction1.param_shared": 3.0,
+        "MockEnergyFunction2.param_shared": 3.0,
+    }
+    assert qualified_cef.opt_params() == {
+        "MockEnergyFunction1.param1": 1.0,
+        "MockEnergyFunction2.param2": 2.0,
+        "MockEnergyFunction1.param_shared": 3.0,
+        "MockEnergyFunction2.param_shared": 3.0,
+    }
+    assert qualified_cef.with_noopt("MockEnergyFunction1.param1").opt_params() == {
+        "MockEnergyFunction2.param2": 2.0,
+        "MockEnergyFunction1.param_shared": 3.0,
+        "MockEnergyFunction2.param_shared": 3.0,
+    }
+
+    cef_updated = qualified_cef.with_params({
+        "MockEnergyFunction1.param1": 10.0,
+        "MockEnergyFunction2.param_shared": 100.0,
+    })
+    assert cef_updated.params_dict() == {
+        "MockEnergyFunction1.param1": 10.0,
+        "MockEnergyFunction2.param2": 2.0,
+        "MockEnergyFunction1.param_shared": 3.0,
+        "MockEnergyFunction2.param_shared": 100.0,
+    }
+
+
+def test_composed_energy_function_prop_replacement(list_of_energy_functions):
+    cef = base.ComposedEnergyFunction(energy_fns=list_of_energy_functions)
+    with_props = cef.with_props(unbonded_neighbors = "TEST")
+    assert all(fn.unbonded_neighbors == "TEST" for fn in with_props.energy_fns)
+
+    with pytest.raises(ValueError, match="got unexpected kwargs"):
+        cef.with_props(non_existent_prop = "TEST")
+
+
+def test_energy_function_info_initialized_from_topology():
+    @chex.dataclass(frozen=True)
+    class Top:
+        bonded_neighbors: jnp.ndarray
+        unbonded_neighbors: jnp.ndarray
+        seq: str
+
+    top = Top(bonded_neighbors=jnp.array([1,2,3]), unbonded_neighbors=jnp.array([[4,5,6]]).T, seq="SEQ")
+    ef = MockEnergyFunction(params=None, displacement_fn=MagicMock(), transform_fn=None, topology=top)
+    assert jnp.all(ef.bonded_neighbors == top.bonded_neighbors)
+    assert jnp.all(ef.unbonded_neighbors == top.unbonded_neighbors.T)
+    assert ef.seq == top.seq
+
+    with pytest.raises(ValueError):
+        MockEnergyFunction(params=None, displacement_fn=MagicMock(), transform_fn=None)
 
 
 if __name__ == "__main__":
