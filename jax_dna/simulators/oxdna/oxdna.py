@@ -14,8 +14,6 @@ from pathlib import Path
 import chex
 import numpy as np
 
-from jax_dna.energy.base import EnergyFunction
-import jax_dna.energy.configuration as jd_energy
 import jax_dna.input.oxdna_input as jd_oxdna
 import jax_dna.input.topology as jd_top
 import jax_dna.input.trajectory as jd_traj
@@ -23,6 +21,7 @@ import jax_dna.simulators.base as jd_base
 import jax_dna.simulators.io as jd_sio
 import jax_dna.simulators.oxdna.utils as oxdna_utils
 import jax_dna.utils.types as jd_types
+from jax_dna.energy.base import EnergyFunction
 
 ERR_OXDNA_NOT_FOUND = "OXDNA binary not found at: {}"
 ERR_MISSING_REQUIRED_KEYS = "Missing required keys: {}"

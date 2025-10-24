@@ -15,7 +15,6 @@ import jax_dna.simulators.io as jd_sio
 import jax_dna.simulators.jax_md.utils as jaxmd_utils
 import jax_dna.utils.types as jd_types
 
-
 SIM_STATE = tuple[jaxmd_utils.SimulationState, jaxmd_utils.NeighborHelper]
 
 

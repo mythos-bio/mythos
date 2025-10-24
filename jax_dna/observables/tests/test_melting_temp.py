@@ -6,11 +6,9 @@ import jax.numpy as jnp
 import jax_md
 import pytest
 
-import jax_dna.energy as jdna_energy
-from jax_dna.energy.base import ComposedEnergyFunction
 import jax_dna.energy.dna1 as jdna1_energy
 import jax_dna.input.topology as jdna_top
-import jax_dna.utils.types as jdna_types
+from jax_dna.energy.base import ComposedEnergyFunction
 from jax_dna.input.trajectory import from_file
 from jax_dna.observables.melting_temp import MeltingTemp, jax_interp1d
 from jax_dna.simulators.io import SimulatorTrajectory

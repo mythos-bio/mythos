@@ -3,17 +3,16 @@
 import pathlib
 import typing
 from collections.abc import Callable
-from unittest.mock import MagicMock
 
 import jax.numpy as jnp
 import jax_md
 import numpy as np
 import pytest
 
-from jax_dna.energy.base import EnergyFunction
 import jax_dna.optimization.objective as o
 import jax_dna.simulators.io as jdna_sio
 import jax_dna.utils.types as jdna_types
+from jax_dna.energy.base import EnergyFunction
 
 file_location = pathlib.Path(__file__).parent
 data_dir = file_location / "data"
@@ -38,7 +37,7 @@ def make_mock_energy_fn(return_value = None) -> EnergyFunction:
                 return return_value
             return jnp.array(n)
 
-        def with_params(self, *args, **kwargs):
+        def with_params(self, *_args, **_kwargs):
             return self
 
     return MockEF()

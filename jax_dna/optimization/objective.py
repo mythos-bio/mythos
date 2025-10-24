@@ -15,8 +15,8 @@ import ray
 import typing_extensions
 
 import jax_dna.energy as jdna_energy
-from jax_dna.energy.base import EnergyFunction
 import jax_dna.utils.types as jdna_types
+from jax_dna.energy.base import EnergyFunction
 from jax_dna.simulators.io import SimulatorTrajectory
 
 ERR_DIFFTRE_MISSING_KWARGS = "Missing required kwargs: {missing_kwargs}."
@@ -178,7 +178,7 @@ def compute_weights_and_neff(
 
 def compute_loss(
     opt_params: jdna_types.Params,
-    energy_fn: Callable,
+    energy_fn: EnergyFunction,
     beta: float,
     loss_fn: Callable[
         [jax_md.rigid_body.RigidBody, jdna_types.Arr_N, EnergyFn], tuple[jnp.ndarray, tuple[str, typing.Any]]
@@ -191,7 +191,7 @@ def compute_loss(
 
     Args:
         opt_params: The optimization parameters.
-        energy_fn_builder: A function that builds the energy function.
+        energy_fn: The energy function.
         beta: The inverse temperature.
         loss_fn: The loss function.
         ref_states: The reference states of the trajectory.
@@ -242,7 +242,7 @@ class DiffTReObjective(Objective):
             needed_observables: The observables that are needed to calculate the gradients.
             logging_observables: The observables that are used for logging.
             grad_or_loss_fn: The function that calculates the loss of the objective.
-            energy_fn_builder: A function that builds the energy function.
+            energy_fn: The energy function used to compute energies.
             opt_params: The optimization parameters.
             beta: The inverse temperature.
             n_equilibration_steps: The number of equilibration steps.
@@ -330,7 +330,9 @@ class DiffTReObjective(Objective):
                     [obs.slice(slc_f(len(obs.rigid_body.center))) for obs in trajectories],
                 )
 
-                self._reference_energies = self._energy_fn.with_params(self._opt_params).map(self._reference_states.rigid_body)
+                self._reference_energies = self._energy_fn.with_params(self._opt_params).map(
+                    self._reference_states.rigid_body
+                )
 
             self._logger.info("trajectory length is %d", len(self._reference_states.rigid_body.center))
 

@@ -2,19 +2,18 @@
 
 from abc import ABC, abstractmethod
 from collections.abc import Callable
-import copy
 from dataclasses import InitVar
 from typing import Any, Union
-import jax
-from typing_extensions import override
 
 import chex
+import jax
 import jax.numpy as jnp
 import jax_md
+from typing_extensions import override
 
+import jax_dna.utils.types as typ
 from jax_dna.energy.configuration import BaseConfiguration
 from jax_dna.input.topology import Topology
-import jax_dna.utils.types as typ
 
 ERR_PARAM_NOT_FOUND = "Parameter '{key}' not found in {class_name}"
 ERR_CALL_NOT_IMPLEMENTED = "Subclasses must implement this method"
@@ -125,6 +124,12 @@ class BaseEnergyFunction(EnergyFunction):
 
     @classmethod
     def create_from(cls, other: "EnergyFunction", **kwargs) -> "EnergyFunction":
+        """Create a new energy function from another with updated properties.
+
+        Args:
+            other: the energy function to copy properties from
+            **kwargs: properties to update, overriding those from other
+        """
         props = dict(other) | kwargs
         return cls(**props)
 
@@ -213,6 +218,7 @@ class ComposedEnergyFunction(EnergyFunction):
         if self.weights is not None and len(self.weights) != len(self.energy_fns):
             raise ValueError(ERR_COMPOSED_ENERGY_FN_LEN_MISMATCH)
 
+    @override
     @classmethod
     def create_from(cls, other: "EnergyFunction", **kwargs) -> "EnergyFunction":
         props = dict(other) | kwargs

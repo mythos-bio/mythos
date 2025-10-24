@@ -16,7 +16,7 @@ def mock_energy_fn():
     class MockEF:
         def __call__(self, n):
             return n.sum()
-        def params_dict(self, **kwargs):
+        def params_dict(self, **_kwargs):
             return {}
     return MockEF()
 
@@ -174,7 +174,7 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
     """Test for oxdna build, fails for missing build dir"""
 
     model_h = Path(__file__).parent / "test_data/test.model.h"
-    excepted_model_h = Path(__file__).parent / "test_data/expected.model.h"
+    expected_model_h = Path(__file__).parent / "test_data/expected.model.h"
 
     tmp_src_dir = tmp_path / "src"
     tmp_src_dir.mkdir(parents=True, exist_ok=True)
@@ -210,7 +210,12 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
             },
     )
     assert sim.build_dir.is_dir()
-    assert (sim.build_dir / "model.h").read_text().splitlines()[-10:] != excepted_model_h.read_text().splitlines()[-10:]
+    new_lines = (sim.build_dir / "model.h").read_text().splitlines()
+    expected_lines = expected_model_h.read_text().splitlines()
+    assert new_lines[10:] == expected_lines[10:], "model.h content does not match expected"
+
+    original_lines = model_h.read_text().splitlines()
+    assert new_lines[10:] != original_lines[10:], "model.h content was not modified"
 
     with pytest.raises(ValueError, match="No valid"):
         sim.build(

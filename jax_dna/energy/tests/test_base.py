@@ -24,7 +24,7 @@ def _make_base_energy_function(
     @chex.dataclass(frozen=True)
     class MockBaseEF(base.BaseEnergyFunction):
         params: None = None
-        def compute_energy(self, nucleotide):
+        def compute_energy(self, _nucleotide):
             return None
     displacement_fn, _ = jax_md.space.free()
     top = MagicMock()
@@ -315,10 +315,10 @@ def test_composed_energy_function_params_interactions(list_of_energy_functions):
     assert cef_updated.params_dict() == { "param1": 10.0, "param2": 2.0, "param_shared": 100.0 }
     assert all(fn.params.param_shared == 100.0 for fn in cef_updated.energy_fns)
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not used in any"):
         cef.with_params({ "non_existent_param": 5.0 })
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="not used in any"):
         cef.with_params(non_existent_param=5.0)
 
 
@@ -376,7 +376,7 @@ def test_energy_function_info_initialized_from_topology():
     assert jnp.all(ef.unbonded_neighbors == top.unbonded_neighbors.T)
     assert ef.seq == top.seq
 
-    with pytest.raises(ValueError):
+    with pytest.raises(ValueError, match="topology"):
         MockEnergyFunction(params=None, displacement_fn=MagicMock(), transform_fn=None)
 
 
