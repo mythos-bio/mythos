@@ -219,12 +219,6 @@ class ComposedEnergyFunction(EnergyFunction):
             raise ValueError(ERR_COMPOSED_ENERGY_FN_LEN_MISMATCH)
 
     @override
-    @classmethod
-    def create_from(cls, other: "EnergyFunction", **kwargs) -> "EnergyFunction":
-        props = dict(other) | kwargs
-        return cls(**props)
-
-    @override
     def with_props(self, **kwargs: Any) -> "ComposedEnergyFunction":
         energy_fns = [fn.with_props(**kwargs) for fn in self.energy_fns]
         return self.replace(energy_fns=energy_fns)
