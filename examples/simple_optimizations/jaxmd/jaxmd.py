@@ -47,7 +47,7 @@ def main():
         .to_rigid_body()
     )
 
-    experiment_config, energy_config = jdna_energy.default_configs()
+    experiment_config, _ = jdna_energy.default_configs()
 
     dt = experiment_config["dt"]
     kT = experiment_config["kT"]

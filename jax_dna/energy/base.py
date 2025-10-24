@@ -206,7 +206,6 @@ class ComposedEnergyFunction(EnergyFunction):
 
     energy_fns: list[BaseEnergyFunction]
     weights: jnp.ndarray | None = None
-    transform_fn: Callable | None = None
 
     def __post_init__(self) -> None:
         """Check that the input is valid."""
@@ -256,14 +255,17 @@ class ComposedEnergyFunction(EnergyFunction):
         used_replacements = set()
         energy_fns = []
         for fn in self.energy_fns:
-            # prefer the keyword arguments over the dicts for replacements (they
-            # appear last in order)
-            fn_repls = {k: v for arg in repl_dicts for k, v in arg.items() if self._param_in_fn(k, fn)}
-            fn_repls.update({k: v for k, v in repl_kwargs.items() if self._param_in_fn(k, fn)})
-            used_replacements.update(fn_repls.keys())
+            # Flatten all the dict-type arguments. prefer the keyword arguments
+            # over the dicts for replacements (they appear last in order).
+            new_params = {k: v for arg in repl_dicts for k, v in arg.items() if self._param_in_fn(k, fn)}
+            new_params.update({k: v for k, v in repl_kwargs.items() if self._param_in_fn(k, fn)})
+            used_replacements.update(new_params.keys())
+
             # Rename replacement keys if necessary (e.g. for qualified overload)
-            fn_repls = {self._rename_param_for_fn(k, fn): v for k, v in fn_repls.items()}
-            energy_fns.append(fn.with_params(**fn_repls))
+            new_params = {self._rename_param_for_fn(k, fn): v for k, v in new_params.items()}
+
+            energy_fns.append(fn.with_params(**new_params))
+
         if unused := all_replacements - used_replacements:
             raise ValueError(f"Some parameters were not used in any energy function: {unused}.")
         return self.replace(energy_fns=energy_fns)
@@ -284,8 +286,6 @@ class ComposedEnergyFunction(EnergyFunction):
 
     @override
     def __call__(self, body: jax_md.rigid_body.RigidBody) -> float:
-        if self.transform_fn:
-            body = self.transform_fn(body)
         energy_vals = self.compute_terms(body)
         return jnp.sum(energy_vals) if self.weights is None else jnp.dot(self.weights, energy_vals)
 
@@ -383,7 +383,15 @@ class ComposedEnergyFunction(EnergyFunction):
 
 
 class QCompEnergyFunction(ComposedEnergyFunction):
-    """A ComposedEnergyFunction that qualifies parameters by their energy function."""
+    """A ComposedEnergyFunction that qualifies parameters by their function.
+
+    For example, parameter eps_backbone in Fene energy function would be
+    referred to as Fene.eps_backbone in the this energy function. This is useful
+    for isolating parameters from a specific energy function in a composed
+    energy function, however note that not all simulations will support this
+    functionality - for example oxDNA simulations write only one value per
+    parameter.
+    """
 
     @override
     def _param_in_fn(self, param: str, fn: BaseEnergyFunction) -> bool:
