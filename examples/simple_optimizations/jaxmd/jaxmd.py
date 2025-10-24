@@ -30,8 +30,8 @@ def main():
     # configs specific to this file
     run_config = {
         "n_sim_steps": 20_000,
-        "n_opt_steps": 5,
-        "learning_rate": 0.00001,
+        "n_opt_steps": 25,
+        "learning_rate": 0.001,
     }
 
     experiment_dir = Path("data/templates/simple-helix")
@@ -41,6 +41,7 @@ def main():
         jdna_traj.from_file(
             experiment_dir / "init.conf",
             topology.strand_counts,
+            is_oxdna=False,
         )
         .states[0]
         .to_rigid_body()
@@ -63,26 +64,14 @@ def main():
         orientation=jnp.array([experiment_config["moment_of_inertia"]], dtype=jnp.float64),
     )
 
-    geometry = energy_config["geometry"]
-    transform_fn = functools.partial(
-        jdna_energy.Nucleotide.from_rigid_body,
-        com_to_backbone=geometry["com_to_backbone"],
-        com_to_hb=geometry["com_to_hb"],
-        com_to_stacking=geometry["com_to_stacking"],
-    )
+    transform_fn = jdna_energy.default_transform_fn()
 
     # The jax_md simulator needs an energy function. We can use the default
     # energy functions and configurations for dna1 simulations. For more
     # information on energy functions and configurations, see the documentation.
-    energy_fns = jdna_energy.default_energy_fns()
-    energy_fn_configs = jdna_energy.default_energy_configs()
-    space = jax_md.space.free()
-    energy_fn = ComposedEnergyFunction.from_lists(
-        energy_fns=energy_fns,
-        energy_configs=energy_fn_configs,
-        transform_fn=transform_fn,
-        displacement_fn=space[0],
+    energy_fn = jdna_energy.create_default_energy_fn(
         topology=topology,
+        displacement_fn=jax_md.space.free()[0],
     ).with_noopt("ss_stack_weights")
 
     # For this example were only going to optimize the parameters that are
@@ -133,7 +122,7 @@ def main():
         dtype=jnp.float64,
     ) / run_config["n_sim_steps"]
 
-    target_prop_twist = jnp.array(jdna_obs.propeller.TARGETS["oxDNA"], dtype=jnp.float64)
+    target_prop_twist = jnp.array(19.5, dtype=jnp.float64)
     def graddable_loss(in_params:jdna_types.Params, in_key:jax.random.PRNGKey) -> tuple[float, tuple[float, jax.random.PRNGKey]]:
         in_key, subkey = jax.random.split(in_key)
         sim_out = simulator.run(in_params, initial_positions, run_config["n_sim_steps"], subkey)
@@ -144,7 +133,6 @@ def main():
     # the other items we care about the loss, the prop twist, and to curry
     # the key for the simulation
     grad_fn = jax.jit(jax.value_and_grad(graddable_loss, has_aux=True))
-    #grad_fn = jax.value_and_grad(graddable_loss, has_aux=True)
 
     # Now we setup an simple optimization loop. This is just to show an example.
     # In practice, ``jax_dna`` has abstracted and generalized this process in
@@ -163,10 +151,3 @@ def main():
 
 if __name__=="__main__":
     main()
-
-
-""" new energy_fns
-real    0m50.049s
-user    1m6.875s
-sys     0m9.426s
-"""

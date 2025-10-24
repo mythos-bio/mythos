@@ -204,18 +204,21 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
     )
 
     sim.build(
-        new_params=[
-            {
-                "FENE_DELTA": 5.0,
-                "HYDR_THETA8_T0": 1.5707963267948966,
-                "HYDR_T3_MESH_POINTS": "HYDR_T2_MESH_POINTS",
-                "CXST_T5_MESH_POINTS": 6,
+        new_params={
+                "delta_backbone": 5.0,
+                "theta0_hb_8": 1.5707963267948966,
             },
-            {},
-        ]
     )
     assert sim.build_dir.is_dir()
     assert (sim.build_dir / "model.h").read_text().splitlines()[-10:] != excepted_model_h.read_text().splitlines()[-10:]
+
+    with pytest.raises(ValueError, match="No valid"):
+        sim.build(
+            new_params={
+                "a": 1,
+                "b": 2,
+            },
+        )
 
     sim.cleanup_build()
     assert not sim.build_dir.exists()

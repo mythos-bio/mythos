@@ -201,6 +201,7 @@ class ComposedEnergyFunction(EnergyFunction):
 
     energy_fns: list[BaseEnergyFunction]
     weights: jnp.ndarray | None = None
+    transform_fn: Callable | None = None
 
     def __post_init__(self) -> None:
         """Check that the input is valid."""
@@ -283,6 +284,8 @@ class ComposedEnergyFunction(EnergyFunction):
 
     @override
     def __call__(self, body: jax_md.rigid_body.RigidBody) -> float:
+        if self.transform_fn:
+            body = self.transform_fn(body)
         energy_vals = self.compute_terms(body)
         return jnp.sum(energy_vals) if self.weights is None else jnp.dot(self.weights, energy_vals)
 
