@@ -102,12 +102,6 @@ class Debye(je_base.BaseEnergyFunction):
         return jnp.multiply(db_dgs, dh_mults)
 
     @override
-    def __call__(
-        self,
-        body: je_base.BaseNucleotide,
-        seq: typ.Discrete_Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
-        dgs = self.pairwise_energies(body, body, unbonded_neighbors)
+    def compute_energy(self, nucleotide: je_base.BaseNucleotide) -> typ.Scalar:
+        dgs = self.pairwise_energies(nucleotide, nucleotide, self.unbonded_neighbors)
         return dgs.sum()

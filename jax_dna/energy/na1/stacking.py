@@ -199,32 +199,22 @@ class Stacking(je_base.BaseEnergyFunction):
     params: StackingConfiguration
 
     @override
-    def __call__(
-        self,
-        body: na1_nucleotide.HybridNucleotide,
-        seq: typ.Discrete_Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
-        nn_i = bonded_neighbors[:, 0]
-        nn_j = bonded_neighbors[:, 1]
+    def compute_energy(self, nucleotide: na1_nucleotide.HybridNucleotide) -> typ.Scalar:
+        nn_i = self.bonded_neighbors[:, 0]
+        nn_j = self.bonded_neighbors[:, 1]
 
         is_rna_bond = jax.vmap(je_utils.is_rna_pair, (0, 0, None))(nn_i, nn_j, self.params.nt_type)
 
-        dna_dgs = dna2_energy.Stacking(
-            displacement_fn=self.displacement_fn, params=self.params.dna_config
-        ).pairwise_energies(
-            body.dna,
-            seq,
-            bonded_neighbors,
+        dna_dgs = dna2_energy.Stacking.create_from(self, params=self.params.dna_config).pairwise_energies(
+            nucleotide.dna,
+            self.seq,
+            self.bonded_neighbors,
         )
 
-        rna_dgs = rna2_energy.Stacking(
-            displacement_fn=self.displacement_fn, params=self.params.rna_config
-        ).pairwise_energies(
-            body.rna,
-            seq,
-            bonded_neighbors,
+        rna_dgs = rna2_energy.Stacking.create_from(self, params=self.params.rna_config).pairwise_energies(
+            nucleotide.rna,
+            self.seq,
+            self.bonded_neighbors,
         )
 
         # Select based on bond type

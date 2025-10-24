@@ -267,12 +267,6 @@ class Stacking(je_base.BaseEnergyFunction):
         return jnp.multiply(stack_weights, v_stack)
 
     @override
-    def __call__(
-        self,
-        body: je_base.BaseNucleotide,
-        seq: typ.Discrete_Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
-        dgs = self.pairwise_energies(body, seq, bonded_neighbors)
+    def compute_energy(self, nucleotide: je_base.BaseNucleotide) -> typ.Scalar:
+        dgs = self.pairwise_energies(nucleotide, self.seq, self.bonded_neighbors)
         return dgs.sum()

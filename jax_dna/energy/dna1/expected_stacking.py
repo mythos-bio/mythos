@@ -40,22 +40,20 @@ class ExpectedStacking(jd_stk.Stacking):
         )
 
     @override
-    def __call__(
-        self,
-        body: je_base.BaseNucleotide,
-        seq: typ.Probabilistic_Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
+    def compute_energy(self, nucleotide: je_base.BaseNucleotide) -> typ.Scalar:
         # Compute sequence-independent energy for each bonded pair
         v_stack = self.compute_v_stack(
-            body.stack_sites, body.back_sites, body.base_normals, body.cross_prods, bonded_neighbors
+            nucleotide.stack_sites,
+            nucleotide.back_sites,
+            nucleotide.base_normals,
+            nucleotide.cross_prods,
+            self.bonded_neighbors
         )
 
         # Compute sequence-dependent weight for each bonded pair
-        nn_i = bonded_neighbors[:, 0]
-        nn_j = bonded_neighbors[:, 1]
-        stack_weights = vmap(self.weight, (0, 0, None))(nn_i, nn_j, seq)
+        nn_i = self.bonded_neighbors[:, 0]
+        nn_j = self.bonded_neighbors[:, 1]
+        stack_weights = vmap(self.weight, (0, 0, None))(nn_i, nn_j, self.seq)
 
         # Return the weighted sum
         return jnp.dot(stack_weights, v_stack)

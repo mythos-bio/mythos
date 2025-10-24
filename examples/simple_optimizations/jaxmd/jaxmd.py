@@ -14,7 +14,9 @@ import jax.numpy as jnp
 import jax_md
 import optax
 
+from jax_dna.energy.base import ComposedEnergyFunction
 import jax_dna.energy.dna1 as jdna_energy
+from jax_dna.energy.dna1.stacking import Stacking
 import jax_dna.input.topology as jdna_top
 import jax_dna.input.trajectory as jdna_traj
 import jax_dna.losses.observable_wrappers as jdna_losses
@@ -29,7 +31,7 @@ def main():
     run_config = {
         "n_sim_steps": 20_000,
         "n_opt_steps": 25,
-        "learning_rate": 0.00001,
+        "learning_rate": 0.001,
     }
 
     experiment_dir = Path("data/templates/simple-helix")
@@ -39,12 +41,13 @@ def main():
         jdna_traj.from_file(
             experiment_dir / "init.conf",
             topology.strand_counts,
+            is_oxdna=False,
         )
         .states[0]
         .to_rigid_body()
     )
 
-    experiment_config, energy_config = jdna_energy.default_configs()
+    experiment_config, _ = jdna_energy.default_configs()
 
     dt = experiment_config["dt"]
     kT = experiment_config["kT"]
@@ -61,39 +64,22 @@ def main():
         orientation=jnp.array([experiment_config["moment_of_inertia"]], dtype=jnp.float64),
     )
 
-    geometry = energy_config["geometry"]
-    transform_fn = functools.partial(
-        jdna_energy.Nucleotide.from_rigid_body,
-        com_to_backbone=geometry["com_to_backbone"],
-        com_to_hb=geometry["com_to_hb"],
-        com_to_stacking=geometry["com_to_stacking"],
-    )
+    transform_fn = jdna_energy.default_transform_fn()
 
     # The jax_md simulator needs an energy function. We can use the default
     # energy functions and configurations for dna1 simulations. For more
     # information on energy functions and configurations, see the documentation.
-    energy_fn_configs = jdna_energy.default_energy_configs()
+    energy_fn = jdna_energy.create_default_energy_fn(
+        topology=topology,
+        displacement_fn=jax_md.space.free()[0],
+    ).with_noopt("ss_stack_weights")
 
     # For this example were only going to optimize the parameters that are
     # associated with the Stacking energy function.
-    params = []
-    for ec in energy_fn_configs:
-        params.append(
-            ec.opt_params if isinstance(ec, jdna_energy.StackingConfiguration) else {}
-        )
-    # we're not going to optimize wrt the seq specific stacking weights
-    for op in params:
-        if "ss_stack_weights" in op:
-            del op["ss_stack_weights"]
-
-
-
-    energy_fns = jdna_energy.default_energy_fns()
+    params = energy_fn.opt_params(from_fns=[Stacking])
 
     simulator = jdna_jaxmd.JaxMDSimulator(
-        energy_configs=energy_fn_configs,
-        energy_fns=energy_fns,
-        topology=topology,
+        energy_fn=energy_fn,
         simulator_params=jdna_jaxmd.StaticSimulatorParams(
             seq=jnp.array(topology.seq),
             mass=mass,
@@ -104,7 +90,6 @@ def main():
             gamma=gamma,
         ),
         space=jax_md.space.free(),
-        transform_fn=transform_fn,
         simulator_init=jax_md.simulate.nvt_langevin,
         neighbors=jdna_jaxmd.NoNeighborList(unbonded_nbrs=topology.unbonded_neighbors),
     )
@@ -153,7 +138,7 @@ def main():
     # In practice, ``jax_dna`` has abstracted and generalized this process in
     # the ``jax_dna.optimization`` module.
 
-    key = jax.random.PRNGKey(1234)
+    key = jax.random.key(1234)
     optimizer = optax.adam(learning_rate=run_config["learning_rate"])
     opt_state = optimizer.init(params)
 

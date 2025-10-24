@@ -1,10 +1,10 @@
 """An example of running persistence length optimization using oxDNA and DiffTRe."""
 
-import functools
 import logging
 import typing
 from pathlib import Path
 
+import fire
 import jax
 import jax.numpy as jnp
 import jax_dna.energy as jdna_energy
@@ -23,8 +23,8 @@ from jax_dna.simulators import oxdna
 from jax_dna.ui.loggers.console import ConsoleLogger
 from jax_dna.ui.loggers.logger import NullLogger
 from jax_dna.ui.loggers.multilogger import MultiLogger
+from jax_dna.utils.units import get_kt_from_string
 from tqdm import tqdm
-import fire
 
 jax.config.update("jax_enable_x64", True)
 
@@ -61,7 +61,7 @@ def main(
     input_dir = Path(input_dir).resolve()
     top = jdna_top.from_oxdna_file(input_dir / "sys.top")
     sim_config = oxdna_input.read(input_dir / "input")
-    kT = 0.1#get_kt_from_string(sim_config["T"])
+    kT = get_kt_from_string(sim_config["T"])
     with input_dir.joinpath(sim_config["conf_file"]).open("r") as f:
         for line in f:
             if line.startswith("b ="):
@@ -69,62 +69,16 @@ def main(
                 box_size = jnp.array([float(i) for i in box_size])
                 break
 
-    _, energy_config = dna1_energy.default_configs()
+    top = jdna_top.from_oxdna_file(input_dir / "sys.top")
+    energy_fn = dna1_energy.create_default_energy_fn(
+        topology=top,
+        displacement_fn=jax_md.space.periodic(box_size)[0],
+    ).with_noopt("ss_stack_weights", "ss_hb_weights", "kt"
+    ).with_params(kt = kT)
 
-    # Energy Function ==========================================================
-    energy_fns = dna1_energy.default_energy_fns()
-    energy_fn_configs = []
-    opt_params = []
-    for ec in dna1_energy.default_energy_configs():
-        # We are only interested in the stacking configuration
-        # However we don't want to optimize ss_stack_weights and kt
-        if isinstance(ec, dna1_energy.StackingConfiguration):
-            ec = ec.replace(
-                non_optimizable_required_params=(
-                    "ss_stack_weights",
-                    "kt",
-                )
-            )
-            opt_params.append(ec.opt_params)
-            energy_fn_configs.append(ec)
-        elif isinstance(ec, dna1_energy.HydrogenBondingConfiguration):
-            ec = ec.replace(
-                non_optimizable_required_params=(
-                    "ss_hb_weights",
-                )
-            )
-            opt_params.append(ec.opt_params)
-            energy_fn_configs.append(ec)
-        else:
-            energy_fn_configs.append(ec)
-            opt_params.append({})
+    transform_fn = energy_fn.energy_fns[0].transform_fn  # all are same
 
-
-    geometry = energy_config["geometry"]
-    transform_fn = functools.partial(
-        dna1_energy.Nucleotide.from_rigid_body,
-        com_to_backbone=geometry["com_to_backbone"],
-        com_to_hb=geometry["com_to_hb"],
-        com_to_stacking=geometry["com_to_stacking"],
-    )
-
-    energy_fn_builder_fn = jdna_energy.energy_fn_builder(
-        energy_fns=energy_fns,
-        energy_configs=energy_fn_configs,
-        transform_fn=transform_fn,
-    )
-
-    def energy_fn_builder(params: jdna_types.Params) -> callable:
-        return jax.vmap(
-            lambda trajectory: energy_fn_builder_fn(params)(
-                trajectory.rigid_body,
-                seq=jnp.array(top.seq),
-                bonded_neighbors=top.bonded_neighbors,
-                unbonded_neighbors=top.unbonded_neighbors.T,
-            )
-        )
-
-    # ==========================================================================
+    opt_params = energy_fn.opt_params()
 
     # Simulators ================================================================
     @ray.remote
@@ -156,7 +110,7 @@ def main(
         RaySimulator.options(num_cpus=1).remote(
             input_dir=input_dir,
             sim_type=jdna_types.oxDNASimulatorType.DNA1,
-            energy_configs=energy_fn_configs,
+            energy_fn=energy_fn,
             source_path=oxdna_path,
         )
         for _ in range(num_sims)
@@ -189,7 +143,7 @@ def main(
         needed_observables=multi_simulator.exposes(),
         logging_observables=["loss", "persistence_length", "neff"],
         grad_or_loss_fn=lp_loss_fn,
-        energy_fn_builder=energy_fn_builder,
+        energy_fn=energy_fn,
         opt_params=opt_params,
         min_n_eff_factor=0.95,
         beta=jnp.array(1 / kT, dtype=jnp.float64),
