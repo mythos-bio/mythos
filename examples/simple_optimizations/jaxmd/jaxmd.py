@@ -122,7 +122,7 @@ def main():
         dtype=jnp.float64,
     ) / run_config["n_sim_steps"]
 
-    target_prop_twist = jnp.array(19.5, dtype=jnp.float64)
+    target_prop_twist = jnp.array(jdna_obs.propeller.TARGETS["oxDNA"], dtype=jnp.float64)
     def graddable_loss(in_params:jdna_types.Params, in_key:jax.random.PRNGKey) -> tuple[float, tuple[float, jax.random.PRNGKey]]:
         in_key, subkey = jax.random.split(in_key)
         sim_out = simulator.run(in_params, initial_positions, run_config["n_sim_steps"], subkey)
