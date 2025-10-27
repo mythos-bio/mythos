@@ -8,7 +8,7 @@ from jax_dna.energy.configuration import BaseConfiguration
 from jax_dna.input.trajectory import Trajectory
 from jax_dna.simulators.io import SimulatorTrajectory
 from jax_dna.simulators.lammps.lammps_oxdna import (
-    LAMMPS_FIELDS,
+    LAMMPS_REQUIRED_FIELDS,
     LAMMPSoxDNASimulator,
     _lammps_oxdna_replace_inputs,
     _read_lammps_output,
@@ -59,12 +59,25 @@ def dummy_input_dir(tmp_path):
 
 
 @pytest.fixture
-def dummy_trajectory_data():
+def dummy_trajectory_timestep0():
+    return (
+        "ITEM: TIMESTEP\n0\n"
+        "ITEM: NUMBER OF ATOMS\n2\n"
+        "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
+        "ITEM: ATOMS id mol type x y z ix iy iz vx vy vz c_quat[1] c_quat[2] c_quat[3] c_quat[4] "
+        "angmomx angmomy angmomz\n"
+        "  should not be read...  \n"
+    )
+
+
+@pytest.fixture
+def dummy_trajectory_timestep1():
     return (
         "ITEM: TIMESTEP\n1\n"
         "ITEM: NUMBER OF ATOMS\n2\n"
         "ITEM: BOX BOUNDS pp pp pp\n0 10\n0 10\n0 10\n"
-        f"ITEM: ATOMS {LAMMPS_FIELDS}\n"
+        "ITEM: ATOMS id mol type x y z ix iy iz vx vy vz c_quat[1] c_quat[2] c_quat[3] c_quat[4] "
+        "angmomx angmomy angmomz\n"
         "1 1 1 -6.126400967010039e-01 -6.573324218675992e-01  3.629709915928486e-01 0 0 0  "
         "7.617309940416418e-02  8.357491234620849e-03  2.079367646633826e-01  9.963616537366130e-01 "
         "-5.113495195424776e-02  8.493495051523761e-03 -6.765007164584903e-02  2.081677204968046e-01 "
@@ -74,6 +87,11 @@ def dummy_trajectory_data():
         "1.106573889544250e-01  6.689473390339626e-02  3.242519522212261e-01 -1.618550301407265e-01 "
         "-6.754152355326958e-02  3.479753155340162e-02\n"
     )
+
+
+@pytest.fixture
+def dummy_trajectory_data(dummy_trajectory_timestep0, dummy_trajectory_timestep1):
+    return dummy_trajectory_timestep0 + dummy_trajectory_timestep1
 
 
 @pytest.fixture
@@ -120,6 +138,27 @@ def test_lammps_oxdna_replace_inputs_missing_seed(dummy_input_lines):
         _lammps_oxdna_replace_inputs(no_seed, params, seed=42)
 
 
+def test_lammps_oxdna_replace_inputs_wrong_traj_name(dummy_input_lines):
+    lines = [line.replace("trajectory.dat", "wrong_name.dat") for line in dummy_input_lines]
+    with pytest.raises(ValueError, match="Expected dump filename"):
+        _lammps_oxdna_replace_inputs(lines, {}, None)
+
+
+def test_lammps_oxdna_replace_errors_on_missing_pair_coeff(dummy_input_lines):
+    lines = [line for line in dummy_input_lines if "pair_coeff * * oxdna/excv" not in line]
+    with pytest.raises(ValueError, match="Missing oxdna pair parameters"):
+        _lammps_oxdna_replace_inputs(lines, {}, seed=42)
+
+
+def test_lammps_oxdna_replace_inputs_random_seed(dummy_input_lines):
+    # replace with value that is not in random range
+    lines = [line if "variable seed" not in line else "variable seed equal NONINT" for line in dummy_input_lines]
+    params = {"eps_backbone": 1.1, "delta_backbone": 2.2, "r0_backbone": 3.3}
+    out = _lammps_oxdna_replace_inputs(lines, params, seed=None)
+    seed_line = next(line for line in out if "variable seed" in line)
+    int(seed_line.split()[-1])  # should be convertible to int
+
+
 def test_transform_lammps_quat_shape_and_values():
     quat = np.array([1.0, 0.0, 0.0, 0.0])
     out = _transform_lammps_quat(quat)
@@ -128,8 +167,8 @@ def test_transform_lammps_quat_shape_and_values():
 
 
 def test_transform_lammps_state_shape():
-    state = np.zeros(len(LAMMPS_FIELDS.split()))
-    out = _transform_lammps_state(state)
+    state = np.zeros(len(LAMMPS_REQUIRED_FIELDS))
+    out = _transform_lammps_state(state, list(LAMMPS_REQUIRED_FIELDS))
     assert out.shape == (3 + 6 + 3 + 3,)
 
 
@@ -162,8 +201,16 @@ def test_simulator_run_mocks_subprocess(tmp_path, dummy_input_lines, dummy_traje
         m_call.assert_called_once()
 
 
+def test_lammps_read_trajectory_missing_state_fields(tmp_path, dummy_trajectory_data):
+    bad_data = dummy_trajectory_data.replace("c_quat[4]", "")
+    dummy_trajectory_file = tmp_path / "trajectory.dat"
+    dummy_trajectory_file.write_text(bad_data)
+    with pytest.raises(ValueError, match="LAMMPS output file has unexpected atom fields."):
+        _read_lammps_output(dummy_trajectory_file)
+
+
 @pytest.mark.parametrize("nstates", [1, 3])
-def test_read_lammps_output(tmp_path, nstates, dummy_trajectory_data):
+def test_read_lammps_output(tmp_path, nstates, dummy_trajectory_data, dummy_trajectory_timestep1):
     # Create a minimal trajectory.dat file
     expected_states = np.array([
         np.array([
@@ -179,7 +226,7 @@ def test_read_lammps_output(tmp_path, nstates, dummy_trajectory_data):
     ])
 
     file = tmp_path / "trajectory.dat"
-    file.write_text(dummy_trajectory_data * nstates)
+    file.write_text(dummy_trajectory_data + dummy_trajectory_timestep1 * (nstates - 1))
     traj = _read_lammps_output(file)
     assert isinstance(traj, Trajectory)
     assert hasattr(traj, "n_nucleotides")

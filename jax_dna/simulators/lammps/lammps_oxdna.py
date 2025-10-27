@@ -289,11 +289,21 @@ def _transform_param(param: str, value: float) -> float:
     return value
 
 
-LAMMPS_FIELDS = "id mol type x y z ix iy iz vx vy vz c_quat[1] c_quat[2] c_quat[3] c_quat[4] angmomx angmomy angmomz"
+LAMMPS_REQUIRED_FIELDS = {
+    "x", "y", "z", "vx", "vy", "vz", "c_quat[1]", "c_quat[2]", "c_quat[3]", "c_quat[4]",
+    "angmomx", "angmomy", "angmomz"
+}
 
-
-def _lfidx(field: str) -> int:
-    return LAMMPS_FIELDS.split().index(field)
+def _transform_lammps_state(state: np.ndarray, fields: str) -> np.ndarray:
+    def get_idx(*field_names: str) -> list[int]:
+        return [fields.index(name) for name in field_names]
+    pos = state[get_idx("x", "y", "z")]
+    vel = state[get_idx("vx", "vy", "vz")]
+    quat = state[get_idx("c_quat[1]", "c_quat[2]", "c_quat[3]", "c_quat[4]")]
+    angmom = state[get_idx("angmomx", "angmomy", "angmomz")]
+    vel *= np.sqrt(3.1575)
+    angmom /= np.sqrt(0.435179)
+    return np.concatenate([pos, _transform_lammps_quat(quat), vel, angmom])
 
 
 def _transform_lammps_quat(quat: np.ndarray) -> np.ndarray:
@@ -306,16 +316,6 @@ def _transform_lammps_quat(quat: np.ndarray) -> np.ndarray:
     b1 = 2 * (quat[2]*quat[3] - quat[0]*quat[1]) * i
     b2 = (q_2[0] + q_2[3] - q_2[1] - q_2[2]) * i
     return np.array([a0, a1, a2, b0, b1, b2])
-
-
-def _transform_lammps_state(state: np.ndarray) -> np.ndarray:
-    pos = state[[_lfidx("x"), _lfidx("y"), _lfidx("z")]]
-    vel = state[[_lfidx("vx"), _lfidx("vy"), _lfidx("vz")]]
-    quat = state[[_lfidx("c_quat[1]"), _lfidx("c_quat[2]"), _lfidx("c_quat[3]"), _lfidx("c_quat[4]")]]
-    angmom = state[[_lfidx("angmomx"), _lfidx("angmomy"), _lfidx("angmomz")]]
-    vel *= np.sqrt(3.1575)
-    angmom /= np.sqrt(0.435179)
-    return np.concatenate([pos, _transform_lammps_quat(quat), vel, angmom])
 
 
 def _read_lammps_output(output_file: Path) -> dict[str, float]:
@@ -347,10 +347,11 @@ def _read_lammps_output(output_file: Path) -> dict[str, float]:
                 bx1, bx2, by1, by2, bz1, bz2 = np.fromstring(bounds, dtype=np.float64, sep=" ")
                 bs.append(np.array([bx2 - bx1, by2 - by1, bz2 - bz1]))
             elif line.startswith("ITEM: ATOMS"):
-                if line[12:].strip() != LAMMPS_FIELDS:
+                state_fields = line[12:].strip().split()
+                if LAMMPS_REQUIRED_FIELDS - set(state_fields):
                     raise ValueError("LAMMPS output file has unexpected atom fields.")
                 states.append(np.array([
-                    _transform_lammps_state(np.fromstring(next(f), dtype=np.float64, sep=" "))
+                    _transform_lammps_state(np.fromstring(next(f), dtype=np.float64, sep=" "), state_fields)
                     for _ in range(num_atoms)
                 ]))
 
