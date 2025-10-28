@@ -69,24 +69,31 @@ class LAMMPSoxDNASimulator(BaseSimulation):
         self.input_dir.joinpath(self.input_file_name).write_text("\n".join(new_lines))
 
 
-def _lammps_oxdna_replace_inputs(  # noqa: C901
+def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
         input_lines: list[str],
         params: list[dict[str, float]],
         seed: int | None
     ) -> list[str]:
     new_lines = []
     seen = set()
+    multiline_buffer = ""
     for input_l in input_lines:
         line = re.sub(r"\s+", " ", input_l.strip())
+        if line.endswith("&"):
+            multiline_buffer += line.removesuffix("&") + " "
+            continue
+        if multiline_buffer:
+            line = multiline_buffer + line
+            multiline_buffer = ""
         if line.startswith("variable seed equal"):
             seen.add("seed")
-            if seed is not None:
-                line = f"variable seed equal {seed}"
-            else:
-                seed = np.random.default_rng().integers(0, 2**24)
-                line = f"variable seed equal {seed}"
-        if line.startswith("dump mythos-out all custom"):
+            seed = seed or np.random.default_rng().integers(0, 2**24)
+            line = f"variable seed equal {seed}"
+        if line.startswith("dump"):
             fname = line.split()[5]
+            fields = line.split()[6:]
+            if LAMMPS_REQUIRED_FIELDS - set(fields):
+                raise ValueError("LAMMPS dump line missing required fields.")
             if fname != "trajectory.dat":
                 raise ValueError("Expected dump filename to be 'trajectory.dat'")
             seen.add("dump_line")
@@ -318,14 +325,23 @@ def _transform_lammps_quat(quat: np.ndarray) -> np.ndarray:
     return np.array([a0, a1, a2, b0, b1, b2])
 
 
-def _read_lammps_output(output_file: Path) -> dict[str, float]:
-    """Reads LAMMPS log file and extracts the final energy values.
+def _read_lammps_output(output_file: Path) -> Trajectory:
+    """Reads LAMMPS trajectory dump file and extracts the final energy values.
+
+    The file must have been created by a dump LAMMPS dump command similar to:
+
+        compute quat all property/atom quatw quati quatj quatk
+        dump {name} all custom {freq} trajectory.dat x y z vx vy vz &
+            c_quat[1] c_quat[2] c_quat[3] c_quat[4] angmomx angmomy angmomz
+
+    noting that the above fields are required, but other fields may also be
+    present in the dump.
 
     Args:
-        output_file: Path to the LAMMPS log file.
+        output_file: Path to the LAMMPS trajectory dump file.
 
     Returns:
-        A dictionary containing the final energy values.
+        A Trajectory object in JAX-DNA format.
     """
     ts = []
     bs = []
@@ -349,7 +365,7 @@ def _read_lammps_output(output_file: Path) -> dict[str, float]:
             elif line.startswith("ITEM: ATOMS"):
                 state_fields = line[12:].strip().split()
                 if LAMMPS_REQUIRED_FIELDS - set(state_fields):
-                    raise ValueError("LAMMPS output file has unexpected atom fields.")
+                    raise ValueError("LAMMPS output file missing required fields.")
                 states.append(np.array([
                     _transform_lammps_state(np.fromstring(next(f), dtype=np.float64, sep=" "), state_fields)
                     for _ in range(num_atoms)

@@ -35,10 +35,8 @@ def dummy_input_lines():
         return " ".join([f"{i+1}.0" for i in range(num)])
     return [
         "variable seed equal 123",
-        (
-            "dump mythos-out all custom 1 trajectory.dat id mol type x y z ix iy iz vx vy vz "
-            "c_quat[1] c_quat[2] c_quat[3] c_quat[4] angmomx angmomy angmomz"
-        ),
+        "dump out all custom 1 trajectory.dat id mol type x y z ix iy iz vx vy vz &",
+        "    c_quat[1] c_quat[2] c_quat[3] c_quat[4] angmomx angmomy angmomz",
         "bond_coeff * 1.0 2.0 3.0",
         "pair_coeff * * oxdna/excv " + dummy_params(9),
         "pair_coeff * * oxdna/stk " + dummy_params(22),
@@ -144,6 +142,12 @@ def test_lammps_oxdna_replace_inputs_wrong_traj_name(dummy_input_lines):
         _lammps_oxdna_replace_inputs(lines, {}, None)
 
 
+def test_lammps_oxdna_replace_inputs_dump_missing_fields(dummy_input_lines):
+    lines = [line.replace("angmomx", "") for line in dummy_input_lines]
+    with pytest.raises(ValueError, match="missing required fields"):
+        _lammps_oxdna_replace_inputs(lines, {}, None)
+
+
 def test_lammps_oxdna_replace_errors_on_missing_pair_coeff(dummy_input_lines):
     lines = [line for line in dummy_input_lines if "pair_coeff * * oxdna/excv" not in line]
     with pytest.raises(ValueError, match="Missing oxdna pair parameters"):
@@ -205,7 +209,7 @@ def test_lammps_read_trajectory_missing_state_fields(tmp_path, dummy_trajectory_
     bad_data = dummy_trajectory_data.replace("c_quat[4]", "")
     dummy_trajectory_file = tmp_path / "trajectory.dat"
     dummy_trajectory_file.write_text(bad_data)
-    with pytest.raises(ValueError, match="LAMMPS output file has unexpected atom fields."):
+    with pytest.raises(ValueError, match="missing required fields"):
         _read_lammps_output(dummy_trajectory_file)
 
 
