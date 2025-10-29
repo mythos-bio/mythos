@@ -199,6 +199,11 @@ class BaseEnergyFunction(EnergyFunction):
 class ComposedEnergyFunction(EnergyFunction):
     """Represents a linear combination of energy functions.
 
+    The parameters of all composite energy functions are treated as sharing a
+    global namespace in all setting and retrieval methods. For example, calling
+    `with_params(kt=0.1)` will set the parameter `kt` in all those energy
+    functions that contain a parameter name `kt`.
+
     Parameters:
         energy_fns (list[BaseEnergyFunction]): a list of energy functions
         weights (jnp.ndarray): optional, the weights of the energy functions
@@ -382,15 +387,17 @@ class ComposedEnergyFunction(EnergyFunction):
         return cls(energy_fns=energy_fns, weights=weights)
 
 
-class QCompEnergyFunction(ComposedEnergyFunction):
+class QualifiedComposedEnergyFunction(ComposedEnergyFunction):
     """A ComposedEnergyFunction that qualifies parameters by their function.
 
-    For example, parameter eps_backbone in Fene energy function would be
-    referred to as Fene.eps_backbone in the this energy function. This is useful
-    for isolating parameters from a specific energy function in a composed
-    energy function, however note that not all simulations will support this
-    functionality - for example oxDNA simulations write only one value per
-    parameter.
+    Parameters for composite functions do not share a global namespace, but
+    instead are qualified by the function they belong to in all setting and
+    retrieval methods. For example, parameter `eps_backbone` in Fene energy
+    function would be referred to as `Fene.eps_backbone` in the this energy
+    function. This is useful for isolating parameters from a specific energy
+    function for optimization, however note that not all simulations will
+    support this functionality - for example oxDNA simulations write only one
+    value per parameter.
     """
 
     @override

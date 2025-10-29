@@ -250,7 +250,6 @@ def test_stacking(base_dir: str, t_kelvin: float):
     strand_bounds = list(itertools.pairwise([0, *itertools.accumulate(strand_counts)]))
     strand_bounds = jnp.array(strand_bounds)
 
-    # seq variable removed; not used
     nt_type = jnp.concat([topology.nt_type[:8][::-1], topology.nt_type[8:][::-1]])
 
     terms = get_energy_terms(base_dir, "stacking")

@@ -193,7 +193,7 @@ class CrossStacking(je_base.BaseEnergyFunction):
         self,
         body_i: je_base.BaseNucleotide,
         body_j: je_base.BaseNucleotide,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors,
+        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
     ) -> typ.Arr_Unbonded_Neighbors:
         """Computes the cross stacking energy for each unbonded pair."""
         op_i = unbonded_neighbors[0]

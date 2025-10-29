@@ -323,7 +323,7 @@ def test_composed_energy_function_params_interactions(list_of_energy_functions):
 
 
 def test_qualified_composed_energy_function_params_interactions(list_of_energy_functions):
-    qualified_cef = base.QCompEnergyFunction(energy_fns=list_of_energy_functions)
+    qualified_cef = base.QualifiedComposedEnergyFunction(energy_fns=list_of_energy_functions)
     assert qualified_cef.params_dict() == {
         "MockEnergyFunction1.param1": 1.0,
         "MockEnergyFunction2.param2": 2.0,
