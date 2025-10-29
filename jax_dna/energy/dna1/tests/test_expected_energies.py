@@ -126,19 +126,17 @@ def test_hydrogen_bonding_discrete(base_dir: str):
     terms = get_energy_terms(base_dir, "hydrogen_bonding")
 
     # compute energy terms
-    energy_fn = jd_energy.ExpectedHydrogenBonding(displacement_fn=displacement_fn, params=energy_config.init_params())
+    energy_fn = jd_energy.ExpectedHydrogenBonding(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        seq=pseq,
+        bonded_neighbors=topology.bonded_neighbors,
+        unbonded_neighbors=topology.unbonded_neighbors.T,
+        params=energy_config.init_params()
+    )
 
     states = trajectory.state_rigid_body
-
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            pseq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
-
+    energy = energy_fn.map(states)
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-3)
 
@@ -201,32 +199,30 @@ def test_hydrogen_bonding_brute_force():
     pseq = (up_pseq, bp_pseq)
 
     # compute energy terms
-    energy_fn = jd_energy.ExpectedHydrogenBonding(displacement_fn=displacement_fn, params=energy_config.init_params())
+    energy_fn = jd_energy.ExpectedHydrogenBonding(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        seq=pseq,
+        bonded_neighbors=topology.bonded_neighbors,
+        unbonded_neighbors=topology.unbonded_neighbors.T,
+        params=energy_config.init_params()
+    )
 
-    energy_fn_base = jd_energy.HydrogenBonding(displacement_fn=displacement_fn, params=energy_config_base.init_params())
+    energy_fn_base = jd_energy.HydrogenBonding(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config_base.init_params()
+    )
 
     states = trajectory.state_rigid_body
 
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            pseq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
+    energy = energy_fn.map(states)
 
     @jax.jit
     def compute_base_vals(dseq):
         """Compute the per-state energies given a discrete sequence."""
-        return jax.vmap(
-            lambda s: energy_fn_base(
-                transform_fn(s),
-                dseq,
-                topology.bonded_neighbors,
-                topology.unbonded_neighbors.T,
-            )
-        )(states)
+        return energy_fn_base.with_props(seq=dseq).map(states)
 
     # Brute force calculation
     assert len(jd_const.BP_TYPES) == len(jd_const.DNA_ALPHA)
@@ -309,32 +305,28 @@ def test_stacking_brute_force():
     pseq = (up_pseq, bp_pseq)
 
     # compute energy terms
-    energy_fn = jd_energy.ExpectedStacking(displacement_fn=displacement_fn, params=energy_config.init_params())
+    energy_fn = jd_energy.ExpectedStacking(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params()
+    ).with_props(seq=pseq)
 
-    energy_fn_base = jd_energy.Stacking(displacement_fn=displacement_fn, params=energy_config_base.init_params())
+    energy_fn_base = jd_energy.Stacking(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config_base.init_params()
+    )
 
     states = trajectory.state_rigid_body
 
-    energy = jax.vmap(
-        lambda s: energy_fn(
-            transform_fn(s),
-            pseq,
-            topology.bonded_neighbors,
-            topology.unbonded_neighbors.T,
-        )
-    )(states)
+    energy = energy_fn.map(states)
 
     @jax.jit
     def compute_base_vals(dseq):
         """Compute the per-state energies given a discrete sequence."""
-        return jax.vmap(
-            lambda s: energy_fn_base(
-                transform_fn(s),
-                dseq,
-                topology.bonded_neighbors,
-                topology.unbonded_neighbors.T,
-            )
-        )(states)
+        return energy_fn_base.with_props(seq=dseq).map(states)
 
     # Brute force calculation
     assert len(jd_const.BP_TYPES) == len(jd_const.DNA_ALPHA)

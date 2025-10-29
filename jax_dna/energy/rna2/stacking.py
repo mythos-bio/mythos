@@ -269,20 +269,14 @@ class Stacking(je_base.BaseEnergyFunction):
         return jnp.multiply(stack_weights, v_stack)
 
     @override
-    def __call__(
-        self,
-        body: rna2_nucleotide.Nucleotide,
-        seq: typ.Discrete_Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
+    def compute_energy(self, nucleotide: rna2_nucleotide.Nucleotide) -> typ.Scalar:
         # Compute sequence-independent energy for each bonded pair
-        v_stack = self.compute_v_stack(body, bonded_neighbors)
+        v_stack = self.compute_v_stack(nucleotide, self.bonded_neighbors)
 
         # Compute sequence-dependent weight for each bonded pair
-        nn_i = bonded_neighbors[:, 0]
-        nn_j = bonded_neighbors[:, 1]
-        stack_weights = self.params.ss_stack_weights[seq[nn_i], seq[nn_j]]
+        nn_i = self.bonded_neighbors[:, 0]
+        nn_j = self.bonded_neighbors[:, 1]
+        stack_weights = self.params.ss_stack_weights[self.seq[nn_i], self.seq[nn_j]]
 
         # Return the weighted sum
         return jnp.dot(stack_weights, v_stack)

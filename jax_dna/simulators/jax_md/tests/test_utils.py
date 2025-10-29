@@ -51,8 +51,8 @@ def test_StaticSimulatorParams_init():  # noqa: N802 - class name
             assert getattr(ssp, attr_name)[key] == init_values[key]
 
     check_keys(ssp, "sim_init_fn", ["dt", "kT", "gamma"])
-    check_keys(ssp, "init_fn", ["seq", "mass", "bonded_neighbors"])
-    check_keys(ssp, "step_fn", ["seq", "bonded_neighbors"])
+    check_keys(ssp, "init_fn", ["mass"])
+    check_keys(ssp, "step_fn", [])
 
 
 def test_split_and_stack():

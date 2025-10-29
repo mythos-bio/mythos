@@ -313,10 +313,14 @@ def write_src_h(src_h: Path, params: dict[str, tuple[oxDNAModelHType, int | floa
         f.write("#endif /* MODEL_H_ */\n")
 
 
-def update_params(src_h: Path, new_params: list[jd_types.Params]) -> None:
+def update_params(src_h: Path, new_params: jd_types.Params | list[jd_types.Params]) -> None:
     """Update the src/model.h file with the new parameters."""
     params = read_src_h(src_h)
-    flattened_params = functools.reduce(operator.or_, new_params, {})
+    flattened_params = functools.reduce(operator.or_, new_params, {}) if isinstance(new_params, list) else new_params
+    # it is probably unintentional that this is called with no valid parameters
+    # or should it be that all updates are required?
+    if set(flattened_params).isdisjoint(DEFAULT_OXDNA_VARIABLE_MAPPER):
+        raise ValueError("No valid oxDNA parameters found to update in src/model.h")
     for np in filter(lambda k: k in DEFAULT_OXDNA_VARIABLE_MAPPER, flattened_params):
         mapped_name = DEFAULT_OXDNA_VARIABLE_MAPPER[np]
         if mapped_name in params:

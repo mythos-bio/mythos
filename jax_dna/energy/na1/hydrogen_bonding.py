@@ -313,56 +313,42 @@ class HydrogenBonding(je_base.BaseEnergyFunction):
     params: HydrogenBondingConfiguration
 
     @override
-    def __call__(
-        self,
-        body: na1_nucleotide.HybridNucleotide,
-        seq: typ.Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
-        op_i = unbonded_neighbors[0]
-        op_j = unbonded_neighbors[1]
+    def compute_energy(self, nucleotide: na1_nucleotide.HybridNucleotide) -> typ.Scalar:
+        op_i = self.unbonded_neighbors[0]
+        op_j = self.unbonded_neighbors[1]
 
         is_rna_bond = jax.vmap(je_utils.is_rna_pair, (0, 0, None))(op_i, op_j, self.params.nt_type)
         is_drh_bond = jax.vmap(je_utils.is_dna_rna_pair, (0, 0, None))(op_i, op_j, self.params.nt_type)
         is_rdh_bond = jax.vmap(je_utils.is_dna_rna_pair, (0, 0, None))(op_j, op_i, self.params.nt_type)
 
-        mask = jnp.array(op_i < body.dna.center.shape[0], dtype=jnp.float32)
+        mask = jnp.array(op_i < nucleotide.dna.center.shape[0], dtype=jnp.float32)
 
-        dna_dgs = dna1_energy.HydrogenBonding(
-            displacement_fn=self.displacement_fn, params=self.params.dna_config
-        ).pairwise_energies(
-            body.dna,
-            body.dna,
-            seq,
-            unbonded_neighbors,
+        dna_dgs = dna1_energy.HydrogenBonding.create_from(self, params=self.params.dna_config).pairwise_energies(
+            nucleotide.dna,
+            nucleotide.dna,
+            self.seq,
+            self.unbonded_neighbors,
         )
 
-        rna_dgs = dna1_energy.HydrogenBonding(
-            displacement_fn=self.displacement_fn, params=self.params.rna_config
-        ).pairwise_energies(
-            body.rna,
-            body.rna,
-            seq,
-            unbonded_neighbors,
+        rna_dgs = dna1_energy.HydrogenBonding.create_from(self, params=self.params.rna_config).pairwise_energies(
+            nucleotide.rna,
+            nucleotide.rna,
+            self.seq,
+            self.unbonded_neighbors,
         )
 
-        drh_dgs = dna1_energy.HydrogenBonding(
-            displacement_fn=self.displacement_fn, params=self.params.drh_config
-        ).pairwise_energies(
-            body.dna,
-            body.rna,
-            seq,
-            unbonded_neighbors,
+        drh_dgs = dna1_energy.HydrogenBonding.create_from(self, params=self.params.drh_config).pairwise_energies(
+            nucleotide.dna,
+            nucleotide.rna,
+            self.seq,
+            self.unbonded_neighbors,
         )
 
-        rdh_dgs = dna1_energy.HydrogenBonding(
-            displacement_fn=self.displacement_fn, params=self.params.drh_config
-        ).pairwise_energies(
-            body.rna,
-            body.dna,
-            seq,
-            unbonded_neighbors,
+        rdh_dgs = dna1_energy.HydrogenBonding.create_from(self, params=self.params.drh_config).pairwise_energies(
+            nucleotide.rna,
+            nucleotide.dna,
+            self.seq,
+            self.unbonded_neighbors,
         )
 
         dgs = jnp.where(is_rna_bond, rna_dgs, jnp.where(is_drh_bond, drh_dgs, jnp.where(is_rdh_bond, rdh_dgs, dna_dgs)))

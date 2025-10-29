@@ -41,20 +41,14 @@ class ExpectedHydrogenBonding(jd_hb.HydrogenBonding):
         )
 
     @override
-    def __call__(
-        self,
-        body: je_base.BaseNucleotide,
-        seq: typ.Probabilistic_Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
+    def compute_energy(self, nucleotide: je_base.BaseNucleotide) -> typ.Scalar:
         # Compute sequence-independent energy for each unbonded pair
-        v_hb = self.compute_v_hb(body, body, unbonded_neighbors)
+        v_hb = self.compute_v_hb(nucleotide, nucleotide, self.unbonded_neighbors)
 
         # Compute sequence-dependent weight for each unbonded pair
-        op_i = unbonded_neighbors[0]
-        op_j = unbonded_neighbors[1]
-        hb_weights = vmap(self.weight, (0, 0, None))(op_i, op_j, seq)
+        op_i = self.unbonded_neighbors[0]
+        op_j = self.unbonded_neighbors[1]
+        hb_weights = vmap(self.weight, (0, 0, None))(op_i, op_j, self.seq)
 
         # Return the weighted sum
         return jnp.dot(hb_weights, v_hb)

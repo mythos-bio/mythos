@@ -151,19 +151,13 @@ class StaticSimulatorParams:
     @property
     def init_fn(self) -> dict[str, jax_md.rigid_body.RigidBody | jnp.ndarray]:
         """Return the kwargs for initial state of the simulator."""
-        return {
-            "seq": self.seq,
-            "mass": self.mass,
-            "bonded_neighbors": self.bonded_neighbors,
-        }
+        return {"mass": self.mass}
 
     @property
     def step_fn(self) -> dict[str, jax_md.rigid_body.RigidBody | jnp.ndarray]:
         """Return the kwargs for the step_fn of the simulator."""
-        return {
-            "seq": self.seq,
-            "bonded_neighbors": self.bonded_neighbors,
-        }
+        return {}
+
 
 
 def split_and_stack(x: jnp.ndarray, n: int) -> jnp.ndarray:

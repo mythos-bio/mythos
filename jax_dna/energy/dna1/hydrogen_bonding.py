@@ -313,12 +313,6 @@ class HydrogenBonding(je_base.BaseEnergyFunction):
         return jnp.multiply(hb_weights, v_hb)
 
     @override
-    def __call__(
-        self,
-        body: je_base.BaseNucleotide,
-        seq: typ.Discrete_Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
-        dgs = self.pairwise_energies(body, body, seq, unbonded_neighbors)
+    def compute_energy(self, nucleotide: je_base.BaseNucleotide) -> typ.Scalar:
+        dgs = self.pairwise_energies(nucleotide, nucleotide, self.seq, self.unbonded_neighbors)
         return dgs.sum()

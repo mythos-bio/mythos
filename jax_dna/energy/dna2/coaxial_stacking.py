@@ -201,12 +201,6 @@ class CoaxialStacking(je_base.BaseEnergyFunction):
         return jnp.where(mask, cx_stack_dg, 0.0)
 
     @override
-    def __call__(
-        self,
-        body: dna2_nucleotide.Nucleotide,
-        seq: typ.Sequence,
-        bonded_neighbors: typ.Arr_Bonded_Neighbors_2,
-        unbonded_neighbors: typ.Arr_Unbonded_Neighbors_2,
-    ) -> typ.Scalar:
-        dgs = self.pairwise_energies(body, body, unbonded_neighbors)
+    def compute_energy(self, nucleotide: dna2_nucleotide.Nucleotide) -> typ.Scalar:
+        dgs = self.pairwise_energies(nucleotide, nucleotide, self.unbonded_neighbors)
         return dgs.sum()
