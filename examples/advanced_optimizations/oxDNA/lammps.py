@@ -13,26 +13,24 @@ See help message for more details.
 """
 
 
-import functools
 import logging
 import typing
 
 import fire
 import jax
 import jax.numpy as jnp
-import jax_dna.energy as jdna_energy
 import jax_dna.energy.dna1 as dna1_energy
 import jax_dna.observables as jd_obs
 import jax_dna.optimization.objective as jdna_objective
 import jax_dna.optimization.optimization as jdna_optimization
 import jax_dna.optimization.simulator as jdna_simulator
-from jax_dna.ui.loggers.logger import NullLogger
 import jax_dna.utils.types as jdna_types
 import jax_md
 import optax
 from jax_dna.input import topology
 from jax_dna.simulators.lammps.lammps_oxdna import LAMMPSoxDNASimulator
 from jax_dna.ui.loggers.console import ConsoleLogger
+from jax_dna.ui.loggers.logger import NullLogger
 from jax_dna.ui.loggers.multilogger import MultiLogger
 
 jax.config.update("jax_enable_x64", True)
@@ -47,53 +45,17 @@ def main(
     ):
     logging.basicConfig(level=logging.INFO)
 
-    simulation_config, energy_config = dna1_energy.default_configs()
-    kT = simulation_config["kT"]
 
-    energy_fns = dna1_energy.default_energy_fns()
-    energy_fn_configs = dna1_energy.default_energy_configs()
-    opt_params = []
-    for ec in energy_fn_configs:
-        opt_params.append(
-            ec.opt_params
-        )
-
-    for op in opt_params:
-        if "ss_stack_weights" in op:
-            del op["ss_stack_weights"]
-        if "eps_backbone" in op:
-            del op["eps_backbone"]
-
-    geometry = energy_config["geometry"]
-    transform_fn = functools.partial(
-        dna1_energy.Nucleotide.from_rigid_body,
-        com_to_backbone=geometry["com_to_backbone"],
-        com_to_hb=geometry["com_to_hb"],
-        com_to_stacking=geometry["com_to_stacking"],
+    top = topology.from_oxdna_file(input_dir / "sys.top")
+    energy_fn = dna1_energy.create_default_energy_fn(
+        topology=top,
+    ).with_noopt(
+        "ss_stack_weights", "ss_hb_weights"
     )
-
-    energy_fn_builder_fn = jdna_energy.energy_fn_builder(
-        energy_fns=energy_fns,
-        energy_configs=energy_fn_configs,
-        transform_fn=transform_fn,
-    )
-
-    topology_fname = "data/templates/simple-helix/sys.top"
-    top = topology.from_oxdna_file(topology_fname)
-
-    def energy_fn_builder(params: jdna_types.Params) -> callable:
-        return jax.vmap(
-            lambda trajectory: energy_fn_builder_fn(params)(
-                trajectory.rigid_body,
-                seq=jnp.array(top.seq),
-                bonded_neighbors=top.bonded_neighbors,
-                unbonded_neighbors=top.unbonded_neighbors.T,
-            )
-        )
 
     simulator = LAMMPSoxDNASimulator(
         input_dir=input_dir,
-        energy_configs=energy_fn_configs,
+        energy_fn=energy_fn,
     )
 
     def simulator_fn(

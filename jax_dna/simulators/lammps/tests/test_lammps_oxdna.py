@@ -4,7 +4,6 @@ from unittest import mock
 import chex
 import numpy as np
 import pytest
-from jax_dna.energy.configuration import BaseConfiguration
 from jax_dna.input.trajectory import Trajectory
 from jax_dna.simulators.io import SimulatorTrajectory
 from jax_dna.simulators.lammps.lammps_oxdna import (
@@ -20,13 +19,24 @@ from jax_dna.simulators.lammps.lammps_oxdna import (
 
 
 @chex.dataclass(frozen=True)
-class DummyConfig(BaseConfiguration):
+class DummyFunction:
     eps_backbone: float = 1.0
     delta_backbone: float = 2.0
     r0_backbone: float = 3.0
 
-    def init_params(self):
-        return self
+    def params_dict(self, **_kwargs) -> dict[str, float]:
+        return {
+            "eps_backbone": self.eps_backbone,
+            "delta_backbone": self.delta_backbone,
+            "r0_backbone": self.r0_backbone,
+        }
+
+    def with_params(self, params: dict[str, float]) -> "DummyFunction":
+        return DummyFunction(
+            eps_backbone=params.get("eps_backbone", self.eps_backbone),
+            delta_backbone=params.get("delta_backbone", self.delta_backbone),
+            r0_backbone=params.get("r0_backbone", self.r0_backbone),
+        )
 
 
 @pytest.fixture
@@ -35,8 +45,10 @@ def dummy_input_lines():
         return " ".join([f"{i+1}.0" for i in range(num)])
     return [
         "variable seed equal 123",
+        "dump unusable all custom 1 unusable.dat id x y z",
         "dump out all custom 1 trajectory.dat id mol type x y z ix iy iz vx vy vz &",
         "    c_quat[1] c_quat[2] c_quat[3] c_quat[4] angmomx angmomy angmomz",
+        "dump_modify out sort id",
         "bond_coeff * 1.0 2.0 3.0",
         "pair_coeff * * oxdna/excv " + dummy_params(9),
         "pair_coeff * * oxdna/stk " + dummy_params(22),
@@ -138,13 +150,13 @@ def test_lammps_oxdna_replace_inputs_missing_seed(dummy_input_lines):
 
 def test_lammps_oxdna_replace_inputs_wrong_traj_name(dummy_input_lines):
     lines = [line.replace("trajectory.dat", "wrong_name.dat") for line in dummy_input_lines]
-    with pytest.raises(ValueError, match="Expected dump filename"):
+    with pytest.raises(ValueError, match="Required dump not found"):
         _lammps_oxdna_replace_inputs(lines, {}, None)
 
 
 def test_lammps_oxdna_replace_inputs_dump_missing_fields(dummy_input_lines):
     lines = [line.replace("angmomx", "") for line in dummy_input_lines]
-    with pytest.raises(ValueError, match="missing required fields"):
+    with pytest.raises(ValueError, match="Required dump not found"):
         _lammps_oxdna_replace_inputs(lines, {}, None)
 
 
@@ -179,7 +191,7 @@ def test_transform_lammps_state_shape():
 def test_simulator_post_init(tmp_path, dummy_input_lines):
     input_dir = tmp_path
     (input_dir / "input").write_text("\n".join(dummy_input_lines))
-    sim = LAMMPSoxDNASimulator(input_dir=input_dir, energy_configs=[DummyConfig()])
+    sim = LAMMPSoxDNASimulator(input_dir=input_dir, energy_fn=DummyFunction())
     assert sim.input_dir != input_dir
     assert sim.input_dir.joinpath("input").exists()
 
@@ -193,13 +205,24 @@ def test_simulator_run_mocks_subprocess(tmp_path, dummy_input_lines, dummy_traje
     sim = LAMMPSoxDNASimulator(
         input_dir=tmp_path,
         overwrite=True,
-        energy_configs=[DummyConfig()],
+        energy_fn=DummyFunction(),
     )
-    params = [{"eps_backbone": 1.1, "delta_backbone": 2.2, "r0_backbone": 3.3}]
+    params = {"eps_backbone": 1.1, "delta_backbone": 2.2, "r0_backbone": 3.3}
+    def get_fene_line(file):
+        lines = file.read_text().splitlines()
+        fene_line = next(line for line in lines if line.startswith("bond_coeff * "))
+        return np.fromstring(fene_line.replace("bond_coeff * ", ""), sep=" ")
+
     # Patch subprocess.check_call so it doesn't actually run anything
     with mock.patch("subprocess.check_call") as m_call:
         m_call.return_value = None
+        # sanity check - to protect against test data change that would invalidate the test
+        assert not np.allclose(get_fene_line(input_file), np.array(list(params.values())))
         result = sim.run(params, seed=123)
+        # Params above are updates of the fene params, ensure that we wrote them
+        # out correctly in the input file.
+        assert np.allclose(get_fene_line(input_file), np.array(list(params.values())))
+        # outputs check, we've already written a dummy trajectory.dat file
         assert isinstance(result, SimulatorTrajectory)
         assert result.length() == 1
         m_call.assert_called_once()

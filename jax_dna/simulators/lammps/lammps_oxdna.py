@@ -11,10 +11,11 @@ import chex
 import numpy as np
 from typing_extensions import override
 
-from jax_dna.energy.configuration import BaseConfiguration
+from jax_dna.energy.base import EnergyFunction
 from jax_dna.input.trajectory import NucleotideState, Trajectory, validate_box_size
 from jax_dna.simulators.base import BaseSimulation
 from jax_dna.simulators.io import SimulatorTrajectory
+from jax_dna.utils.types import Params
 
 
 @chex.dataclass
@@ -26,13 +27,12 @@ class LAMMPSoxDNASimulator(BaseSimulation):
         overwrite: Whether to overwrite the input directory or copy to a
             temporary directory.
         input_file_name: Name of the LAMMPS input file (default "input").
-        energy_configs: List of energy configurations for base energy function
-            parameters
+        energy_fn: Energy function used in the simulation, for updating parameters.
     """
     input_dir: Path
+    energy_fn: EnergyFunction
     overwrite: bool = False
     input_file_name: str = "input"
-    energy_configs: list[BaseConfiguration] | None = None
 
     @override
     def __post_init__(self) -> None:
@@ -62,10 +62,9 @@ class LAMMPSoxDNASimulator(BaseSimulation):
             rigid_body=traj.state_rigid_body,
         )
 
-    def _replace_parameters(self, params: list[dict[str, float]], seed: int | None) -> None:
-        updated_params = [(ec | np).init_params() for ec, np in zip(self.energy_configs, params, strict=True)]
-        flat_params = {k: v for i in updated_params for k, v in i.items()}
-        new_lines = _lammps_oxdna_replace_inputs(self.input_lines, flat_params, seed)
+    def _replace_parameters(self, params: Params, seed: int | None) -> None:
+        updated_params = self.energy_fn.with_params(params).params_dict(exclude_non_optimizable=True)
+        new_lines = _lammps_oxdna_replace_inputs(self.input_lines, updated_params, seed)
         self.input_dir.joinpath(self.input_file_name).write_text("\n".join(new_lines))
 
 
@@ -89,14 +88,13 @@ def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
             seen.add("seed")
             seed = seed or np.random.default_rng().integers(0, 2**24)
             line = f"variable seed equal {seed}"
-        if line.startswith("dump"):
-            fname = line.split()[5]
-            fields = line.split()[6:]
-            if LAMMPS_REQUIRED_FIELDS - set(fields):
-                raise ValueError("LAMMPS dump line missing required fields.")
-            if fname != "trajectory.dat":
-                raise ValueError("Expected dump filename to be 'trajectory.dat'")
-            seen.add("dump_line")
+        if line.startswith("dump "):
+            line_parts = line.split()
+            if len(line_parts) > 6:  # noqa: PLR2004
+                fname = line_parts[5]
+                fields = set(line_parts[6:])
+                if LAMMPS_REQUIRED_FIELDS.issubset(fields) and fname == "trajectory.dat":
+                    seen.add("dump_line")
         for key, replacements in REPLACEMENT_MAP.items():
             if line.startswith(key):
                 seen.add(key)
@@ -104,7 +102,7 @@ def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
                 line = f"{key} {new_parts}"
         new_lines.append(line)
     if "dump_line" not in seen:
-        raise ValueError("Dump line not found in input")
+        raise ValueError(f"Required dump not found. Must dump to trajectory.dat fields {LAMMPS_REQUIRED_FIELDS}.")
     if "seed" not in seen:
         raise ValueError("Random seed not specified in input")
     if missing_params := REPLACEMENT_MAP.keys() - seen:
