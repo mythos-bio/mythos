@@ -137,7 +137,7 @@ def test_lammps_oxdna_replace_inputs_missing_dump():
         "bond_coeff * 1.0 2.0 3.0",
     ]
     params = {"eps_backbone": 1.1, "delta_backbone": 2.2, "r0_backbone": 3.3}
-    with pytest.raises(ValueError, match="Dump line not found in input"):
+    with pytest.raises(ValueError, match="Required dump not found"):
         _lammps_oxdna_replace_inputs(input_lines, params, seed=42)
 
 

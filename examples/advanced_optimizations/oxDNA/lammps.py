@@ -45,6 +45,8 @@ def main(
     ):
     logging.basicConfig(level=logging.INFO)
 
+    _, sim_config = dna1_energy.default_configs()
+    kT = sim_config["kt"]
 
     top = topology.from_oxdna_file(input_dir / "sys.top")
     energy_fn = dna1_energy.create_default_energy_fn(
@@ -74,7 +76,7 @@ def main(
     )
 
     prop_twist_fn = jd_obs.propeller.PropellerTwist(
-        rigid_body_transform_fn=transform_fn,
+        rigid_body_transform_fn=energy_fn.energy_fns[0].transform_fn,
         h_bonded_base_pairs=jnp.array([[1, 14], [2, 13], [3, 12], [4, 11], [5, 10], [6, 9]])
     )
 
@@ -90,6 +92,7 @@ def main(
         loss = jnp.sqrt(loss)
         return loss, (("prop_twist", expected_prop_twist), {})
 
+    opt_params = energy_fn.opt_params()
 
     propeller_twist_objective = jdna_objective.DiffTReObjective(
         name = "DiffTRe",
@@ -97,7 +100,7 @@ def main(
         needed_observables = [obs_trajectory],
         logging_observables = ["loss", "prop_twist"],
         grad_or_loss_fn = prop_twist_loss_fn,
-        energy_fn_builder = energy_fn_builder,
+        energy_fn = energy_fn,
         opt_params = opt_params,
         min_n_eff_factor = 0.95,
         beta = jnp.array(1/kT),
