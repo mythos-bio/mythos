@@ -158,7 +158,7 @@ REPLACEMENT_MAP = {
     ),
     "pair_coeff * * oxdna/hbond": (
         None,
-        "HYDR_F1",
+        "HYDR_F1",  # this we don't have replacement for
         "a_hb",
         "dr0_hb",
         "dr_c_hb",
@@ -289,7 +289,7 @@ REPLACEMENT_MAP = {
 
 
 def _transform_param(param: str, value: float) -> float:
-    if param == "neg_cos_phi1_star_stack":
+    if param in ["neg_cos_phi1_star_stack", "neg_cos_phi2_star_stack"]:
         return -value
     return value
 

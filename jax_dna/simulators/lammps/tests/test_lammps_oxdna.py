@@ -4,6 +4,7 @@ from unittest import mock
 import chex
 import numpy as np
 import pytest
+from jax_dna.energy.dna1 import create_default_energy_fn
 from jax_dna.input.trajectory import Trajectory
 from jax_dna.simulators.io import SimulatorTrajectory
 from jax_dna.simulators.lammps.lammps_oxdna import (
@@ -61,10 +62,9 @@ def dummy_input_lines():
 
 
 @pytest.fixture
-def dummy_input_dir(tmp_path):
+def dummy_input_dir(tmp_path, dummy_input_lines):
     input_file = tmp_path / "input"
-    input_file.write_text(
-    )
+    input_file.write_text("\n".join(dummy_input_lines))
     return tmp_path
 
 
@@ -263,3 +263,55 @@ def test_read_lammps_output(tmp_path, nstates, dummy_trajectory_data, dummy_traj
     for i in range(nstates):
         assert isinstance(traj.states[i].array, np.ndarray)
         assert np.allclose(traj.states[i].array, expected_states)  # same for all states
+
+
+def test_check_dna1_default_energy_fn_replacements(dummy_input_dir):
+    # Expected comes from https://docs.lammps.org/pair_oxdna.html - which has
+    # the default energy function parameters frozen in for oxdna model in
+    # LAMMPS. The non-parameter values have been stripped, noting that the first
+    # parameter from the first hbond is also not included.
+    expected = {
+        "pair_coeff * * oxdna/excv": "2.0 0.7 0.675 2.0 0.515 0.5 2.0 0.33 0.32",
+        "pair_coeff * * oxdna/stk":
+            "1.3448 2.6568 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65",
+        "pair_coeff * * oxdna/hbond": (
+            "8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46"
+            " 3.141592653589793 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+        "pair_coeff 1 4 oxdna/hbond": (
+            "1.077 8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46 3.141592653589793"
+            " 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+        "pair_coeff 2 3 oxdna/hbond": (
+            "1.077 8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46 3.141592653589793"
+            " 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+        "pair_coeff * * oxdna/xstk": (
+            "47.5 0.575 0.675 0.495 0.655 2.25 0.791592653589793 0.58 1.7 1.0 0.68 1.7 1.0 0.68"
+            " 1.5 0 0.65 1.7 0.875 0.68 1.7 0.875 0.68"),
+        "pair_coeff * * oxdna/coaxstk":
+            "46.0 0.4 0.6 0.22 0.58 2.0 2.541592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 -0.65 2.0 -0.65"
+    }
+
+    def checklines(lines, shouldmatch):
+        for line in lines:
+            for key, values_str in expected.items():
+                if line.startswith(key):
+                    updated_values = np.fromstring(line.replace(key, "").strip(), sep=" ", dtype=np.float64)
+                    if "oxdna/stk" in key or "* * oxdna/hbond" in key:
+                        updated_values = updated_values[2:]
+                    elif "oxdna/hbond" in key:
+                        updated_values = updated_values[1:]
+                    expected_values = np.fromstring(values_str, sep=" ", dtype=np.float64)
+                    isclose = np.allclose(updated_values, expected_values)
+                    if shouldmatch:
+                        assert isclose, f"Mismatch in line: {key}"
+                    else:
+                        assert not isclose, f"Expected mismatch in line: {key}"
+
+    # sanity check - default params should NOT match expected
+    checklines(dummy_input_dir.joinpath("input").read_text().splitlines(), shouldmatch=False)
+
+    energy_fn = create_default_energy_fn(topology=mock.MagicMock())
+    sim = LAMMPSoxDNASimulator(input_dir=dummy_input_dir, energy_fn=energy_fn)
+    sim._replace_parameters(params={}, seed=42)
+
+    checklines(sim.input_dir.joinpath("input").read_text().splitlines(), shouldmatch=True)
+
