@@ -5,7 +5,7 @@ import functools
 import itertools
 import multiprocessing as mp
 from pathlib import Path
-from typing import TypeAlias
+from typing import TextIO, TypeAlias
 
 import chex
 import jax.numpy as jnp
@@ -45,6 +45,7 @@ class Trajectory:
     times: typ.Arr_States
     energies: typ.Arr_States_3
     states: list["NucleotideState"]
+    box_size: typ.Vector3D | None = None
 
     def __post_init__(self) -> None:
         """Validate the input."""
@@ -104,6 +105,22 @@ class Trajectory:
                 f"# states: {len(self.states)}",
             ]
         )
+
+    def to_file(self, filepath: Path) -> None:
+        """Write a jaxDNA simulation trajectory to oxDNA file format.
+
+        In cases where the box_size is not specified, it will be written as "0 0 0".
+        """
+        with Path(filepath).open("w") as f:
+            for state_i in range(len(self.times)):
+                _write_state(
+                    file=f,
+                    time=self.times[state_i],
+                    energies=self.energies[state_i],
+                    state=self.states[state_i].array,
+                    box_size=self.box_size,
+                )
+
 
 
 @chex.dataclass(frozen=True)
@@ -221,6 +238,7 @@ def from_file(
     validate_box_size(bs)
 
     return Trajectory(
+        box_size=bs[0],  # from above, we know all box sizes are the same
         n_nucleotides=sum(strand_lengths),
         strand_lengths=strand_lengths,
         times=np.array(ts, dtype=np.float64),
@@ -297,3 +315,18 @@ def _read_file(file_path: Path, start: int, end: int, strand_lengths: list[int],
         line = file_obj.readline()
 
     return ts, bs, es, states
+
+
+def _write_state(
+    file: TextIO,
+    time: float,
+    energies: typ.Vector3D,
+    state: typ.Arr_Nucleotide_15,
+    box_size: typ.Vector3D = (0, 0, 0)
+) -> None:
+    file.write(f"t = {time}\n")
+    file.write(f"b = {box_size[0]} {box_size[1]} {box_size[2]}\n")
+    file.write(f"E = {energies[0]} {energies[1]} {energies[2]}\n")
+    for nucleotide in state:
+        row = " ".join(map(str, nucleotide))
+        file.write(f"{row}\n")

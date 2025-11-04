@@ -411,6 +411,32 @@ def test_trajectory_from_file(
         )
 
 
+def test_trajectory_to_file(tmp_path: Path):
+    input_filepath = TEST_FILES_DIR / "simple-helix-8bp-5steps.conf"
+    output_filepath = tmp_path / "output.conf"
+
+    strand_lengths = [8, 8]
+    trajectory = jdt.from_file(
+        input_filepath,
+        strand_lengths,
+        is_oxdna=False,
+    )
+
+    trajectory.to_file(output_filepath)
+
+    # Read back the written file and compare to the original
+    read_back_trajectory = jdt.from_file(
+        output_filepath,
+        strand_lengths,
+        is_oxdna=False,
+    )
+
+    np.testing.assert_equal(trajectory.times, read_back_trajectory.times)
+    np.testing.assert_equal(trajectory.energies, read_back_trajectory.energies)
+    for i in range(len(trajectory.states)):
+        np.testing.assert_equal(trajectory.states[i].array, read_back_trajectory.states[i].array)
+
+
 def test_trajectory_from_file_raises_file_not_found():
     regx_pat = "^[" + re.escape(jdt.ERR_TRAJECTORY_FILE_NOT_FOUND.format("")) + "]"
     with pytest.raises(FileNotFoundError, match=regx_pat):
