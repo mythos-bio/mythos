@@ -1,4 +1,5 @@
 import re
+from io import StringIO
 from pathlib import Path
 
 import numpy as np
@@ -436,6 +437,14 @@ def test_trajectory_to_file(tmp_path: Path):
     for i in range(len(trajectory.states)):
         np.testing.assert_equal(trajectory.states[i].array, read_back_trajectory.states[i].array)
 
+
+def test_write_state_helper():
+    sio = StringIO()
+    jdt._write_state(sio, time=99, energies=np.array([0.0, 1.0, 2.0]), state=[], box_size=[10.0, 10.0, 10.0])
+    block = sio.getvalue()
+    assert "t = 99" in block
+    assert "b = 10.0 10.0 10.0" in block
+    assert "E = 0.0 1.0 2.0" in block
 
 def test_trajectory_from_file_raises_file_not_found():
     regx_pat = "^[" + re.escape(jdt.ERR_TRAJECTORY_FILE_NOT_FOUND.format("")) + "]"
