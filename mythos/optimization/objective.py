@@ -12,7 +12,7 @@ import jax
 import jax.numpy as jnp
 import jax_md
 import ray
-import typing_extensions
+from typing_extensions import override
 
 import mythos.energy as jdna_energy
 import mythos.utils.types as jdna_types
@@ -34,7 +34,6 @@ class Objective:
         self,
         name: str,
         required_observables: list[str],
-        needed_observables: list[str],
         logging_observables: list[str],
         grad_or_loss_fn: typing.Callable[[tuple[str, ...]], tuple[jdna_types.Grads, list[tuple[str, typing.Any]]]],
         logger_config: dict[str, typing.Any] = empty_dict,
@@ -45,8 +44,6 @@ class Objective:
             name (str): The name of the objective.
             required_observables (list[str]): The observables that are required
                 to calculate the gradients.
-            needed_observables (list[str]): The observables that are needed to
-                calculate the gradients.
             logging_observables (list[str]): The observables that are used for
                 logging.
             grad_or_loss_fn (typing.Callable[[tuple[str, ...]], jdna_types.Grads]):
@@ -57,8 +54,6 @@ class Objective:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="name"))
         if required_observables is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="required_observables"))
-        if needed_observables is None:
-            raise ValueError(ERR_MISSING_ARG.format(missing_arg="needed_observables"))
         if logging_observables is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="logging_observables"))
         if grad_or_loss_fn is None:
@@ -66,87 +61,48 @@ class Objective:
 
         self._name = name
         self._required_observables = required_observables
-        self._needed_observables = needed_observables
         self._grad_or_loss_fn = grad_or_loss_fn
-        self._obtained_observables = []
+        self._obtained_observables = {}
         self._logging_observables = logging_observables
         logging.basicConfig(**logger_config)
         self._logger = logging.getLogger(__name__)
 
-    def name(self) -> str:
-        """Return the name of the objective."""
-        return self._name
-
-    def required_observables(self) -> list[str]:
-        """Return the observables that are required to calculate the gradients."""
-        return self._required_observables
-
-    def needed_observables(self) -> list[str]:
+    def needed_observables(self) -> set[str]:
         """Return the observables that are still needed."""
-        return self._needed_observables
+        return set(self._required_observables) - set(self._obtained_observables)
 
-    def obtained_observables(self) -> list[tuple[str, jdna_types.SimulatorActorOutput]]:
-        """Return the latest observed values for all observables."""
-        return self._obtained_observables
-
-    def logging_observables(self) -> list[tuple[str, typing.Any]]:
+    def logging_observables(self) -> dict[str, typing.Any]:
         """Return the latest observed values for the logging observables."""
-        lastest_observed = self._obtained_observables
-        return_values = []
-        for log_obs in self._logging_observables:
-            for obs in lastest_observed:
-                if obs[0] == log_obs:
-                    return_values.append(obs)
-                    break
-        return return_values
+        return {k: v for k, v in self._obtained_observables.items() if k in self._logging_observables}
 
     def is_ready(self) -> bool:
         """Check if the objective is ready to calculate its gradients."""
-        obtained_keys = [obs[0] for obs in self._obtained_observables]
-        return all(obs in obtained_keys for obs in self._required_observables)
+        return len(self.needed_observables()) == 0
 
-    def update(
-        self,
-        sim_results: list[tuple[list[str], list[str]]],
-    ) -> None:
+    def update_one(self, name: str, value: typing.Any) -> None:
+        if name in self._required_observables:
+            self._obtained_observables[name] = value
+
+    def update(self, names: list[str], *values: typing.Any) -> None:
         """Update the observables with the latest simulation results."""
-        for sim_exposes, sim_output in sim_results:
-            for exposed, output in filter(
-                lambda e: e[0] in self._needed_observables, zip(sim_exposes, sim_output, strict=True)
-            ):
-                self._obtained_observables.append((exposed, output))
-                self._needed_observables.remove(exposed)
+        for name, value in zip(names, values, strict=True):
+            self.update_one(name, value)
+
+    def _get_observables_sorted(self) -> list[typing.Any]:
+        return [self._obtained_observables[name] for name in self._required_observables]
 
     def calculate(self) -> list[jdna_types.Grads]:
         """Calculate the gradients of the objective."""
         if not self.is_ready():
             raise ValueError(ERR_OBJECTIVE_NOT_READY)
 
-        sorted_obtained_observables = sorted(
-            self._obtained_observables,
-            key=lambda x: self._required_observables.index(x[0]),
-        )
-
-        sorted_obs = [x[1] for x in sorted_obtained_observables]
-
-        grads, aux = self._grad_or_loss_fn(*sorted_obs)
-
-        self._obtained_observables = [
-            *aux,
-            *list(zip(self._required_observables, sorted_obs, strict=True)),
-        ]
-
+        grads, aux = self._grad_or_loss_fn(*self._get_observables_sorted())
+        self._obtained_observables.update(dict(aux))
         return grads
 
     def post_step(self, opt_params: dict) -> None:  # noqa: ARG002 - not all objectives need params
         """Reset the needed observables for the next step."""
-        self._needed_observables = self._required_observables[:]
-        self._obtained_observables = []
-
-
-@ray.remote
-class SimGradObjectiveActor(Objective):
-    """Objective that calculates the gradients of a simulation."""
+        self._obtained_observables.clear()
 
 
 def compute_weights_and_neff(
@@ -223,7 +179,6 @@ class DiffTReObjective(Objective):
         self,
         name: str,
         required_observables: list[str],
-        needed_observables: list[str],
         logging_observables: list[str],
         grad_or_loss_fn: typing.Callable[[tuple[jdna_types.SimulatorActorOutput]], jdna_types.Grads],
         energy_fn: EnergyFunction,
@@ -239,7 +194,6 @@ class DiffTReObjective(Objective):
         Args:
             name: The name of the objective.
             required_observables: The observables that are required to calculate the gradients.
-            needed_observables: The observables that are needed to calculate the gradients.
             logging_observables: The observables that are used for logging.
             grad_or_loss_fn: The function that calculates the loss of the objective.
             energy_fn: The energy function used to compute energies.
@@ -253,7 +207,6 @@ class DiffTReObjective(Objective):
         super().__init__(
             name,
             required_observables,
-            needed_observables,
             logging_observables,
             grad_or_loss_fn,
             logger_config=logging_config,
@@ -278,17 +231,12 @@ class DiffTReObjective(Objective):
         self._reference_states = None
         self._reference_energies = None
 
-    @typing_extensions.override
+    @override
     def calculate(self) -> list[jdna_types.Grads]:
         if not self.is_ready():
             raise ValueError(ERR_OBJECTIVE_NOT_READY)
 
-        # want the required observables in the order they are requested
-        sorted_obtained_observables = sorted(
-            filter(lambda x: x[0] in self._required_observables, self._obtained_observables),
-            key=lambda x: self._required_observables.index(x[0]),
-        )
-        sorted_obs = [x[1] for x in sorted_obtained_observables]
+        sorted_obs = self._get_observables_sorted()
 
         (loss, (_, measured_value, new_energies)), grads = compute_loss_and_grad(
             self._opt_params,
@@ -300,28 +248,18 @@ class DiffTReObjective(Objective):
             sorted_obs,
         )
 
-        latest_neff = next(obs for obs in self._obtained_observables if obs[0] == "neff")
-        self._obtained_observables = [
-            ("loss", loss),
-            latest_neff,
-            measured_value,
-            *list(zip(self._required_observables, sorted_obs, strict=True)),
-        ]
-
+        self._obtained_observables.update({"loss": loss})
+        self._obtained_observables.update(dict([measured_value]))
         return grads
 
-    @typing_extensions.override
+    @override
     def is_ready(self) -> bool:
         have_trajectories = super().is_ready()
         if have_trajectories:
-            sorted_obtained_observables = sorted(
-                filter(lambda x: x[0] in self._required_observables, self._obtained_observables),
-                key=lambda x: self._required_observables.index(x[0]),
-            )
+            sorted_obs = self._get_observables_sorted()
+            trajectories = [obs for obs in sorted_obs if isinstance(obs, SimulatorTrajectory)]
 
-            trajectories = [oo[1] for oo in sorted_obtained_observables if isinstance(oo[1], SimulatorTrajectory)]
             if self._reference_states is None:
-
                 def slc_f(n: int) -> slice:
                     return slice(self._n_eq_steps, n, None)
 
@@ -342,38 +280,59 @@ class DiffTReObjective(Objective):
                 ref_energies=self._reference_energies,
             )
 
-            if any(obs[0] == "neff" for obs in self._obtained_observables):
-                self._obtained_observables = [
-                    (obs[0], neff) if obs[0] == "neff" else obs for obs in self._obtained_observables
-                ]
-            else:
-                self._obtained_observables.append(("neff", neff))
+            self._obtained_observables["neff"] = neff
 
             # if the trajectory is no longer valid remove it form obtained
             # and add it to needed so that a new trajectory is run.
             self._logger.info("checking neff %f neff_factory %f", neff, self._n_eff_factor)
             self._logger.info("checking opt steps %d vs %f", self._opt_steps, float(self._max_valid_opt_steps))
             if (neff < self._n_eff_factor) or (self._opt_steps == self._max_valid_opt_steps):
-                self._obtained_observables = []
-                self._needed_observables = self._required_observables[:]
+                self._obtained_observables.clear()
                 self._reference_states = None
                 self._opt_steps = 1
                 have_trajectories = False
 
         return have_trajectories
 
-    @typing_extensions.override
+    @override
     def post_step(
         self,
         opt_params: jdna_types.Params,
     ) -> None:
         # DiffTre objectives may not need to update the trajectory depending on neff
         # the need for a new trajectory is checked in `is_ready`
-        self._obtained_observables = [oo for oo in self._obtained_observables if oo[0] not in ("neff", "loss")]
+        self._obtained_observables.pop("neff", None)
+        self._obtained_observables.pop("loss", None)
         self._opt_params = opt_params
         self._opt_steps += 1
 
 
-@ray.remote
-class DiffTReObjectiveActor(DiffTReObjective):
-    """Objective that calculates the gradients of an objective using DiffTRe and ray."""
+class RayObjective(Objective):
+    """Objective that manages and dispatches to a remote objective in Ray."""
+
+    def __init__(self, objective_class: type[Objective], *args, **kwds) -> "RayObjective":
+        """Initialize the Ray objective."""
+        self.objective = ray.remote(objective_class)(*args, **kwds)
+
+    @override
+    def update(self, *args, **kwargs) -> None:
+        ray.get(self.objective.update.remote(*args, **kwargs))
+
+    @override
+    def needed_observables(self) -> set[str]:
+        return ray.get(self.objective.needed_observables.remote())
+
+    @override
+    def is_ready(self) -> bool:
+        return ray.get(self.objective.is_ready.remote())
+
+    @override
+    def calculate(self) -> list[jdna_types.Grads]:
+        return ray.get(self.objective.calculate.remote())
+
+    def calculate_async(self) -> ray.ObjectRef:
+        return self.objective.calculate.remote()
+
+    @override
+    def post_step(self, opt_params: dict) -> None:
+        ray.get(self.objective.post_step.remote(opt_params))
