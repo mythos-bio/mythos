@@ -18,13 +18,17 @@ class _RaySimulationWrapper:
     def run(self, *args, **kwargs) -> Any:
         return self.simulator.run(*args, **kwargs)
 
+    def call(self, method: str, *args, **kwargs) -> Any:
+        func = getattr(self.simulator, method)
+        return func(*args, **kwargs)
+
 
 class RaySimulation(BaseSimulation):
     """A simulation that runs a simulation using Ray."""
 
-    def __init__(self, sim_class: type[BaseSimulation], /, **sim_kwargs) -> None:
+    def __init__(self, sim_class: type[BaseSimulation], /, ray_options: dict[str, Any], **sim_kwargs) -> None:
         # create wrapper class
-        self.simulator = _RaySimulationWrapper.remote(sim_class, **sim_kwargs)
+        self.simulator = _RaySimulationWrapper.options(**ray_options).remote(sim_class, **sim_kwargs)
 
     @override
     def exposes(self) -> list[str]:
@@ -35,26 +39,39 @@ class RaySimulation(BaseSimulation):
         return ray.get(self.run_async(*args, **kwargs))
 
     def run_async(self, *args, **kwargs) -> ray.ObjectRef:
+        """Runs the simulation asynchronously and returns object references.
+
+        This is the same as run, but does not block and fetch results, but
+        rather returns ray.ObjectRef(s) that can be used to fetch results later.
+        """
         num_returns = len(self.exposes())
         return self.simulator.run.options(num_returns=num_returns).remote(*args, **kwargs)
 
 
 @chex.dataclass(kw_only=True)
-class RayMultiSimulation(MultiSimulation):
+class RayMultiSimulation(MultiSimulation, RaySimulation):
     """A simulation that runs simulations in parallel using Ray."""
 
     @override
     @classmethod
-    def create(cls, num: int, sim_class: type[BaseSimulation], /, *sim_args, **sim_kwargs) -> "RayMultiSimulation":
-        ms = MultiSimulation.create(num, RaySimulation, sim_class, *sim_args, **sim_kwargs)
+    def create(
+        cls,
+        num: int,
+        sim_class: type[BaseSimulation],
+        /,
+        *sim_args,
+        ray_options: dict[str, Any],
+        **sim_kwargs
+    ) -> "RayMultiSimulation":
+        ms = MultiSimulation.create(num, RaySimulation, sim_class, *sim_args, ray_options=ray_options, **sim_kwargs)
         return cls(simulations=ms.simulations)
 
     @override
     def run(self, *args, **kwargs) -> list[Any]:
         refs = self.run_async(*args, **kwargs)
-        results = ray.get(refs)
-        return results
+        return ray.get(refs)
 
+    @override
     def run_async(self, *args, **kwargs) -> list[ray.ObjectRef]:
         refs = []
         for sim in self.simulations:
