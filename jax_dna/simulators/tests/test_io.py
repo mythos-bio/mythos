@@ -3,6 +3,7 @@ import jax_md
 import pytest
 
 import jax_dna.simulators.io as jd_sio
+from jax_dna.input import trajectory
 
 
 @pytest.mark.parametrize(
@@ -52,3 +53,29 @@ def test_simulatortrajectory_length(
     )
 
     assert traj.length() == n
+
+
+@pytest.mark.parametrize(
+    ("n_states", "n_nucleotides"),
+    [
+        (4, 10),
+        (2, 5),
+    ],
+)
+def test_simulator_trajectory_to_file(tmp_path, n_states, n_nucleotides):
+    traj = jd_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=jnp.ones((n_states, n_nucleotides, 3)),
+            orientation=jax_md.rigid_body.Quaternion(
+                # quarternions of (1,0,0,0) translate to back base and base
+                # norms of (0, 0, 0), and vice-a-versa
+                vec=jnp.dstack([jnp.ones((n_states, n_nucleotides, 1)), jnp.zeros((n_states, n_nucleotides, 3))]),
+            ),
+        )
+    )
+    output = tmp_path / "test.traj"
+    traj.to_file(output)
+
+    read_back = trajectory.from_file(output, strand_lengths=[n_nucleotides], is_oxdna=False)
+    assert jnp.allclose(read_back.state_rigid_body.center, traj.rigid_body.center)
+    assert jnp.allclose(read_back.state_rigid_body.orientation.vec, traj.rigid_body.orientation.vec)
