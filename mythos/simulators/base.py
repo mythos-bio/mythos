@@ -15,7 +15,7 @@ import mythos.simulators.io as jd_sio
 class BaseSimulation(ABC):
     """Base class for a simulation."""
 
-    name: str | None = field(default_factory=uuid.uuid4)
+    name: str | None = field(default_factory=lambda: str(uuid.uuid4()))
     exposed_observables: ClassVar[list[str]] = ["trajectory"]
 
     def exposes(self) -> list[str]:
@@ -25,6 +25,10 @@ class BaseSimulation(ABC):
     @abstractmethod
     def run(self, *args, **kwargs) -> jd_sio.SimulatorTrajectory:
         """Run the simulation."""
+
+    @override
+    def __hash__(self) -> int:
+        return object.__hash__(self)
 
 
 @chex.dataclass(kw_only=True)
@@ -53,8 +57,22 @@ class MultiSimulation(BaseSimulation):
         outputs = []
         for sim in self.simulations:
             obs = sim.run(*args, **kwargs)
-            if len(sim.exposes()) > 1:
-                outputs.extend(obs)
-            else:
-                outputs.append(obs)
+            obs = [obs] if len(sim.exposes()) == 1 else obs
+            outputs.extend(obs)
         return outputs
+
+
+class AsyncSimulation(BaseSimulation):
+    """An abstract base class for asynchronous simulations.
+
+    This class extends BaseSimulation to provide an interface for running
+    simulations asynchronously. Typically, concrete implementations would
+    implement the `run_async` method to return future-like objects (e.g.,
+    `ray.ObjectRef`s) that can be used to fetch results later. The `run` method
+    should typically be implemented to call `run_async` and block and fetch
+    results immediately, matching the synchronous api of BaseSimulation.
+    """
+
+    @abstractmethod
+    def run_async(self, *args, **kwargs) -> Any:
+        """Runs the simulation asynchronously and returns future-like objects."""

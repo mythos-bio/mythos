@@ -1,5 +1,6 @@
 """Objectives implemented as ray actors."""
 
+from abc import ABC, abstractmethod
 import functools
 import logging
 import math
@@ -307,6 +308,14 @@ class DiffTReObjective(Objective):
         self._opt_steps += 1
 
 
+class AsyncObjective(Objective, ABC):
+    """An abstract base class for asynchronous objectives."""
+
+    @abstractmethod
+    def calculate_async(self) -> typing.Any:
+        """Calculate the gradients asynchronously."""
+
+
 class RayObjective(Objective):
     """Objective that manages and dispatches to a remote objective in Ray."""
 
@@ -330,9 +339,11 @@ class RayObjective(Objective):
     def calculate(self) -> list[jdna_types.Grads]:
         return ray.get(self.objective.calculate.remote())
 
-    def calculate_async(self) -> ray.ObjectRef:
-        return self.objective.calculate.remote()
-
     @override
     def post_step(self, opt_params: dict) -> None:
         ray.get(self.objective.post_step.remote(opt_params))
+
+    @override
+    def calculate_async(self) -> ray.ObjectRef:
+        return self.objective.calculate.remote()
+
