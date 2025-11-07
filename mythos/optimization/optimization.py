@@ -7,10 +7,12 @@ from abc import ABC, abstractmethod
 import chex
 import optax
 import ray
+from typing_extensions import override
 
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.simulator as jdna_actor
 import mythos.utils.types as jdna_types
+from mythos.simulators.base import BaseSimulation
 from mythos.ui.loggers import logger as jdna_logger
 
 ERR_MISSING_OBJECTIVES = "At least one objective is required."
@@ -18,11 +20,18 @@ ERR_MISSING_SIMULATORS = "At least one simulator is required."
 ERR_MISSING_AGG_GRAD_FN = "An aggregate gradient function is required."
 ERR_MISSING_OPTIMIZER = "An optimizer is required."
 
-
 OptResult = tuple[optax.OptState, jdna_types.Params, jdna_types.Grads]
 
 
 class Optimizer(ABC):
+    """An abstract base class for optimizers.
+
+    Optimizers are a class of objects that take one or more objectives which in
+    turn require one or more observables produced via simulators. The optimizer
+    coordinates passing information between these components in steps and
+    implements an optimization loop.
+    """
+
 
     @abstractmethod
     def step(self, params: jdna_types.Params) -> OptResult:
@@ -54,7 +63,8 @@ class Optimizer(ABC):
         new_params = optax.apply_updates(params, updates)
         return opt_state, new_params, grads
 
-    def optimize(self, initial_params: jdna_types.Params, n_steps: int) -> jdna_types.Params:
+    @staticmethod
+    def optimize(optimizer, initial_params: jdna_types.Params, n_steps: int) -> jdna_types.Params:
         """Run the optimization loop for a given number of steps.
 
         Args:
@@ -66,13 +76,21 @@ class Optimizer(ABC):
         """
         params = initial_params
         for _ in range(n_steps):
-            opt_state, params, grads = self.step(params)
-            self.post_step(opt_state, params)
+            opt_state, params, _ = optimizer.step(params)
+            optimizer = optimizer.post_step(opt_state, params)
         return params
 
+
 @chex.dataclass(frozen=True)
-class RayMultiOptimizer(Optimizer):
+class MultiOptimizer(Optimizer, ABC):
     """Optimization of a list of objectives using a list of simulators.
+
+    This abstract class implements the logic to coordinate multiple objectives
+    and multiple simulators asynchronously, using the interface to remote
+    simulators and objectives defined in this library. `*_async` methods of
+    those should return some type of future object - concrete implementations of
+    this class must implement the methods to wait for and get results from those
+    futures.
 
     Parameters:
         objectives: A list of objectives to optimize.
@@ -116,6 +134,30 @@ class RayMultiOptimizer(Optimizer):
         if len(self._expose_map) != sum(len(exps) for exps in self._sim_exposes.values()):
             raise ValueError("Multiple simulators expose the same observable.")
 
+    @abstractmethod
+    def futures_wait(self, futures: list[typing.Any]) -> tuple[list[typing.Any], list[typing.Any]]:
+        """Waits for the given futures to complete.
+
+        Args:
+            futures: A list of futures to wait for.
+        """
+
+    @abstractmethod
+    def future_get(self, future: typing.Any) -> typing.Any:
+        """Gets the result of the given future locally.
+
+        Args:
+            future: The future to get the result from.
+        """
+
+    @abstractmethod
+    def future_pass(self, future: typing.Any) -> typing.Any:
+        """Get the future for passing to other async calls.
+
+        Args:
+            future: The future to pass.
+        """
+
     def step(self, params: jdna_types.Params) -> OptResult:
         """Perform a single optimization step.
 
@@ -125,11 +167,16 @@ class RayMultiOptimizer(Optimizer):
         Returns:
             A tuple containing the updated optimizer state, new params, and the gradients.
         """
-        remote_map = {}  # maps ray.ObjectRef to producer (simulator observation or objective)
-        needs_map = {}  # maps objective to its needed observables
-        grads_map = {}  # maps objective to gradients that have been calculated
+        # maps futures to producer (simulator observation or objective). This is
+        # useful so we know where to route results when they complete without
+        # having to encode this information in the future itself.
+        remote_map = {}
+        # maps objective to its needed observables to avoid repetitive calls
+        needs_map = {}
+        # maps objective to gradients that have been calculated, used to keep order and done-ness
+        grads_map = {}
 
-        def schedule_simulator(sim) -> None:
+        def schedule_simulator(sim: BaseSimulation) -> None:
             exposures = self._sim_exposes[sim]
             if set(exposures).isdisjoint(remote_map.values()):
                 refs = sim.run_async(params)
@@ -137,7 +184,7 @@ class RayMultiOptimizer(Optimizer):
                 for ref, exp in zip(refs, exposures, strict=True):
                     remote_map[ref] = exp
 
-        def route_to_objective(obs_name, ref) -> None:
+        def route_to_objective(obs_name: str, ref: typing.Any) -> None:
             for objective, needs in needs_map.items():
                 if obs_name in needs:
                     objective.update_one(obs_name, ref)
@@ -160,14 +207,14 @@ class RayMultiOptimizer(Optimizer):
                     for sim in {self._expose_map[obs] for obs in needs_map[objective]}:
                         schedule_simulator(sim)
 
-            done, _ = ray.wait(list(remote_map.keys()), fetch_local=False, num_returns=1)
+            done, _ = self.futures_wait(list(remote_map.keys()))
 
             for ref in done:
                 producer = remote_map.pop(ref)
                 if producer in self.objectives:
-                    grads_map[producer] = ray.get(ref)
+                    grads_map[producer] = self.future_get(ref)
                 else:
-                    route_to_objective(producer, ref)
+                    route_to_objective(producer, self.future_pass(ref))
 
         grads = self.aggregate_grad_fn(list(grads_map.values()))
         return self.get_updates_and_state(grads, params)
@@ -181,6 +228,22 @@ class RayMultiOptimizer(Optimizer):
         for objective in self.objectives:
             objective.post_step(opt_params)
         return self.replace(optimizer_state=optimizer_state)
+
+
+class RayMultiOptimizer(MultiOptimizer):
+    """An optimization that uses Ray actors for objectives and simulators."""
+
+    @override
+    def futures_wait(self, futures: list[typing.Any]) -> tuple[list[typing.Any], list[typing.Any]]:
+        return ray.wait(futures, fetch_local=False, num_returns=1)
+
+    @override
+    def future_get(self, future: typing.Any) -> typing.Any:
+        return ray.get(future)
+
+    @override
+    def future_pass(self, future: typing.Any) -> typing.Any:
+        return future
 
 
 @chex.dataclass(frozen=True)

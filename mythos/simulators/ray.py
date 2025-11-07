@@ -4,7 +4,7 @@ import chex
 import ray
 from typing_extensions import override
 
-from mythos.simulators.base import BaseSimulation, MultiSimulation
+from mythos.simulators.base import AsyncSimulation, BaseSimulation, MultiSimulation
 
 
 @ray.remote
@@ -23,10 +23,10 @@ class _RaySimulationWrapper:
         return func(*args, **kwargs)
 
 
-class RaySimulation(BaseSimulation):
+class RaySimulation(AsyncSimulation):
     """A simulation that runs a simulation using Ray."""
 
-    def __init__(self, sim_class: type[BaseSimulation], /, ray_options: dict[str, Any], **sim_kwargs) -> None:
+    def __init__(self, sim_class: type[BaseSimulation], /, ray_options: dict[str, Any] = {}, **sim_kwargs) -> None:
         # create wrapper class
         self.simulator = _RaySimulationWrapper.options(**ray_options).remote(sim_class, **sim_kwargs)
 
@@ -60,7 +60,7 @@ class RayMultiSimulation(MultiSimulation, RaySimulation):
         sim_class: type[BaseSimulation],
         /,
         *sim_args,
-        ray_options: dict[str, Any],
+        ray_options: dict[str, Any] = {},
         **sim_kwargs
     ) -> "RayMultiSimulation":
         ms = MultiSimulation.create(num, RaySimulation, sim_class, *sim_args, ray_options=ray_options, **sim_kwargs)
