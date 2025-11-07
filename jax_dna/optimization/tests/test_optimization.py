@@ -9,9 +9,10 @@ import ray
 
 import jax_dna.optimization.optimization as jdna_optimization
 from jax_dna.optimization.objective import Objective
+from jax_dna.simulators.base import AsyncSimulation
 
 
-@pytest.fixture
+@pytest.fixture(autouse=True)
 def _ray_mocking(monkeypatch):
     """Fixture to mock ray.get and ray.wait in optimization tests."""
 
@@ -43,7 +44,7 @@ class MockRayObjective(Objective):
         return self.calc_value
 
 
-class MockRaySimulator:
+class MockRaySimulator(AsyncSimulation):
     def __init__(
         self,
         name: str = "test",
@@ -56,6 +57,9 @@ class MockRaySimulator:
         self.hex_id = hex_id
         self.expose_values = exposes
 
+    def run(self, _params):
+        return self.run_val
+
     def run_async(self, _params):
         return self.run_val
 
@@ -65,9 +69,11 @@ class MockRaySimulator:
 
 class MockOptimizer:
     def init(self, params):
+        self.n_update_calls = 0
         return params
 
     def update(self, grads, opt_state, params):  # noqa: ARG002 -- This is just for testing
+        self.n_update_calls += 1
         return {}, opt_state
 
 
@@ -111,7 +117,7 @@ def test_optimization_post_init_raises(
         )
 
 
-def test_optimzation_step(_ray_mocking):
+def test_optimzation_step():
     """Test that the optimization step."""
 
     opt = jdna_optimization.RayMultiOptimizer(
@@ -158,11 +164,12 @@ def test_optimization_fails_for_redundant_observables():
         )
 
 
-def test_simple_optimizer(_ray_mocking):
+@pytest.mark.parametrize("obj_ready", [True, False])
+def test_simple_optimizer(obj_ready):
     """Test that the SimpleOptimizer can be created."""
     opt = jdna_optimization.SimpleOptimizer(
-        objective=MockRayObjective(name="test", ready=True, calc_value=1, required_observables=["q_1"]),
-        simulator=MockRaySimulator(name="test", run_value="test-2", exposes=["q_2"], hex_id="1234"),
+        objective=MockRayObjective(name="test", ready=obj_ready, calc_value=1, required_observables=["q_1"]),
+        simulator=MockRaySimulator(name="test", run_value="test-2", exposes=["q_1"], hex_id="1234"),
         optimizer=MockOptimizer(),
     )
 
@@ -171,3 +178,13 @@ def test_simple_optimizer(_ray_mocking):
     assert params == ({"test": 1}, {})
     new_opt = opt.post_step(optimizer_state=opt_state, opt_params=params)
     assert isinstance(new_opt, jdna_optimization.SimpleOptimizer)
+
+
+def test_optimizer_optimize_loop_simple():
+    opt = jdna_optimization.SimpleOptimizer(
+        objective=MockRayObjective(name="test", ready=True, calc_value=1, required_observables=["q_1"]),
+        simulator=MockRaySimulator(name="test", run_value="test-2", exposes=["q_1"], hex_id="1234"),
+        optimizer=MockOptimizer(),
+    )
+    jdna_optimization.Optimizer.optimize(opt, initial_params={"test": 1}, n_steps=3)
+    assert opt.optimizer.n_update_calls == 3
