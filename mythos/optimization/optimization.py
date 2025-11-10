@@ -10,9 +10,8 @@ import ray
 from typing_extensions import override
 
 import mythos.optimization.objective as jdna_objective
-import mythos.optimization.simulator as jdna_actor
 import mythos.utils.types as jdna_types
-from mythos.simulators.base import BaseSimulation
+from mythos.simulators.base import AsyncSimulation, BaseSimulation
 from mythos.ui.loggers import logger as jdna_logger
 
 ERR_MISSING_OBJECTIVES = "At least one objective is required."
@@ -56,7 +55,7 @@ class Optimizer(ABC):
             An updated instance of the Optimizer.
         """
 
-    def get_updates_and_state(self, grads, params):
+    def get_updates_and_state(self, grads: jdna_types.Grads, params: jdna_types.Params) -> OptResult:
         """Helper function to get the updated optimizer state and new params."""
         opt_state = self.optimizer.init(params) if self.optimizer_state is None else self.optimizer_state
         updates, opt_state = self.optimizer.update(grads, opt_state, params)
@@ -64,10 +63,11 @@ class Optimizer(ABC):
         return opt_state, new_params, grads
 
     @staticmethod
-    def optimize(optimizer, initial_params: jdna_types.Params, n_steps: int) -> jdna_types.Params:
+    def optimize(optimizer: "Optimizer", initial_params: jdna_types.Params, n_steps: int) -> jdna_types.Params:
         """Run the optimization loop for a given number of steps.
 
         Args:
+            optimizer: The optimizer to use for the optimization.
             initial_params: The initial parameters to start optimization from.
             n_steps: The number of optimization steps to perform.
 
@@ -101,8 +101,8 @@ class MultiOptimizer(Optimizer, ABC):
         logger: A logger to use for the optimization.
     """
 
-    objectives: list[jdna_objective.Objective]
-    simulators: list[tuple[jdna_actor.SimulatorActor, jdna_types.MetaData]]
+    objectives: list[jdna_objective.AsyncObjective]
+    simulators: list[AsyncSimulation]
     aggregate_grad_fn: typing.Callable[[list[jdna_types.Grads]], jdna_types.Grads]
     optimizer: optax.GradientTransformation
     optimizer_state: optax.OptState | None = None
@@ -158,7 +158,7 @@ class MultiOptimizer(Optimizer, ABC):
             future: The future to pass.
         """
 
-    def step(self, params: jdna_types.Params) -> OptResult:
+    def step(self, params: jdna_types.Params) -> OptResult:  # noqa: C901
         """Perform a single optimization step.
 
         Args:
@@ -251,7 +251,7 @@ class SimpleOptimizer(Optimizer):
     """A simple optimizer that uses a single objective and simulator."""
 
     objective: jdna_objective.Objective
-    simulator: jdna_actor.SimulatorActor
+    simulator: BaseSimulation
     optimizer: optax.GradientTransformation
     optimizer_state: optax.OptState | None = None
     logger: jdna_logger.Logger = dc.field(default_factory=jdna_logger.NullLogger)

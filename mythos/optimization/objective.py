@@ -1,12 +1,12 @@
 """Objectives implemented as ray actors."""
 
-from abc import ABC, abstractmethod
 import functools
 import logging
 import math
 import operator
 import types
 import typing
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 
 import jax
@@ -81,11 +81,12 @@ class Objective:
         return len(self.needed_observables()) == 0
 
     def update_one(self, name: str, value: typing.Any) -> None:
+        """Update a single observable with the latest simulation result."""
         if name in self._required_observables:
             self._obtained_observables[name] = value
 
     def update(self, names: list[str], *values: typing.Any) -> None:
-        """Update the observables with the latest simulation results."""
+        """Update several observables with the latest simulation results."""
         for name, value in zip(names, values, strict=True):
             self.update_one(name, value)
 

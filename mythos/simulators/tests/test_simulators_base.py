@@ -1,14 +1,17 @@
+from typing import ClassVar
+
 from mythos.simulators.base import BaseSimulation, MultiSimulation
 
 
 class DummySimulation(BaseSimulation):
-    def run(self, params):
+    def run(self, _params):
         return 1
 
-class MultiObsDummySimulation(BaseSimulation):
-    exposed_observables: list[str] = ["obs1", "obs2"]
 
-    def run(self, params):
+class MultiObsDummySimulation(BaseSimulation):
+    exposed_observables: ClassVar[list[str]] = ["obs1", "obs2"]
+
+    def run(self, _params):
         return 1, 2
 
 
@@ -47,6 +50,7 @@ def test_multi_simulation_named():
         "trajectory.DummySimulation.test_sim.1",
     ]
     assert multi_sim.run({}) == [1, 1]
+
 
 def test_multi_simulation_multiple_exposures():
     multi_sim = MultiSimulation.create(2, MultiObsDummySimulation, name="test_sim")

@@ -1,3 +1,5 @@
+"""Utilities for running simulations in parallel using Ray."""
+
 from abc import ABC, abstractmethod
 from typing import Any
 
@@ -24,13 +26,23 @@ class _RaySimulationWrapper:
         return func(*args, **kwargs)
 
 
+@chex.dataclass(kw_only=True)
 class RaySimulation(AsyncSimulation):
     """A simulation that runs a simulation using Ray."""
 
-    def __init__(self, sim_class: type[BaseSimulation], /, ray_options: dict[str, Any] = {}, **sim_kwargs) -> None:
-        super().__init__(name=sim_kwargs.get("name", None))
-        # create wrapper class
-        self.simulator = _RaySimulationWrapper.options(**ray_options).remote(sim_class, **sim_kwargs)
+    simulator: ray.actor.ActorHandle
+
+    @classmethod
+    def create(
+        cls,
+        sim_class: type[BaseSimulation],
+        /,
+        ray_options: dict[str, Any] | None = None,
+        **sim_kwargs
+    ) -> None:
+        """Creates a RaySimulation instance by constructing an actor."""
+        ray_options = ray_options or {}
+        return cls(simulator = _RaySimulationWrapper.options(**ray_options).remote(sim_class, **sim_kwargs))
 
     @override
     def exposes(self) -> list[str]:
@@ -66,8 +78,8 @@ class RaySimulation(AsyncSimulation):
 
 
 @chex.dataclass(kw_only=True)
-class RayMultiSimulation(MultiSimulation, RaySimulation):
-    """A simulation that runs simulations in parallel using Ray."""
+class RayMultiSimulation(MultiSimulation, AsyncSimulation):
+    """A simulator that runs simulations in parallel using Ray."""
 
     simulations: list[RaySimulation]
 
@@ -79,10 +91,12 @@ class RayMultiSimulation(MultiSimulation, RaySimulation):
         sim_class: type[BaseSimulation],
         /,
         *sim_args,
-        ray_options: dict[str, Any] = {},
+        ray_options: dict[str, Any] | None = None,
         **sim_kwargs
     ) -> "RayMultiSimulation":
-        ms = MultiSimulation.create(num, RaySimulation, sim_class, *sim_args, ray_options=ray_options, **sim_kwargs)
+        ms = MultiSimulation.create(
+            num, RaySimulation.create, sim_class, *sim_args, ray_options=ray_options, **sim_kwargs
+        )
         return cls(simulations=ms.simulations)
 
     @override
@@ -101,21 +115,42 @@ class RayMultiSimulation(MultiSimulation, RaySimulation):
 
 
 class RayMultiGangSimulation(RayMultiSimulation, ABC):
-    """A simulation that runs simulations in parallel using Ray ganged actors."""
+    """A simulator that runs ray simulations and performs an action as a group.
 
-    @abstractmethod
+    This class is designed to be extended and have at least the `post_run`
+    method overridden to provide the desired group action. Usage is same as for
+    the RayMultiSimulation.
+    """
+
     def pre_run(self, *args, **kwargs) -> None:
-        """Hook to run before the gang run."""
+        """Hook to run before all simulations have started.
+
+        Please see note in `post_run` about remote execution.
+        """
 
     @abstractmethod
     def post_run(self, observables: list[Any], *args, **kwargs) -> list[Any]:
-        """Hook to run after the gang run."""
+        """Hook to run after all simulations have completed.
 
-    def gang_run(self, *args, **kwargs) -> list[Any]:
-        self.pre_run(*args, **kwargs)
-        observables = ray.get(super().run_async(*args, **kwargs))
-        return self.post_run(observables, *args, **kwargs)
+        This method must be overridden and must return the observables,
+        potentially modified. Please note that if the number of observables
+        is changed here, the exposes method must also be updated accordingly.
 
+        Please note that while this method has read-access to data members of
+        self, it will be run remotely in a copy, and thus cannot modify self.
+        """
+
+    def gang_run(self, *_args, **_kwargs) -> list[Any]:
+        """Run all simulations synchronously as a gang, with pre and post hooks.
+
+        This method is intended to be called internally via `run` or `run_async`
+        and not typically directly.
+        """
+        self.pre_run(*_args, **_kwargs)
+        observables = ray.get(super().run_async(*_args, **_kwargs))
+        return self.post_run(observables, *_args, **_kwargs)
+
+    @override
     def run_async(self, *args, **kwargs) -> list[ray.ObjectRef]:
         num_returns = len(self.exposes())
         return _run_gang.options(num_returns=num_returns).remote(self, *args, **kwargs)
