@@ -10,7 +10,7 @@ from typing_extensions import override
 import mythos.simulators.io as jd_sio
 
 
-@chex.dataclass(kw_only=True)
+@chex.dataclass(kw_only=True, eq=False)
 class BaseSimulation(ABC):
     """Base class for a simulation."""
 
@@ -43,13 +43,9 @@ class MultiSimulation(BaseSimulation):
     @classmethod
     def create(cls, num: int, sim_class: type[BaseSimulation], /, *sim_args, **sim_kwargs) -> "MultiSimulation":
         """Create a MultiSimulation with n instances of sim_cls."""
-        name = sim_kwargs.pop("name", None)
-        def name_kwarg(index: int) -> str:
-            if name is None:
-                return {}
-            return {"name": f"{name}.{index}"}
-        sims = [sim_class(*sim_args, **sim_kwargs, **name_kwarg(i)) for i in range(num)]
-        return cls(simulations=sims)
+        base_name = sim_kwargs.pop("name", str(uuid.uuid4()))
+        sims = [sim_class(*sim_args, **sim_kwargs, name=f"{base_name}.{i}") for i in range(num)]
+        return cls(simulations=sims, name=base_name)
 
     @override
     def exposes(self) -> list[str]:
