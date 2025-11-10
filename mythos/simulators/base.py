@@ -15,8 +15,12 @@ import mythos.simulators.io as jd_sio
 class BaseSimulation(ABC):
     """Base class for a simulation."""
 
-    name: str | None = field(default_factory=lambda: str(uuid.uuid4()))
+    name: str | None = None
     exposed_observables: ClassVar[list[str]] = ["trajectory"]
+
+    def __post_init__(self) -> None:
+        """Sets a default name if none is provided."""
+        self.name = str(uuid.uuid4()) if self.name is None else self.name
 
     def exposes(self) -> list[str]:
         """Get the list of exposed observables."""
@@ -62,6 +66,7 @@ class MultiSimulation(BaseSimulation):
         return outputs
 
 
+@chex.dataclass(kw_only=True)
 class AsyncSimulation(BaseSimulation):
     """An abstract base class for asynchronous simulations.
 

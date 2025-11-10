@@ -7,19 +7,19 @@ from pathlib import Path
 import fire
 import jax
 import jax.numpy as jnp
-import mythos.energy as jdna_energy
+import jax_md
 import mythos.energy.dna1 as dna1_energy
 import mythos.input.topology as jdna_top
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
+from mythos.simulators.oxdna.oxdna import oxDNASimulator
+from mythos.simulators.ray import RayMultiSimulation
 import mythos.utils.types as jdna_types
-import jax_md
 import optax
 import ray
 from mythos.input import oxdna_input
 from mythos.observables import base
 from mythos.observables.persistence_length import PersistenceLength
-from mythos.simulators import oxdna
 from mythos.ui.loggers.console import ConsoleLogger
 from mythos.ui.loggers.logger import NullLogger
 from mythos.ui.loggers.multilogger import MultiLogger
@@ -46,16 +46,7 @@ def main(
 ):
     # The coordination of objectives and simulators is done through Ray actors.
     # So we need to initialize a ray server
-    ray.init(
-        ignore_reinit_error=True,
-        log_to_driver=True,
-        runtime_env={
-            "env_vars": {
-                "JAX_ENABLE_X64": "True",
-                "JAX_PLATFORM_NAME": "cpu",
-            }
-        }
-    )
+    ray.init(runtime_env={"env_vars": {"JAX_ENABLE_X64": "True", "JAX_PLATFORM_NAME": "cpu"}})
 
     oxdna_path = Path(oxdna_path).resolve()
     input_dir = Path(input_dir).resolve()
@@ -80,44 +71,15 @@ def main(
 
     opt_params = energy_fn.opt_params()
 
-    # Simulators ================================================================
-    @ray.remote
-    class RaySimulator:
-        def __init__(self, **kwargs):
-            self.simulator = oxdna.oxDNASimulator(**kwargs)
+    multi_simulator = RayMultiSimulation.create(
+        num_sims,
+        oxDNASimulator,
+        input_dir=input_dir,
+        sim_type=jdna_types.oxDNASimulatorType.DNA1,
+        energy_fn=energy_fn,
+        source_path=oxdna_path,
+    )
 
-        def run(self, params, meta_data=None):
-            return self.simulator.run(params, meta_data)
-
-    class MultiRaySimulator:
-        def __init__(self, simulators):
-            self.simulators = simulators
-
-        def run(self, params, meta_data=None):
-            # Run all the simulators in parallel and wait for all to be finished
-            # before gathering results here
-            futures = [sim.run.remote(params, meta_data) for sim in self.simulators]
-            return ray.get(futures)
-
-        def exposes(self):
-            # each simulator returns 2 observables: traj and energy, but doesn't
-            # really matter what they are called here, just they are unique
-            return [f"obs-{i}" for i in range(len(self.simulators))]
-
-    # Construct multi simulator, it expects a list of simulator actors to be
-    # passed in
-    multi_simulator = MultiRaySimulator([
-        RaySimulator.options(num_cpus=1).remote(
-            input_dir=input_dir,
-            sim_type=jdna_types.oxDNASimulatorType.DNA1,
-            energy_fn=energy_fn,
-            source_path=oxdna_path,
-        )
-        for _ in range(num_sims)
-    ])
-
-
-    # Objective ================================================================
     lp_fn = PersistenceLength(
         rigid_body_transform_fn=transform_fn,
         displacement_fn=jax_md.space.periodic(box_size)[0],
@@ -128,9 +90,8 @@ def main(
     def lp_loss_fn(
         traj: jax_md.rigid_body.RigidBody,
         weights: jnp.ndarray,
-        energy_model: jdna_energy.base.ComposedEnergyFunction,
-        *args,
-        **kwargs,
+        *_args,
+        **_kwargs,
     ) -> tuple[float, tuple[str, typing.Any]]:
         fit_lp = lp_fn(traj, weights=weights)
         loss = (fit_lp - target_lp) ** 2
@@ -140,7 +101,6 @@ def main(
     persistence_length_objective = jdna_objective.DiffTReObjective(
         name="persistence_length",
         required_observables=multi_simulator.exposes(),
-        needed_observables=multi_simulator.exposes(),
         logging_observables=["loss", "persistence_length", "neff"],
         grad_or_loss_fn=lp_loss_fn,
         energy_fn=energy_fn,
@@ -177,7 +137,7 @@ def main(
     for i in tqdm(range(opt_steps), desc="Optimizing"):
         opt_state, opt_params, grads = opt.step(opt_params)
 
-        for (name, value) in opt.objective.logging_observables():
+        for (name, value) in opt.objective.logging_observables().items():
             logger.log_metric(name, value, step=i)
 
         opt = opt.post_step(
