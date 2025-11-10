@@ -1,7 +1,9 @@
 """Tests for optimization module."""
 
+from dataclasses import field
 from typing import Any
 
+import chex
 import numpy as np
 import optax
 import pytest
@@ -28,7 +30,8 @@ def _ray_mocking(monkeypatch):
 
 
 class MockRayObjective(Objective):
-    def __init__(self, *args, calc_value=None, ready=False, required_observables=[], **kwargs):
+    def __init__(self, *args, calc_value=None, ready=False, required_observables=None, **kwargs):
+        required_observables = required_observables or []
         super().__init__(
             *args,
             **kwargs,
@@ -44,24 +47,16 @@ class MockRayObjective(Objective):
         return self.calc_value
 
 
+@chex.dataclass(eq=False)
 class MockRaySimulator(AsyncSimulation):
-    def __init__(
-        self,
-        name: str = "test",
-        run_value: Any = None,
-        hex_id: str = "1234",
-        exposes: list[str] = [],  # noqa: B006 -- This is just for testing
-    ):
-        self.name = name
-        self.run_val = run_value
-        self.hex_id = hex_id
-        self.expose_values = exposes
+    expose_values: list[str] = field(default_factory=list)
+    run_value: Any | None = None
 
     def run(self, _params):
-        return self.run_val
+        return self.run_value
 
     def run_async(self, _params):
-        return self.run_val
+        return self.run_value
 
     def exposes(self):
         return self.expose_values
@@ -126,8 +121,8 @@ def test_optimzation_step():
             MockRayObjective(name="test", ready=False, calc_value=2, required_observables=["q_2"]),
         ],
         simulators=[
-            MockRaySimulator(name="test", run_value="test-1", exposes=["q_1"], hex_id="abcd"),
-            MockRaySimulator(name="test", run_value="test-2", exposes=["q_2"], hex_id="1234"),
+            MockRaySimulator(name="test", run_value="test-1", expose_values=["q_1"]),
+            MockRaySimulator(name="test", run_value="test-2", expose_values=["q_2"]),
         ],
         aggregate_grad_fn=np.mean,
         optimizer=MockOptimizer(),
@@ -158,7 +153,7 @@ def test_optimization_fails_for_redundant_observables():
     with pytest.raises(ValueError, match="expose the same observable"):
         jdna_optimization.RayMultiOptimizer(
             objectives=[MockRayObjective(name="test2", ready=True, required_observables=["q_1"])],
-            simulators=[MockRaySimulator(exposes=["q_1", "q_2"]), MockRaySimulator(exposes=["q_2", "q_3"])],
+            simulators=[MockRaySimulator(expose_values=["q_1", "q_2"]), MockRaySimulator(expose_values=["q_2", "q_3"])],
             aggregate_grad_fn=lambda x: x,
             optimizer=MockOptimizer(),
         )
@@ -169,7 +164,7 @@ def test_simple_optimizer(obj_ready):
     """Test that the SimpleOptimizer can be created."""
     opt = jdna_optimization.SimpleOptimizer(
         objective=MockRayObjective(name="test", ready=obj_ready, calc_value=1, required_observables=["q_1"]),
-        simulator=MockRaySimulator(name="test", run_value="test-2", exposes=["q_1"], hex_id="1234"),
+        simulator=MockRaySimulator(name="test", run_value="test-2", expose_values=["q_1"]),
         optimizer=MockOptimizer(),
     )
 
@@ -183,7 +178,7 @@ def test_simple_optimizer(obj_ready):
 def test_optimizer_optimize_loop_simple():
     opt = jdna_optimization.SimpleOptimizer(
         objective=MockRayObjective(name="test", ready=True, calc_value=1, required_observables=["q_1"]),
-        simulator=MockRaySimulator(name="test", run_value="test-2", exposes=["q_1"], hex_id="1234"),
+        simulator=MockRaySimulator(name="test", run_value="test-2", expose_values=["q_1"]),
         optimizer=MockOptimizer(),
     )
     jdna_optimization.Optimizer.optimize(opt, initial_params={"test": 1}, n_steps=3)
