@@ -42,7 +42,11 @@ class RaySimulation(AsyncSimulation):
     ) -> None:
         """Creates a RaySimulation instance by constructing an actor."""
         ray_options = ray_options or {}
-        return cls(simulator = _RaySimulationWrapper.options(**ray_options).remote(sim_class, **sim_kwargs))
+        return cls(
+            name = sim_kwargs.get("name"),
+            simulator = _RaySimulationWrapper.options(**ray_options).remote(sim_class, **sim_kwargs)
+        )
+
 
     @override
     def exposes(self) -> list[str]:
@@ -97,7 +101,7 @@ class RayMultiSimulation(MultiSimulation, AsyncSimulation):
         ms = MultiSimulation.create(
             num, RaySimulation.create, sim_class, *sim_args, ray_options=ray_options, **sim_kwargs
         )
-        return cls(simulations=ms.simulations)
+        return cls(simulations=ms.simulations, name=ms.name)
 
     @override
     def run(self, *args, **kwargs) -> list[Any]:
