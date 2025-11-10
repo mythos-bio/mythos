@@ -37,6 +37,7 @@ class RaySimulation(AsyncSimulation):
         cls,
         sim_class: type[BaseSimulation],
         /,
+        *sim_args,
         ray_options: dict[str, Any] | None = None,
         **sim_kwargs
     ) -> None:
@@ -44,9 +45,8 @@ class RaySimulation(AsyncSimulation):
         ray_options = ray_options or {}
         return cls(
             name = sim_kwargs.get("name"),
-            simulator = _RaySimulationWrapper.options(**ray_options).remote(sim_class, **sim_kwargs)
+            simulator = _RaySimulationWrapper.options(**ray_options).remote(sim_class, *sim_args, **sim_kwargs)
         )
-
 
     @override
     def exposes(self) -> list[str]:
