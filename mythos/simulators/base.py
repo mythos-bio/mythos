@@ -2,7 +2,6 @@
 
 import uuid
 from abc import ABC, abstractmethod
-from dataclasses import field
 from typing import Any, ClassVar
 
 import chex
@@ -18,8 +17,8 @@ class BaseSimulation(ABC):
     name: str | None = None
     exposed_observables: ClassVar[list[str]] = ["trajectory"]
 
+    @override
     def __post_init__(self) -> None:
-        """Sets a default name if none is provided."""
         self.name = str(uuid.uuid4()) if self.name is None else self.name
 
     def exposes(self) -> list[str]:
@@ -66,7 +65,7 @@ class MultiSimulation(BaseSimulation):
         return outputs
 
 
-@chex.dataclass(kw_only=True)
+@chex.dataclass(kw_only=True, eq=False)
 class AsyncSimulation(BaseSimulation):
     """An abstract base class for asynchronous simulations.
 
