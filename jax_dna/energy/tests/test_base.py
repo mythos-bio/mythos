@@ -363,6 +363,25 @@ def test_composed_energy_function_prop_replacement(list_of_energy_functions):
         cef.with_props(non_existent_prop = "TEST")
 
 
+def test_composed_energy_function_without_terms(list_of_energy_functions):
+    cef = base.ComposedEnergyFunction(energy_fns=list_of_energy_functions)
+    first_by_class = list_of_energy_functions[0].__class__
+    without_fn1 = cef.without_terms(first_by_class)
+    assert len(without_fn1.energy_fns) == 1
+    assert without_fn1.energy_fns == [list_of_energy_functions[1]]
+
+    first_by_name = "MockEnergyFunction1"
+    without_fn1 = cef.without_terms(first_by_name)
+    assert len(without_fn1.energy_fns) == 1
+    assert without_fn1.energy_fns == [list_of_energy_functions[1]]
+
+    cef_w = base.ComposedEnergyFunction(energy_fns=list_of_energy_functions, weights=np.array([2.0, 3.0]))
+    without_fn1_w = cef_w.without_terms(first_by_name)
+    assert len(without_fn1_w.energy_fns) == 1
+    assert without_fn1_w.weights[0] == 3.0
+    assert without_fn1_w.weights.shape == (1,)
+
+
 def test_energy_function_info_initialized_from_topology():
     @chex.dataclass(frozen=True)
     class Top:

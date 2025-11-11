@@ -1,4 +1,4 @@
-
+variable seed equal 30362
 units lj
 
 dimension 3
@@ -37,7 +37,7 @@ pair_coeff * * oxdna2/coaxstk 58.5 0.4 0.6 0.22 0.58 2.0 2.891592653589793 0.65 
 pair_coeff * * oxdna2/dh 0.1 0.15 0.815
 
 #fix 1 all nve/dot
-fix 1 all nve/dotc/langevin 0.1 0.1 100.0 30362 angmom 1000
+fix 1 all nve/dotc/langevin 0.1 0.1 100.0 ${seed} angmom 1000
 #fix 1 all nve/asphere
 #fix 2 all langevin 0.1 0.1 0.03 457145 angmom 10
 
@@ -85,7 +85,7 @@ dump_modify	coord sort id
 
 
 # Changed by RK to permit conversion via TacoxDNA
-dump 4 all custom 660 filename.dat & 
+dump mythos-out all custom 660 trajectory.dat &
     id mol type x y z ix iy iz vx vy vz &
     c_quat[1] c_quat[2] c_quat[3] c_quat[4] &
     angmomx angmomy angmomz
