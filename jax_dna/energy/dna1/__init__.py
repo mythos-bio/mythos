@@ -70,7 +70,9 @@ def default_energy_configs(
             get_param("stacking") | {"kt": overrides.get("kT", default_sim_config["kT"])},
             get_opts("stacking", default_stacking_opts),
         ),
-        UnbondedExcludedVolumeConfiguration.from_dict(get_param("unbonded_excluded_volume")),
+        UnbondedExcludedVolumeConfiguration.from_dict(
+            get_param("unbonded_excluded_volume"), get_opts("unbonded_excluded_volume")
+        ),
         HydrogenBondingConfiguration.from_dict(get_param("hydrogen_bonding"), get_opts("hydrogen_bonding")),
         CrossStackingConfiguration.from_dict(get_param("cross_stacking"), get_opts("cross_stacking")),
         CoaxialStackingConfiguration.from_dict(get_param("coaxial_stacking"), get_opts("coaxial_stacking")),
