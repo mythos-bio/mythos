@@ -1,4 +1,3 @@
-import functools
 
 import jax
 import jax.numpy as jnp
@@ -7,9 +6,9 @@ import numpy as np
 import pytest
 
 import jax_dna.energy.dna2 as jd_energy
-import jax_dna.input.toml as jd_toml
 import jax_dna.input.topology as jd_top
 import jax_dna.input.trajectory as jd_traj
+from jax_dna.utils.units import get_kt
 
 jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - ignore boolean positional value
 # this is a common jax practice
@@ -33,6 +32,12 @@ def get_energy_terms(base_dir: str, term: str) -> np.ndarray:
     return energy_terms[:, COLUMN_NAMES.index(term)]
 
 
+def get_potential_energy(base_dir: str) -> np.ndarray:
+    # Columns are: time, potential_energy, kinetic_energy, total_energy
+    energies = np.loadtxt(base_dir + "/energy.dat")
+    potential_energies = energies[:, 1]
+    return potential_energies[1:]  # ignore the initial state
+
 def get_topology(base_dir: str) -> jd_top.Topology:
     return jd_top.from_oxdna_file(base_dir + "/generated.top")
 
@@ -48,16 +53,8 @@ def get_trajectory(base_dir: str, topology: jd_top.Topology) -> jd_traj.Trajecto
 def get_setup_data(base_dir: str):
     topology = get_topology(base_dir)
     trajectory = get_trajectory(base_dir, topology)
-    default_params = jd_toml.parse_toml("jax_dna/input/dna2/default_energy.toml")
-
-    transform_fn = functools.partial(
-        jd_energy.Nucleotide.from_rigid_body,
-        com_to_backbone_x=default_params["geometry"]["com_to_backbone_x"],
-        com_to_backbone_y=default_params["geometry"]["com_to_backbone_y"],
-        com_to_backbone_dna1=default_params["geometry"]["com_to_backbone_dna1"],
-        com_to_hb=default_params["geometry"]["com_to_hb"],
-        com_to_stacking=default_params["geometry"]["com_to_stacking"],
-    )
+    default_params = jd_energy.default_configs()[1]
+    transform_fn = jd_energy.default_transform_fn()
 
     displacement_fn, _ = jax_md.space.periodic(20.0)
 
@@ -280,7 +277,7 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
     energy_config = jd_energy.DebyeConfiguration(
         **(
             default_params["debye"]
-            | {"kt": kt, "salt_conc": salt_conc, "is_end": topology.is_end, "half_charged_ends": half_charged_ends}
+            | {"kt": kt, "salt_conc": salt_conc, "half_charged_ends": half_charged_ends}
         )
     )
     energy_fn = jd_energy.Debye(
@@ -288,6 +285,73 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
         transform_fn=transform_fn,
         topology=topology,
         params=energy_config.init_params()
+    )
+
+    states = trajectory.state_rigid_body
+    energy = energy_fn.map(states)
+    energy = np.around(energy / topology.n_nucleotides, 6)
+    np.testing.assert_allclose(energy, terms, atol=1e-3)
+
+
+@pytest.mark.parametrize(
+        "base_dir",
+        ["data/test-data/dna2/simple-helix", "data/test-data/dna2/simple-helix-half-charged-ends"]
+)
+def test_debye_is_end_initialization(base_dir: str):
+    top, _, _, transform_fn, _ = get_setup_data(base_dir)
+    dummy = 1 # just to satisfy interface, but make clear here it is not used
+    debye_from_top = jd_energy.Debye(
+        transform_fn=transform_fn,
+        displacement_fn=dummy,
+        topology=top,
+        params=dummy,
+    )
+    assert (debye_from_top.is_end == top.is_end).all()
+    debye_from_direct = jd_energy.Debye(
+        transform_fn=transform_fn,
+        displacement_fn=dummy,
+        bonded_neighbors=top.bonded_neighbors,
+        unbonded_neighbors=top.unbonded_neighbors,
+        is_end=top.is_end,
+        seq=dummy,
+        params=dummy,
+    )
+    assert (debye_from_direct.is_end == top.is_end).all()
+    with pytest.raises(ValueError, match="is_end must be provided"):
+        jd_energy.Debye(
+            transform_fn=transform_fn,
+            displacement_fn=dummy,
+            bonded_neighbors=top.bonded_neighbors,
+            unbonded_neighbors=top.unbonded_neighbors,
+            seq=dummy,
+            params=dummy,
+        )
+
+
+@pytest.mark.parametrize(
+    ("base_dir", "half_charged_ends"),
+    [
+        ("data/test-data/dna2/simple-helix", False),
+        ("data/test-data/dna2/simple-helix-half-charged-ends", True),
+    ]
+)
+def test_total_energy(base_dir: str, *, half_charged_ends: bool):
+    (
+        topology,
+        trajectory,
+        _,
+        _,
+        displacement_fn,
+    ) = get_setup_data(base_dir)
+
+    terms = get_potential_energy(base_dir)
+
+    energy_fn = jd_energy.create_default_energy_fn(
+        topology=topology,
+        displacement_fn=displacement_fn,
+    ).with_params(
+        kt = get_kt(296.15),
+        half_charged_ends = half_charged_ends,
     )
 
     states = trajectory.state_rigid_body

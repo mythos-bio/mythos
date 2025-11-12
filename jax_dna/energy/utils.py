@@ -1,14 +1,18 @@
 """Utility functions for energy calculations."""
 
 import functools
+import importlib
 
+import jax
 import jax.numpy as jnp
 import jax_md
 import numpy as np
 from jax import vmap
+from jaxtyping import PyTree
 
 import jax_dna.utils.constants as jd_const
 import jax_dna.utils.types as typ
+from jax_dna.input import toml
 
 
 @vmap
@@ -125,4 +129,20 @@ def compute_seq_dep_weight(
         jnp.where(
             nt1_unpaired, pair_weight_nt1_up, jnp.where(nt2_unpaired, pair_weight_nt2_up, pair_weight_both_paired)
         ),
+    )
+
+
+def default_configs_for(base: str) -> tuple[PyTree, PyTree]:
+    """Return the default simulation and energy configuration files for dna2 simulations."""
+    config_dir = importlib.resources.files("jax_dna").joinpath("input").joinpath(base)
+
+    sim_config_path = config_dir.joinpath("default_simulation.toml")
+    energy_config_path = config_dir.joinpath("default_energy.toml")
+
+    def cast_f(x: float | list[float]) -> jnp.ndarray:
+        return jnp.array(x, dtype=jnp.float64)
+
+    return (
+        jax.tree.map(cast_f, toml.parse_toml(sim_config_path)),
+        jax.tree.map(cast_f, toml.parse_toml(energy_config_path)),
     )

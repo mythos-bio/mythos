@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 from typing_extensions import override
 
-import jax_dna.energy.base as je_base
 import jax_dna.energy.configuration as config
 import jax_dna.energy.dna2 as dna2_energy
 import jax_dna.energy.na1.nucleotide as na1_nucleotide
@@ -21,7 +20,6 @@ class DebyeConfiguration(config.BaseConfiguration):
 
     # independent parameters
     nt_type: typ.Arr_Nucleotide | None = None
-    is_end: typ.Arr_Nucleotide_Int | None = None
     half_charged_ends: bool | None = None
     kt: float | None = None
     salt_conc: float | None = None
@@ -46,7 +44,6 @@ class DebyeConfiguration(config.BaseConfiguration):
     # override
     required_params: tuple[str] = (
         "nt_type",
-        "is_end",
         "half_charged_ends",
         "kt",
         "salt_conc",
@@ -68,7 +65,6 @@ class DebyeConfiguration(config.BaseConfiguration):
             prefactor_coeff=self.dna_prefactor_coeff,
             kt=self.kt,
             salt_conc=self.salt_conc,
-            is_end=self.is_end,
             half_charged_ends=self.half_charged_ends,
         ).init_params()
 
@@ -78,7 +74,6 @@ class DebyeConfiguration(config.BaseConfiguration):
             prefactor_coeff=self.rna_prefactor_coeff,
             kt=self.kt,
             salt_conc=self.salt_conc,
-            is_end=self.is_end,
             half_charged_ends=self.half_charged_ends,
         ).init_params()
 
@@ -88,7 +83,6 @@ class DebyeConfiguration(config.BaseConfiguration):
             prefactor_coeff=self.drh_prefactor_coeff,
             kt=self.kt,
             salt_conc=self.salt_conc,
-            is_end=self.is_end,
             half_charged_ends=self.half_charged_ends,
         ).init_params()
 
@@ -101,7 +95,7 @@ class DebyeConfiguration(config.BaseConfiguration):
 
 
 @chex.dataclass(frozen=True)
-class Debye(je_base.BaseEnergyFunction):
+class Debye(dna2_energy.Debye):
     """Debye-huckel energy function for NA1 model."""
 
     params: DebyeConfiguration
