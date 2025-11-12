@@ -38,6 +38,7 @@ def get_potential_energy(base_dir: str) -> np.ndarray:
     potential_energies = energies[:, 1]
     return potential_energies[1:]  # ignore the initial state
 
+
 def get_topology(base_dir: str) -> jd_top.Topology:
     return jd_top.from_oxdna_file(base_dir + "/generated.top")
 

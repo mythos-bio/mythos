@@ -133,7 +133,7 @@ def compute_seq_dep_weight(
 
 
 def default_configs_for(base: str) -> tuple[PyTree, PyTree]:
-    """Return the default simulation and energy configuration files for dna2 simulations."""
+    """Return the default simulation and energy configuration files for a given type."""
     config_dir = importlib.resources.files("jax_dna").joinpath("input").joinpath(base)
 
     sim_config_path = config_dir.joinpath("default_simulation.toml")
