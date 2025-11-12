@@ -294,6 +294,29 @@ class ComposedEnergyFunction(EnergyFunction):
         energy_vals = self.compute_terms(body)
         return jnp.sum(energy_vals) if self.weights is None else jnp.dot(self.weights, energy_vals)
 
+    def without_terms(self, *terms: list[str|type]) -> "ComposedEnergyFunction":
+        """Create a new ComposedEnergyFunction without the specified terms.
+
+        Args:
+            *terms: all positional arguments should be either a type or a string
+                which is the name of the type to exclude.
+
+        Returns:
+            ComposedEnergyFunction: a new ComposedEnergyFunction without the
+                specified terms
+        """
+        new_energy_fns = []
+        new_weights = []
+        for i, fn in enumerate(self.energy_fns):
+            if type(fn) in terms or fn.__class__.__name__ in terms:
+                continue
+            new_energy_fns.append(fn)
+            if self.weights is not None:
+                new_weights.append(self.weights[i])
+
+        new_weights = None if self.weights is None else jnp.array(new_weights)
+        return self.replace(energy_fns=new_energy_fns, weights=new_weights)
+
     def add_energy_fn(self, energy_fn: BaseEnergyFunction, weight: float = 1.0) -> "ComposedEnergyFunction":
         """Add an energy function to the list of energy functions.
 
@@ -313,6 +336,7 @@ class ComposedEnergyFunction(EnergyFunction):
             energy_fns=[*self.energy_fns, energy_fn],
             weights=weights,
         )
+
 
     def add_composable_energy_fn(self, energy_fn: "ComposedEnergyFunction") -> "ComposedEnergyFunction":
         """Add a ComposedEnergyFunction to the list of energy functions.

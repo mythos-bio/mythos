@@ -84,6 +84,10 @@ lint.ignore = [
     "FIX002", # https://docs.astral.sh/ruff/rules/line-contains-todo/
     "D107", # https://docs.astral.sh/ruff/rules/undocumented-public-init
     "SIM115", # https://docs.astral.sh/ruff/rules/open-file-with-context-handler
+    # Following has little to do with code
+    "S607", # https://docs.astral.sh/ruff/rules/start-process-with-partial-path/
+    # There is no way to resolve the below, so no real point
+    "S603", # https://docs.astral.sh/ruff/rules/subprocess-without-shell-equals-true/
 ]
 
 exclude = [
