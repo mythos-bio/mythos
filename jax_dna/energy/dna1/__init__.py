@@ -1,11 +1,7 @@
 """oxDNA1 energy implementation in jax_dna."""
 
 import functools
-from pathlib import Path
 from types import MappingProxyType
-
-import jax
-import jax.numpy as jnp
 
 from jax_dna.energy import DEFAULT_DISPLACEMENT
 from jax_dna.energy.base import BaseEnergyFunction, ComposedEnergyFunction, EnergyFunction
@@ -20,31 +16,14 @@ from jax_dna.energy.dna1.hydrogen_bonding import HydrogenBonding, HydrogenBondin
 from jax_dna.energy.dna1.nucleotide import Nucleotide
 from jax_dna.energy.dna1.stacking import Stacking, StackingConfiguration
 from jax_dna.energy.dna1.unbonded_excluded_volume import UnbondedExcludedVolume, UnbondedExcludedVolumeConfiguration
-from jax_dna.input import toml
+from jax_dna.energy.utils import default_configs_for
 from jax_dna.input.topology import Topology
 from jax_dna.utils.types import PyTree
 
 
 def default_configs() -> tuple[PyTree, PyTree]:
-    """Return the default simulation and energy configuration files for dna1 simulations."""
-    config_dir = (
-        # jax_dna/energy/dna1/__init__.py
-        Path(__file__)
-        .resolve()
-        # jax_dna/
-        .parent.parent.parent
-        # jax_dna/input/dna1
-        .joinpath("input")
-        .joinpath("dna1")
-    )
-
-    def cast_f(x: float | list[float]) -> jnp.ndarray:
-        return jnp.array(x, dtype=jnp.float64)
-
-    return (
-        jax.tree.map(cast_f, toml.parse_toml(config_dir.joinpath("default_simulation.toml"))),
-        jax.tree.map(cast_f, toml.parse_toml(config_dir.joinpath("default_energy.toml"))),
-    )
+    """Return the default simulation and energy configurations for dna1."""
+    return default_configs_for("dna1")
 
 
 def default_energy_configs(

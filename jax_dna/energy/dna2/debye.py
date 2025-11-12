@@ -8,6 +8,7 @@ import jax_dna.energy.base as je_base
 import jax_dna.energy.configuration as config
 import jax_dna.energy.dna2.interactions as dna2_interactions
 import jax_dna.utils.types as typ
+from jax_dna.input.topology import Topology
 
 
 @chex.dataclass(frozen=True)
@@ -23,7 +24,6 @@ class DebyeConfiguration(config.BaseConfiguration):
     salt_conc: float | None = None
 
     ## not optimizable
-    is_end: typ.Arr_Nucleotide_Int | None = None
     half_charged_ends: bool | None = None
 
     # dependent parameters
@@ -40,7 +40,6 @@ class DebyeConfiguration(config.BaseConfiguration):
         "prefactor_coeff",
         "kt",
         "salt_conc",
-        "is_end",
         "half_charged_ends",
     )
 
@@ -70,6 +69,15 @@ class Debye(je_base.BaseEnergyFunction):
     """Debye-huckel energy function for DNA2 model."""
 
     params: DebyeConfiguration
+    is_end: typ.Arr_Nucleotide_Int | None = None
+
+    @override
+    def __post_init__(self, topology: Topology | None) -> None:
+        je_base.BaseEnergyFunction.__post_init__(self, topology)
+        if topology is not None:
+            object.__setattr__(self, "is_end", topology.is_end)
+        if self.is_end is None:
+            raise ValueError("is_end must be provided either through topology or directly.")
 
     def pairwise_energies(
         self,
@@ -95,8 +103,8 @@ class Debye(je_base.BaseEnergyFunction):
         )
         db_dgs = jnp.where(mask, db_dgs, 0.0)
 
-        dh_mults_op_i = jnp.where(self.params.is_end[op_i], 0.5, 1.0)
-        dh_mults_op_j = jnp.where(self.params.is_end[op_j], 0.5, 1.0)
+        dh_mults_op_i = jnp.where(self.is_end[op_i], 0.5, 1.0)
+        dh_mults_op_j = jnp.where(self.is_end[op_j], 0.5, 1.0)
         dh_mults = jnp.multiply(dh_mults_op_i, dh_mults_op_j)
         dh_mults = jnp.where(self.params.half_charged_ends, dh_mults, jnp.ones(op_i.shape[0]))
         return jnp.multiply(db_dgs, dh_mults)
