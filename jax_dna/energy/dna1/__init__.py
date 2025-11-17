@@ -9,8 +9,6 @@ from jax_dna.energy.configuration import BaseConfiguration
 from jax_dna.energy.dna1.bonded_excluded_volume import BondedExcludedVolume, BondedExcludedVolumeConfiguration
 from jax_dna.energy.dna1.coaxial_stacking import CoaxialStacking, CoaxialStackingConfiguration
 from jax_dna.energy.dna1.cross_stacking import CrossStacking, CrossStackingConfiguration
-from jax_dna.energy.dna1.expected_hydrogen_bonding import ExpectedHydrogenBonding, ExpectedHydrogenBondingConfiguration
-from jax_dna.energy.dna1.expected_stacking import ExpectedStacking, ExpectedStackingConfiguration
 from jax_dna.energy.dna1.fene import Fene, FeneConfiguration
 from jax_dna.energy.dna1.hydrogen_bonding import HydrogenBonding, HydrogenBondingConfiguration
 from jax_dna.energy.dna1.nucleotide import Nucleotide
@@ -83,10 +81,7 @@ def default_transform_fn() -> callable:
     )
 
 
-def create_default_energy_fn(
-        topology: Topology,
-        displacement_fn: callable = DEFAULT_DISPLACEMENT
-    ) -> EnergyFunction:
+def create_default_energy_fn(topology: Topology, displacement_fn: callable = DEFAULT_DISPLACEMENT) -> EnergyFunction:
     """Create the default oxDNA1 energy function.
 
     This creates the composed energy function from the default set of function
@@ -123,10 +118,6 @@ __all__ = [
     "BondedExcludedVolumeConfiguration",
     "UnbondedExcludedVolume",
     "UnbondedExcludedVolumeConfiguration",
-    "ExpectedHydrogenBondingConfiguration",
-    "ExpectedHydrogenBonding",
-    "ExpectedStackingConfiguration",
-    "ExpectedStacking",
     "default_configs",
     "default_energy_fns",
 ]

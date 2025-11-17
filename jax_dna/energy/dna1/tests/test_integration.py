@@ -92,7 +92,7 @@ def test_bonded_excluded_volume(base_dir: str):
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body
@@ -124,7 +124,7 @@ def test_coaxial_stacking(base_dir: str):
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body
@@ -151,7 +151,7 @@ def test_cross_stacking(base_dir: str):
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body
@@ -177,7 +177,7 @@ def test_fene(base_dir: str):
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body
@@ -203,7 +203,7 @@ def test_hydrogen_bonding(base_dir: str):
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body
@@ -230,7 +230,7 @@ def test_stacking(base_dir: str):
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body
@@ -256,7 +256,7 @@ def test_unbonded_excluded_volume(base_dir: str):
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body

@@ -1,10 +1,9 @@
 """Stacking energy function for RNA2 model."""
 
-import dataclasses as dc
-
 import chex
 import jax.numpy as jnp
 import numpy as np
+from jax import vmap
 from typing_extensions import override
 
 import jax_dna.energy.base as je_base
@@ -15,6 +14,7 @@ import jax_dna.energy.rna2.nucleotide as rna2_nucleotide
 import jax_dna.utils.math as jd_math
 import jax_dna.utils.types as typ
 from jax_dna.energy.dna1.stacking import STACK_WEIGHTS_SA
+from jax_dna.input.sequence_constraints import SequenceConstraints
 
 
 @chex.dataclass(frozen=True)
@@ -50,9 +50,11 @@ class StackingConfiguration(config.BaseConfiguration):
     a_stack_1: float | None = None
     neg_cos_phi2_star_stack: float | None = None
     a_stack_2: float | None = None
+    pseq: typ.Probabilistic_Sequence | None = None
+    pseq_constraints: SequenceConstraints | None = None
 
     kt: float | None = None
-    ss_stack_weights: np.ndarray | None = dc.field(default_factory=lambda: STACK_WEIGHTS_SA)
+    ss_stack_weights: np.ndarray | None = None
 
     # dependent parameters
     b_low_stack: float | None = None
@@ -98,12 +100,19 @@ class StackingConfiguration(config.BaseConfiguration):
         "neg_cos_phi2_star_stack",
         "a_stack_2",
         "kt",
-        "ss_stack_weights",
     )
+
+    non_optimizable_required_params: tuple[str] = ("ss_stack_weights",)
 
     @override
     def init_params(self) -> "StackingConfiguration":
-        eps_stack = self.eps_stack_base + self.eps_stack_kt_coeff * self.kt
+        if self.pseq and self.pseq_constraints is None:
+            raise ValueError("pseq_constraints must be provided when pseq is provided.")
+
+        if self.ss_stack_weights is not None:
+            eps_stack = self.ss_stack_weights * (1.0 + self.kt * self.eps_stack_kt_coeff)
+        else:
+            eps_stack = (self.eps_stack_base + self.eps_stack_kt_coeff * self.kt) * STACK_WEIGHTS_SA
 
         b_low_stack, dr_c_low_stack, b_high_stack, dr_c_high_stack = bsf.get_f1_smoothing_params(
             self.dr0_stack,
@@ -213,7 +222,7 @@ class Stacking(je_base.BaseEnergyFunction):
             cosphi2,
             self.params.dr_low_stack,
             self.params.dr_high_stack,
-            self.params.eps_stack,
+            1,
             self.params.a_stack,
             self.params.dr0_stack,
             self.params.dr_c_stack,
@@ -264,19 +273,14 @@ class Stacking(je_base.BaseEnergyFunction):
         # Compute sequence-dependent weight for each bonded pair
         nn_i = bonded_neighbors[:, 0]
         nn_j = bonded_neighbors[:, 1]
-        stack_weights = self.params.ss_stack_weights[seq[nn_i], seq[nn_j]]
 
+        if self.params.pseq:
+            stack_weights = vmap(self.weight, (0, 0, None))(nn_i, nn_j, self.params.pseq)
+        else:
+            stack_weights = self.params.eps_stack[seq[nn_i], seq[nn_j]]
         return jnp.multiply(stack_weights, v_stack)
 
     @override
     def compute_energy(self, nucleotide: rna2_nucleotide.Nucleotide) -> typ.Scalar:
-        # Compute sequence-independent energy for each bonded pair
-        v_stack = self.compute_v_stack(nucleotide, self.bonded_neighbors)
-
-        # Compute sequence-dependent weight for each bonded pair
-        nn_i = self.bonded_neighbors[:, 0]
-        nn_j = self.bonded_neighbors[:, 1]
-        stack_weights = self.params.ss_stack_weights[self.seq[nn_i], self.seq[nn_j]]
-
-        # Return the weighted sum
-        return jnp.dot(stack_weights, v_stack)
+        dgs = self.pairwise_energies(nucleotide, self.seq, self.bonded_neighbors)
+        return dgs.sum()

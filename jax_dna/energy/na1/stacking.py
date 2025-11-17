@@ -1,7 +1,5 @@
 """Stacking energy function for DNA1 model."""
 
-import dataclasses as dc
-
 import chex
 import jax
 import jax.numpy as jnp
@@ -16,7 +14,6 @@ import jax_dna.energy.na1.nucleotide as na1_nucleotide
 import jax_dna.energy.na1.utils as je_utils
 import jax_dna.energy.rna2 as rna2_energy
 import jax_dna.utils.types as typ
-from jax_dna.energy.dna1.stacking import STACK_WEIGHTS_SA
 
 
 @chex.dataclass(frozen=True)
@@ -47,7 +44,7 @@ class StackingConfiguration(config.BaseConfiguration):
     dna_a_stack_1: float | None = None
     dna_neg_cos_phi2_star_stack: float | None = None
     dna_a_stack_2: float | None = None
-    dna_ss_stack_weights: np.ndarray | None = dc.field(default_factory=lambda: STACK_WEIGHTS_SA)
+    dna_ss_stack_weights: np.ndarray | None = None
     ## RNA2-specific
     rna_eps_stack_base: float | None = None
     rna_eps_stack_kt_coeff: float | None = None
@@ -72,7 +69,7 @@ class StackingConfiguration(config.BaseConfiguration):
     rna_a_stack_1: float | None = None
     rna_neg_cos_phi2_star_stack: float | None = None
     rna_a_stack_2: float | None = None
-    rna_ss_stack_weights: np.ndarray | None = dc.field(default_factory=lambda: STACK_WEIGHTS_SA)
+    rna_ss_stack_weights: np.ndarray | None = None
 
     # dependent parameters
     dna_config: dna1_energy.StackingConfiguration | None = None
@@ -103,7 +100,6 @@ class StackingConfiguration(config.BaseConfiguration):
         "dna_a_stack_1",
         "dna_neg_cos_phi2_star_stack",
         "dna_a_stack_2",
-        "dna_ss_stack_weights",
         # RNA2-specific
         "rna_eps_stack_base",
         "rna_eps_stack_kt_coeff",
@@ -128,8 +124,9 @@ class StackingConfiguration(config.BaseConfiguration):
         "rna_a_stack_1",
         "rna_neg_cos_phi2_star_stack",
         "rna_a_stack_2",
-        "rna_ss_stack_weights",
     )
+
+    non_optimizable_required_params: tuple[str] = ("dna_stack_weights", "rna_stack_weights")
 
     @override
     def init_params(self) -> "StackingConfiguration":
