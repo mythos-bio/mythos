@@ -5,6 +5,7 @@ import dataclasses as dc
 import chex
 import jax.numpy as jnp
 import numpy as np
+from jax import vmap
 from typing_extensions import override
 
 import jax_dna.energy.base as je_base
@@ -13,6 +14,8 @@ import jax_dna.energy.dna1.base_smoothing_functions as bsf
 import jax_dna.energy.dna1.interactions as dna1_interactions
 import jax_dna.utils.math as jd_math
 import jax_dna.utils.types as typ
+from jax_dna.energy.utils import compute_seq_dep_weight
+from jax_dna.input.sequence_constraints import SequenceConstraints
 
 HB_WEIGHTS_SA = jnp.array(
     [
@@ -87,6 +90,9 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
     delta_theta_hb_7_c: float | None = None
     b_hb_8: float | None = None
     delta_theta_hb_8_c: float | None = None
+    # probabilistic sequence and constraints
+    pseq: typ.Probabilistic_Sequence | None = None
+    pseq_constraints: SequenceConstraints | None = None
 
     # override
     required_params: tuple[str] = (
@@ -115,9 +121,10 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
         "a_hb_8",
         "theta0_hb_8",
         "delta_theta_star_hb_8",
-        # Sequence-dependence
-        "ss_hb_weights",
     )
+
+    # Sequence-dependence
+    non_optimizable_required_params: tuple[str] = ("ss_hb_weights",)
 
     # override
     dependent_params: tuple[str] = (
@@ -141,6 +148,9 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
 
     @override
     def init_params(self) -> "HydrogenBondingConfiguration":
+        if self.pseq is not None and self.pseq_constraints is None:
+            raise ValueError("pseq_constraints must be provided when pseq is provided.")
+
         # reference to f1(dr_hb)
         b_low_hb, dr_c_low_hb, b_high_hb, dr_c_high_hb = bsf.get_f1_smoothing_params(
             self.dr0_hb,
@@ -294,6 +304,14 @@ class HydrogenBonding(je_base.BaseEnergyFunction):
 
         return jnp.where(mask, v_hb, 0.0)  # Mask for neighbors
 
+    def weight(self, i: int, j: int, seq: typ.Probabilistic_Sequence) -> float:
+        """Computes the sequence-dependent weight for an unbonded pair."""
+        sc = self.params.pseq_constraints
+
+        return compute_seq_dep_weight(
+            seq, i, j, self.params.ss_hb_weights, sc.is_unpaired, sc.idx_to_unpaired_idx, sc.idx_to_bp_idx
+        )
+
     def pairwise_energies(
         self,
         body_i: je_base.BaseNucleotide,
@@ -308,7 +326,10 @@ class HydrogenBonding(je_base.BaseEnergyFunction):
         # Compute sequence-dependent weight for each unbonded pair
         op_i = unbonded_neighbors[0]
         op_j = unbonded_neighbors[1]
-        hb_weights = self.params.ss_hb_weights[seq[op_i], seq[op_j]]
+        if self.params.pseq:
+            hb_weights = vmap(self.weight, (0, 0, None))(op_i, op_j, self.params.pseq)
+        else:
+            hb_weights = self.params.ss_hb_weights[seq[op_i], seq[op_j]]
 
         return jnp.multiply(hb_weights, v_hb)
 

@@ -15,6 +15,7 @@ import jax_dna.energy.na1.nucleotide as na1_nucleotide
 import jax_dna.energy.na1.utils as je_utils
 import jax_dna.utils.types as typ
 from jax_dna.energy.dna1.hydrogen_bonding import HB_WEIGHTS_SA
+from jax_dna.input.sequence_constraints import SequenceConstraints
 
 
 @chex.dataclass(frozen=True)
@@ -124,6 +125,10 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
     drh_delta_theta_star_hb_8: float | None = None
 
     drh_ss_hb_weights: np.ndarray | None = dc.field(default_factory=lambda: HB_WEIGHTS_SA)
+
+    # probabilistic sequence and constraints
+    pseq: typ.Probabilistic_Sequence | None = None
+    pseq_constraints: SequenceConstraints | None = None
 
     # dependent parameters
     dna_config: dna1_energy.HydrogenBondingConfiguration | None = None
@@ -241,6 +246,8 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
             theta0_hb_8=self.dna_theta0_hb_8,
             delta_theta_star_hb_8=self.dna_delta_theta_star_hb_8,
             ss_hb_weights=self.dna_ss_hb_weights,
+            pseq=self.pseq,
+            pseq_constraints=self.pseq_constraints,
         ).init_params()
 
         rna_config = dna1_energy.HydrogenBondingConfiguration(
@@ -269,6 +276,8 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
             theta0_hb_8=self.rna_theta0_hb_8,
             delta_theta_star_hb_8=self.rna_delta_theta_star_hb_8,
             ss_hb_weights=self.rna_ss_hb_weights,
+            pseq=self.pseq,
+            pseq_constraints=self.pseq_constraints,
         ).init_params()
 
         drh_config = dna1_energy.HydrogenBondingConfiguration(
@@ -297,6 +306,8 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
             theta0_hb_8=self.drh_theta0_hb_8,
             delta_theta_star_hb_8=self.drh_delta_theta_star_hb_8,
             ss_hb_weights=self.drh_ss_hb_weights,
+            pseq=self.pseq,
+            pseq_constraints=self.pseq_constraints,
         ).init_params()
 
         return self.replace(
