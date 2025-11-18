@@ -1,159 +1,98 @@
 """Tests for optimization module."""
 
+from dataclasses import field
 from typing import Any
 
+import chex
 import numpy as np
+import optax
 import pytest
+import ray
 
 import jax_dna.optimization.optimization as jdna_optimization
+from jax_dna.optimization.objective import Objective
+from jax_dna.simulators.base import AsyncSimulation
 
 
-def mock_get_fn(value: Any):
-    return value
+@pytest.fixture(autouse=True)
+def _ray_mocking(monkeypatch):
+    """Fixture to mock ray.get and ray.wait in optimization tests."""
+
+    def mock_get_fn(value: Any):
+        return value
+
+    def ray_wait_fn(refs: list[Any], **kwargs):
+        return refs, []
+
+    monkeypatch.setattr(ray, "get", mock_get_fn)
+    monkeypatch.setattr(ray, "wait", ray_wait_fn)
+    monkeypatch.setattr(optax, "apply_updates", lambda x, y: (x, y))
 
 
-jdna_optimization.get_fn = mock_get_fn
-jdna_optimization.wait_fn = jdna_optimization.split_by_ready
-jdna_optimization.grad_update_fn = lambda x, y: (x, y)
-
-
-class RemoteFn:
-    def __init__(self, value: Any):
-        self.value = value
-
-    def remote(self, *args, **kwargs):  # noqa: ARG002 -- This is just for testing
-        return self.value
-
-
-class MockObjectiveActor:
-    def __init__(
-        self,
-        name: str,
-        ready: bool,  # noqa: FBT001 -- This is just for testing
-        calc_value: Any = None,
-        needed_observables: list[str] = [],  # noqa: B006 -- This is just for testing
-    ):
-        self._name = name
-        self.ready = ready
+class MockRayObjective(Objective):
+    def __init__(self, *args, calc_value=None, ready=False, required_observables=None, **kwargs):
+        required_observables = required_observables or []
+        super().__init__(
+            *args,
+            **kwargs,
+            required_observables=required_observables,
+            logging_observables=[],
+            grad_or_loss_fn=lambda *_obs: (0, [("obs", 1)]),
+        )
         self.calc_value = calc_value
-        self.needed_obs = needed_observables
+        if ready:
+            self._obtained_observables = {k: 1 for k in self._required_observables}
 
-    @property
-    def name(self):
-        return RemoteFn(self._name)
-
-    @property
-    def is_ready(self):
-        return RemoteFn(self.ready)
-
-    @property
-    def calculate(self):
-        return RemoteFn(self.calc_value)
-
-    @property
-    def needed_observables(self):
-        return RemoteFn(self.needed_obs)
-
-    @property
-    def update(self):
-        self.needed_obs = []
-        self.ready = True
-        return RemoteFn(None)
-
-    @property
-    def post_step(self):
-        return RemoteFn(None)
+    def calculate_async(self):
+        return self.calc_value
 
 
-class MockRunningSim:
-    def __init__(self, hex_id: str, is_ready: bool = False):  # noqa: FBT001,FBT002 -- This is just for testing
-        self.hex_id = hex_id
-        self.ready = is_ready
+@chex.dataclass(eq=False)
+class MockRaySimulator(AsyncSimulation):
+    expose_values: list[str] = field(default_factory=list)
+    run_value: Any | None = None
 
-    def task_id(self):
-        hex_val = self.hex_id
+    def run(self, _params):
+        return self.run_value
 
-        class MockHex:
-            def hex(self):
-                return hex_val
+    def run_async(self, _params):
+        return self.run_value
 
-        return MockHex()
-
-    @property
-    def is_ready(self):
-        return RemoteFn(self.ready)
-
-
-class MockSimulatorActor:
-    def __init__(
-        self,
-        name: str = "test",
-        run_value: Any = None,
-        hex_id: str = "1234",
-        exposes: list[str] = [],  # noqa: B006 -- This is just for testing
-    ):
-        self._name = name
-        self.run_val = run_value
-        self.hex_id = hex_id
-        self.expose_values = exposes
-
-    @property
-    def name(self):
-        return RemoteFn(self._name)
-
-    @property
-    def run(self):
-        return RemoteFn(MockRunningSim(self.hex_id, is_ready=True))
-
-    @property
     def exposes(self):
-        return RemoteFn(self.expose_values)
+        return self.expose_values
 
 
 class MockOptimizer:
     def init(self, params):
+        self.n_update_calls = 0
         return params
 
     def update(self, grads, opt_state, params):  # noqa: ARG002 -- This is just for testing
+        self.n_update_calls += 1
         return {}, opt_state
-
-
-def test_split_by_ready():
-    ready = MockObjectiveActor(name="test", ready=True)
-    not_ready = MockObjectiveActor(name="test", ready=False)
-
-    objectives = [ready, not_ready]
-
-    ready, not_ready = jdna_optimization.split_by_ready(objectives)
-
-    assert len(ready) == 1
-    assert len(not_ready) == 1
-
-    assert ready[0] == objectives[0]
-    assert not_ready[0] == objectives[1]
 
 
 @pytest.mark.parametrize(
     ("objectives", "simulators", "aggregate_grad_fn", "optimizer", "expected_err"),
     [
-        ([], [MockSimulatorActor()], lambda x: x, MockOptimizer(), jdna_optimization.ERR_MISSING_OBJECTIVES),
+        ([], [MockRaySimulator()], lambda x: x, MockOptimizer(), jdna_optimization.ERR_MISSING_OBJECTIVES),
         (
-            [MockObjectiveActor(name="test", ready=True)],
+            [MockRayObjective(name="test", ready=True)],
             [],
             lambda x: x,
             MockOptimizer(),
             jdna_optimization.ERR_MISSING_SIMULATORS,
         ),
         (
-            [MockObjectiveActor(name="test", ready=True)],
-            [MockSimulatorActor()],
+            [MockRayObjective(name="test", ready=True)],
+            [MockRaySimulator()],
             None,
             MockOptimizer(),
             jdna_optimization.ERR_MISSING_AGG_GRAD_FN,
         ),
         (
-            [MockObjectiveActor(name="test", ready=True)],
-            [MockSimulatorActor()],
+            [MockRayObjective(name="test", ready=True)],
+            [MockRaySimulator()],
             lambda x: x,
             None,
             jdna_optimization.ERR_MISSING_OPTIMIZER,
@@ -168,7 +107,7 @@ def test_optimization_post_init_raises(
     expected_err,
 ):
     with pytest.raises(ValueError, match=expected_err):
-        jdna_optimization.Optimization(
+        jdna_optimization.RayMultiOptimizer(
             objectives=objectives, simulators=simulators, aggregate_grad_fn=aggregate_grad_fn, optimizer=optimizer
         )
 
@@ -176,14 +115,14 @@ def test_optimization_post_init_raises(
 def test_optimzation_step():
     """Test that the optimization step."""
 
-    opt = jdna_optimization.Optimization(
+    opt = jdna_optimization.RayMultiOptimizer(
         objectives=[
-            MockObjectiveActor(name="test", ready=True, calc_value=1, needed_observables=["q_1"]),
-            MockObjectiveActor(name="test", ready=False, calc_value=2, needed_observables=["q_2"]),
+            MockRayObjective(name="test", ready=True, calc_value=1, required_observables=["q_1"]),
+            MockRayObjective(name="test", ready=False, calc_value=2, required_observables=["q_2"]),
         ],
         simulators=[
-            MockSimulatorActor(name="test", run_value="test-1", exposes=["q_1"], hex_id="abcd"),
-            MockSimulatorActor(name="test", run_value="test-2", exposes=["q_2"], hex_id="1234"),
+            MockRaySimulator(name="test", run_value="test-1", expose_values=["q_1"]),
+            MockRaySimulator(name="test", run_value="test-2", expose_values=["q_2"]),
         ],
         aggregate_grad_fn=np.mean,
         optimizer=MockOptimizer(),
@@ -196,9 +135,9 @@ def test_optimzation_step():
 
 def test_optimization_post_step():
     """Test that the optimizer state is updated after a step."""
-    opt = jdna_optimization.Optimization(
-        objectives=[MockObjectiveActor(name="test", ready=True)],
-        simulators=[MockSimulatorActor()],
+    opt = jdna_optimization.RayMultiOptimizer(
+        objectives=[MockRayObjective(name="test", ready=True)],
+        simulators=[MockRaySimulator()],
         aggregate_grad_fn=lambda x: x,
         optimizer=MockOptimizer(),
         optimizer_state="old",
@@ -207,3 +146,40 @@ def test_optimization_post_step():
     new_state = "new"
     opt = opt.post_step(optimizer_state=new_state, opt_params={})
     assert opt.optimizer_state == new_state
+
+
+def test_optimization_fails_for_redundant_observables():
+    """Test that the optimization fails if two objectives require the same observable."""
+    with pytest.raises(ValueError, match="expose the same observable"):
+        jdna_optimization.RayMultiOptimizer(
+            objectives=[MockRayObjective(name="test2", ready=True, required_observables=["q_1"])],
+            simulators=[MockRaySimulator(expose_values=["q_1", "q_2"]), MockRaySimulator(expose_values=["q_2", "q_3"])],
+            aggregate_grad_fn=lambda x: x,
+            optimizer=MockOptimizer(),
+        )
+
+
+@pytest.mark.parametrize("obj_ready", [True, False])
+def test_simple_optimizer(obj_ready):
+    """Test that the SimpleOptimizer can be created."""
+    opt = jdna_optimization.SimpleOptimizer(
+        objective=MockRayObjective(name="test", ready=obj_ready, calc_value=1, required_observables=["q_1"]),
+        simulator=MockRaySimulator(name="test", run_value="test-2", expose_values=["q_1"]),
+        optimizer=MockOptimizer(),
+    )
+
+    opt_state, params, _ = opt.step(params={"test": 1})
+    assert opt_state is not None
+    assert params == ({"test": 1}, {})
+    new_opt = opt.post_step(optimizer_state=opt_state, opt_params=params)
+    assert isinstance(new_opt, jdna_optimization.SimpleOptimizer)
+
+
+def test_optimizer_optimize_loop_simple():
+    opt = jdna_optimization.SimpleOptimizer(
+        objective=MockRayObjective(name="test", ready=True, calc_value=1, required_observables=["q_1"]),
+        simulator=MockRaySimulator(name="test", run_value="test-2", expose_values=["q_1"]),
+        optimizer=MockOptimizer(),
+    )
+    jdna_optimization.Optimizer.optimize(opt, initial_params={"test": 1}, n_steps=3)
+    assert opt.optimizer.n_update_calls == 3
