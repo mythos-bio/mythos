@@ -466,7 +466,6 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
             | {
                 "kt": kt,
                 "salt_conc": salt_conc,
-                "is_end": topology.is_end,
                 "half_charged_ends": half_charged_ends,
                 "nt_type": topology.nt_type,
             }

@@ -296,7 +296,7 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
     energy_config = jd_energy2.DebyeConfiguration(
         **(
             default_params["debye"]
-            | {"kt": kt, "salt_conc": salt_conc, "is_end": topology.is_end, "half_charged_ends": half_charged_ends}
+            | {"kt": kt, "salt_conc": salt_conc, "half_charged_ends": half_charged_ends}
         )
     )
     energy_fn = jd_energy2.Debye(
