@@ -230,14 +230,15 @@ def test_bonded_excluded_volume(base_dir: str):
 
 
 @pytest.mark.parametrize(
-    ("base_dir", "t_kelvin"),
+    ("base_dir", "t_kelvin", "weights"),
     [
-        ("data/test-data/na1/simple-helix-dna-dna", 296.15),
-        ("data/test-data/na1/simple-helix-dna-rna", 296.15),
-        ("data/test-data/na1/simple-helix-rna-rna", 296.15),
+        ("data/test-data/na1/simple-helix-dna-dna", 296.15, None),
+        ("data/test-data/na1/simple-helix-dna-rna", 296.15, None),
+        ("data/test-data/na1/simple-helix-rna-rna", 296.15, None),
+        ("data/test-data/na1/simple-helix-rna-dna", 296.15, jnp.zeros((4, 4))),
     ],
 )
-def test_stacking(base_dir: str, t_kelvin: float):
+def test_stacking(base_dir: str, t_kelvin: float, weights: jnp.ndarray):
     (
         topology,
         trajectory,
@@ -255,7 +256,9 @@ def test_stacking(base_dir: str, t_kelvin: float):
     terms = get_energy_terms(base_dir, "stacking")
     # compute energy terms
     energy_config = jd_energy.StackingConfiguration(
-        **(default_params["stacking"] | {"kt": t_kelvin * 0.1 / 300.0, "nt_type": nt_type})
+        **(default_params["stacking"] | {"kt": t_kelvin * 0.1 / 300.0, "nt_type": nt_type}),
+        dna_ss_stack_weights=weights,
+        rna_ss_stack_weights=weights,
     )
     energy_fn = jd_energy.Stacking(
         displacement_fn=displacement_fn,
@@ -269,6 +272,9 @@ def test_stacking(base_dir: str, t_kelvin: float):
     energy = energy_fn.map(states)
 
     energy = np.around(energy / topology.n_nucleotides, 6)
+
+    if weights is not None:
+        terms *= 0.0  # our supplied weights are zero, so we expect zero energy
 
     np.testing.assert_allclose(energy, terms, atol=1e-3)  # using a higher tolerance here
 

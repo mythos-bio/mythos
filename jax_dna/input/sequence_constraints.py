@@ -207,4 +207,10 @@ def dseq_to_pseq(dseq: typ.Discrete_Sequence, sc: SequenceConstraints) -> typ.Pr
         bp_type_idx = jd_const.BP_IDX_MAP[bp_tuple]
         bp_pseq[bp_idx][bp_type_idx] = 1.0
 
+    # With zero base pairs, we need a dummy array to handle the -1 indexing
+    # which is used in computing pair weights where individual nucleotides are
+    # not in a base pair and thus ignored in computation but needed in access.
+    if n_bp == 0:
+        bp_pseq = np.zeros((1, 4), dtype=np.float64)
+
     return (jnp.array(up_pseq), jnp.array(bp_pseq))

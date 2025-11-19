@@ -33,7 +33,7 @@ class Stacking(jd_energy1.Stacking):
         nn_j = bonded_neighbors[:, 1]
 
         if self.params.pseq:
-            stack_weights = vmap(self.weight, (0, 0, None))(nn_i, nn_j, self.params.pseq)
+            stack_weights = vmap(self.pseq_weights, (0, 0, None))(nn_i, nn_j, self.params.pseq)
         else:
             stack_weights = self.params.eps_stack[seq[nn_i], seq[nn_j]]
         return jnp.multiply(stack_weights, v_stack)
