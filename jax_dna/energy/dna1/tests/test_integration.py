@@ -11,6 +11,7 @@ import jax_dna.energy.dna1 as jd_energy
 import jax_dna.input.toml as jd_toml
 import jax_dna.input.topology as jd_top
 import jax_dna.input.trajectory as jd_traj
+from jax_dna.input.sequence_constraints import dseq_to_pseq, from_bps
 
 jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - ignore boolean positional value
 # this is a common jax practice
@@ -213,8 +214,12 @@ def test_hydrogen_bonding(base_dir: str):
 
 
 # mismatch 1/100
-@pytest.mark.parametrize("base_dir", ["data/test-data/dna1/simple-helix"])
-def test_stacking(base_dir: str):
+@pytest.mark.parametrize(("base_dir", "weights", "use_pseq"), [
+    ("data/test-data/dna1/simple-helix", None, False),
+    ("data/test-data/dna1/simple-helix", jnp.zeros((4, 4)), False),
+    ("data/test-data/dna1/simple-helix", None, True),
+])
+def test_stacking(base_dir: str, weights: jnp.ndarray, *, use_pseq: bool):
     (
         topology,
         trajectory,
@@ -225,7 +230,10 @@ def test_stacking(base_dir: str):
 
     terms = get_energy_terms(base_dir, "stacking")
     # compute energy terms
-    energy_config = jd_energy.StackingConfiguration(**(default_params["stacking"] | {"kt": 296.15 * 0.1 / 300.0}))
+    energy_config = jd_energy.StackingConfiguration(
+        **(default_params["stacking"] | {"kt": 296.15 * 0.1 / 300.0}),
+        ss_stack_weights=weights,
+    )
     energy_fn = jd_energy.Stacking(
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
@@ -233,9 +241,16 @@ def test_stacking(base_dir: str):
         params=energy_config.init_params(),
     )
 
+    if use_pseq:  # create a probabilistic sequence, one-hot encoded matching the discrete sequence
+        sc = from_bps(topology.n_nucleotides, bps=jnp.zeros((0, 2), dtype=jnp.int32))
+        pseq = dseq_to_pseq(topology.seq, sc)
+        energy_fn = energy_fn.with_params(pseq=pseq, pseq_constraints=sc)
+
     states = trajectory.state_rigid_body
     energy = energy_fn.map(states)
     energy = np.around(energy / topology.n_nucleotides, 6)
+    if weights is not None:
+        terms *= 0.0  # our supplied weights are zero, so we expect zero energy
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
 

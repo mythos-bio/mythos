@@ -98,7 +98,7 @@ class StackingConfiguration(config.BaseConfiguration):
         "kt",
     )
 
-    non_optimizable_required_params: tuple[str] = ("ss_stack_weights",)
+    non_optimizable_required_params: tuple[str] = ("kt", "ss_stack_weights")
 
     dependent_params: tuple[str] = (
         "b_low_stack",
@@ -260,7 +260,7 @@ class Stacking(je_base.BaseEnergyFunction):
             self.params.b_neg_cos_phi2_stack,
         )
 
-    def weight(self, i: int, j: int, seq: typ.Probabilistic_Sequence) -> float:
+    def pseq_weights(self, i: int, j: int, seq: typ.Probabilistic_Sequence) -> float:
         """Computes the sequence-dependent weight for a bonded pair."""
         sc = self.params.pseq_constraints
         return compute_seq_dep_weight(
@@ -284,7 +284,7 @@ class Stacking(je_base.BaseEnergyFunction):
         nn_j = bonded_neighbors[:, 1]
 
         if self.params.pseq:
-            stack_weights = vmap(self.weight, (0, 0, None))(nn_i, nn_j, self.params.pseq)
+            stack_weights = vmap(self.pseq_weights, (0, 0, None))(nn_i, nn_j, self.params.pseq)
         else:
             stack_weights = self.params.eps_stack[seq[nn_i], seq[nn_j]]
         return jnp.multiply(stack_weights, v_stack)
