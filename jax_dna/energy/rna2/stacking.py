@@ -104,8 +104,6 @@ class StackingConfiguration(config.BaseConfiguration):
         "kt",
     )
 
-    non_optimizable_required_params: tuple[str] = ("kt", "ss_stack_weights")
-
     @override
     def init_params(self) -> "StackingConfiguration":
         if self.pseq and self.pseq_constraints is None:

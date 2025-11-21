@@ -1,6 +1,5 @@
 """Hydrogen bonding energy function for DNA1 model."""
 
-import dataclasses as dc
 
 import chex
 import jax.numpy as jnp
@@ -71,7 +70,7 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
     delta_theta_star_hb_8: float | None = None
 
     # required but not optimizable
-    ss_hb_weights: np.ndarray | None = dc.field(default_factory=lambda: HB_WEIGHTS_SA)
+    ss_hb_weights: np.ndarray | None = None
 
     # dependent parameters =====================================================
     b_low_hb: float | None = None
@@ -90,6 +89,8 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
     delta_theta_hb_7_c: float | None = None
     b_hb_8: float | None = None
     delta_theta_hb_8_c: float | None = None
+    # Sequence-dependence parameters
+    eps_hb_weights: np.ndarray | None = None
     # probabilistic sequence and constraints
     pseq: typ.Probabilistic_Sequence | None = None
     pseq_constraints: SequenceConstraints | None = None
@@ -123,9 +124,6 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
         "delta_theta_star_hb_8",
     )
 
-    # Sequence-dependence
-    non_optimizable_required_params: tuple[str] = ("ss_hb_weights",)
-
     # override
     dependent_params: tuple[str] = (
         "b_low_hb",
@@ -144,12 +142,15 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
         "delta_theta_hb_7_c",
         "b_hb_8",
         "delta_theta_hb_8_c",
+        "eps_hb_weights",
     )
 
     @override
     def init_params(self) -> "HydrogenBondingConfiguration":
         if self.pseq is not None and self.pseq_constraints is None:
             raise ValueError("pseq_constraints must be provided when pseq is provided.")
+
+        eps_hb_weights = HB_WEIGHTS_SA * self.eps_hb if self.ss_hb_weights is None else self.ss_hb_weights
 
         # reference to f1(dr_hb)
         b_low_hb, dr_c_low_hb, b_high_hb, dr_c_high_hb = bsf.get_f1_smoothing_params(
@@ -219,6 +220,7 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
             delta_theta_hb_7_c=delta_theta_hb_7_c,
             b_hb_8=b_hb_8,
             delta_theta_hb_8_c=delta_theta_hb_8_c,
+            eps_hb_weights=eps_hb_weights,
         )
 
 
@@ -264,7 +266,7 @@ class HydrogenBonding(je_base.BaseEnergyFunction):
             self.params.dr_high_hb,
             self.params.dr_c_low_hb,
             self.params.dr_c_high_hb,
-            self.params.eps_hb,
+            1,  # eps is handled via eps_hb_weights NT-NT matrix
             self.params.a_hb,
             self.params.dr0_hb,
             self.params.dr_c_hb,
@@ -309,7 +311,7 @@ class HydrogenBonding(je_base.BaseEnergyFunction):
         sc = self.params.pseq_constraints
 
         return compute_seq_dep_weight(
-            seq, i, j, self.params.ss_hb_weights, sc.is_unpaired, sc.idx_to_unpaired_idx, sc.idx_to_bp_idx
+            seq, i, j, self.params.eps_hb_weights, sc.is_unpaired, sc.idx_to_unpaired_idx, sc.idx_to_bp_idx
         )
 
     def pairwise_energies(
@@ -329,7 +331,7 @@ class HydrogenBonding(je_base.BaseEnergyFunction):
         if self.params.pseq:
             hb_weights = vmap(self.weight, (0, 0, None))(op_i, op_j, self.params.pseq)
         else:
-            hb_weights = self.params.ss_hb_weights[seq[op_i], seq[op_j]]
+            hb_weights = self.params.eps_hb_weights[seq[op_i], seq[op_j]]
 
         return jnp.multiply(hb_weights, v_hb)
 
