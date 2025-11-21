@@ -126,8 +126,6 @@ class StackingConfiguration(config.BaseConfiguration):
         "rna_a_stack_2",
     )
 
-    non_optimizable_required_params: tuple[str] = ("dna_stack_weights", "rna_stack_weights")
-
     @override
     def init_params(self) -> "StackingConfiguration":
         dna_config = dna1_energy.StackingConfiguration(

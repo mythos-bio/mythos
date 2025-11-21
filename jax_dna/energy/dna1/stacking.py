@@ -98,8 +98,6 @@ class StackingConfiguration(config.BaseConfiguration):
         "kt",
     )
 
-    non_optimizable_required_params: tuple[str] = ("kt", "ss_stack_weights")
-
     dependent_params: tuple[str] = (
         "b_low_stack",
         "dr_c_low_stack",
@@ -127,7 +125,7 @@ class StackingConfiguration(config.BaseConfiguration):
             eps_stack = (self.eps_stack_base + self.eps_stack_kt_coeff * self.kt) * STACK_WEIGHTS_SA
         else:
             eps_stack = self.ss_stack_weights * (
-                1.0 - self.eps_stack_kt_coeff + self.kt * 9.0 * self.eps_stack_kt_coeff
+                1.0 - self.eps_stack_kt_coeff + (self.kt * 9.0 * self.eps_stack_kt_coeff)
             )
 
         b_low_stack, dr_c_low_stack, b_high_stack, dr_c_high_stack = bsf.get_f1_smoothing_params(
@@ -261,7 +259,7 @@ class Stacking(je_base.BaseEnergyFunction):
         )
 
     def pseq_weights(self, i: int, j: int, seq: typ.Probabilistic_Sequence) -> float:
-        """Computes the sequence-dependent weight for a bonded pair."""
+        """Computes the probabilistic sequence-dependent weight for a bonded pair."""
         sc = self.params.pseq_constraints
         return compute_seq_dep_weight(
             seq, i, j, self.params.eps_stack, sc.is_unpaired, sc.idx_to_unpaired_idx, sc.idx_to_bp_idx

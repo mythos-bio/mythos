@@ -1,6 +1,5 @@
 """Hydrogen bonding energy function for NA1 model."""
 
-import dataclasses as dc
 
 import chex
 import jax
@@ -14,7 +13,6 @@ import jax_dna.energy.dna1 as dna1_energy
 import jax_dna.energy.na1.nucleotide as na1_nucleotide
 import jax_dna.energy.na1.utils as je_utils
 import jax_dna.utils.types as typ
-from jax_dna.energy.dna1.hydrogen_bonding import HB_WEIGHTS_SA
 from jax_dna.input.sequence_constraints import SequenceConstraints
 
 
@@ -56,7 +54,7 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
     dna_theta0_hb_8: float | None = None
     dna_delta_theta_star_hb_8: float | None = None
 
-    dna_ss_hb_weights: np.ndarray | None = dc.field(default_factory=lambda: HB_WEIGHTS_SA)
+    dna_ss_hb_weights: np.ndarray | None = None
 
     ## RNA2-specific
     rna_eps_hb: float | None = None
@@ -90,7 +88,7 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
     rna_theta0_hb_8: float | None = None
     rna_delta_theta_star_hb_8: float | None = None
 
-    rna_ss_hb_weights: np.ndarray | None = dc.field(default_factory=lambda: HB_WEIGHTS_SA)
+    rna_ss_hb_weights: np.ndarray | None = None
 
     ## DNA/RNA-hybrid-specific
     drh_eps_hb: float | None = None
@@ -124,7 +122,7 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
     drh_theta0_hb_8: float | None = None
     drh_delta_theta_star_hb_8: float | None = None
 
-    drh_ss_hb_weights: np.ndarray | None = dc.field(default_factory=lambda: HB_WEIGHTS_SA)
+    drh_ss_hb_weights: np.ndarray | None = None
 
     # probabilistic sequence and constraints
     pseq: typ.Probabilistic_Sequence | None = None
@@ -163,7 +161,6 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
         "dna_a_hb_8",
         "dna_theta0_hb_8",
         "dna_delta_theta_star_hb_8",
-        "dna_ss_hb_weights",
         # RNA2-specific
         "rna_eps_hb",
         "rna_a_hb",
@@ -189,7 +186,6 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
         "rna_a_hb_8",
         "rna_theta0_hb_8",
         "rna_delta_theta_star_hb_8",
-        "rna_ss_hb_weights",
         # DNA/RNA-hybrid-specific
         "drh_eps_hb",
         "drh_a_hb",
@@ -215,7 +211,6 @@ class HydrogenBondingConfiguration(config.BaseConfiguration):
         "drh_a_hb_8",
         "drh_theta0_hb_8",
         "drh_delta_theta_star_hb_8",
-        "drh_ss_hb_weights",
     )
 
     @override

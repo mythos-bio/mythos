@@ -1,4 +1,5 @@
 import functools
+from pathlib import Path
 
 import jax
 import jax.numpy as jnp
@@ -12,6 +13,7 @@ import jax_dna.input.toml as jd_toml
 import jax_dna.input.topology as jd_top
 import jax_dna.input.trajectory as jd_traj
 from jax_dna.input.sequence_constraints import dseq_to_pseq, from_bps
+from jax_dna.input.sequence_dependence import read_ss_weights
 
 jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - ignore boolean positional value
 # this is a common jax practice
@@ -187,8 +189,16 @@ def test_fene(base_dir: str):
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
 
-@pytest.mark.parametrize("base_dir", ["data/test-data/dna1/simple-helix"])
-def test_hydrogen_bonding(base_dir: str):
+@pytest.mark.parametrize(
+    ("base_dir", "weights_file", "use_pseq"),
+    [
+        ("data/test-data/dna1/simple-helix", None, False),
+        ("data/test-data/dna1/simple-helix", None, True),
+        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", False),
+        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True),
+    ]
+)
+def test_hydrogen_bonding(base_dir: str, weights_file: str, *, use_pseq: bool):
     (
         topology,
         trajectory,
@@ -200,45 +210,21 @@ def test_hydrogen_bonding(base_dir: str):
     terms = get_energy_terms(base_dir, "hydrogen_bonding")
     # compute energy terms
     energy_config = jd_energy.HydrogenBondingConfiguration(**default_params["hydrogen_bonding"])
+    if weights_file is not None:
+        ss_params = read_ss_weights(Path(base_dir) / weights_file)
+        ss_params = {
+            "ss_hb_weights": ss_params["ss_hb_weights"],
+        }
+    else:
+        ss_params = {}
+
     energy_fn = jd_energy.HydrogenBonding(
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
         params=energy_config.init_params(),
-    )
-
-    states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
-    energy = np.around(energy / topology.n_nucleotides, 6)
-    np.testing.assert_allclose(energy, terms, atol=1e-3)
-
-
-# mismatch 1/100
-@pytest.mark.parametrize(("base_dir", "weights", "use_pseq"), [
-    ("data/test-data/dna1/simple-helix", None, False),
-    ("data/test-data/dna1/simple-helix", jnp.zeros((4, 4)), False),
-    ("data/test-data/dna1/simple-helix", None, True),
-])
-def test_stacking(base_dir: str, weights: jnp.ndarray, *, use_pseq: bool):
-    (
-        topology,
-        trajectory,
-        default_params,
-        transform_fn,
-        displacement_fn,
-    ) = get_setup_data(base_dir)
-
-    terms = get_energy_terms(base_dir, "stacking")
-    # compute energy terms
-    energy_config = jd_energy.StackingConfiguration(
-        **(default_params["stacking"] | {"kt": 296.15 * 0.1 / 300.0}),
-        ss_stack_weights=weights,
-    )
-    energy_fn = jd_energy.Stacking(
-        displacement_fn=displacement_fn,
-        transform_fn=transform_fn,
-        topology=topology,
-        params=energy_config.init_params(),
+    ).with_params(
+        **ss_params
     )
 
     if use_pseq:  # create a probabilistic sequence, one-hot encoded matching the discrete sequence
@@ -249,8 +235,60 @@ def test_stacking(base_dir: str, weights: jnp.ndarray, *, use_pseq: bool):
     states = trajectory.state_rigid_body
     energy = energy_fn.map(states)
     energy = np.around(energy / topology.n_nucleotides, 6)
-    if weights is not None:
-        terms *= 0.0  # our supplied weights are zero, so we expect zero energy
+    np.testing.assert_allclose(energy, terms, atol=1e-3)
+
+
+# mismatch 1/100
+@pytest.mark.parametrize(("base_dir", "weights_file", "use_pseq"), [
+    ("data/test-data/dna1/simple-helix", None, False),
+    ("data/test-data/dna1/simple-helix", None, True),
+    ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", False),
+    ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True),
+])
+def test_stacking(base_dir: str, weights_file: str, *, use_pseq: bool):
+    (
+        topology,
+        trajectory,
+        default_params,
+        transform_fn,
+        displacement_fn,
+    ) = get_setup_data(base_dir)
+
+    terms = get_energy_terms(base_dir, "stacking")
+
+    if weights_file is not None:
+        ss_params = read_ss_weights(Path(base_dir) / weights_file)
+        # we just need stacking params here
+        ss_params = {
+            "ss_stack_weights": ss_params["ss_stack_weights"],
+            "eps_stack_kt_coeff": ss_params["eps_stack_kt_coeff"],
+        }
+    else:
+        ss_params = {}
+
+    # compute energy terms
+    energy_config = jd_energy.StackingConfiguration(
+        **(default_params["stacking"] | {"kt": 296.15 * 0.1 / 300.0}),
+    )
+
+    energy_fn = jd_energy.Stacking(
+        displacement_fn=displacement_fn,
+        transform_fn=transform_fn,
+        topology=topology,
+        params=energy_config.init_params(),
+    ).with_params(
+        **ss_params
+    )
+
+    if use_pseq:  # create a probabilistic sequence, one-hot encoded matching the discrete sequence
+        sc = from_bps(topology.n_nucleotides, bps=jnp.zeros((0, 2), dtype=jnp.int32))
+        pseq = dseq_to_pseq(topology.seq, sc)
+        energy_fn = energy_fn.with_params(pseq=pseq, pseq_constraints=sc)
+
+    states = trajectory.state_rigid_body
+    energy = energy_fn.map(states)
+    energy = np.around(energy / topology.n_nucleotides, 6)
+
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
 
