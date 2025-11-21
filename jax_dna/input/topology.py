@@ -200,9 +200,6 @@ def _from_file_oxdna_classic(lines: list[str]) -> Topology:
     # - 3' neighbor (0-indexed), -1 if none, -1 indicates the stand isn't circular
     # - 5' neighbor (0-indexed), -1 if none
     #
-    # A more common convention is to store the nucleotides in the 5' -> 3' direction
-    # so we need to reverse the order, which seems to be as easy as reversing the
-    # order of the nucleotides per strand.
 
     strand_ids, bases, _, neighbor_5p = list(zip(*[line.strip().split() for line in lines[1:]], strict=True))
     strand_ids = list(map(int, strand_ids))
@@ -224,7 +221,7 @@ def _from_file_oxdna_classic(lines: list[str]) -> Topology:
         )
         strand_is_circular = strand_5p[-1] != -1
         is_circular.append(strand_is_circular)
-        reversed_bases.extend(strand_bases[::-1])
+        reversed_bases.extend(strand_bases)
 
         strand_length = len(strand_bases)
         strand_is_end = [0 for _ in range(strand_length)]
