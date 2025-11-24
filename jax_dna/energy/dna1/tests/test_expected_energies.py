@@ -7,7 +7,6 @@ import jax_md
 import numpy as np
 import pytest
 
-import jax_dna.energy.configuration as jd_config
 import jax_dna.energy.dna1 as jd_energy
 import jax_dna.input.sequence_constraints as jd_sc
 import jax_dna.input.toml as jd_toml
@@ -28,13 +27,13 @@ default_params = jd_toml.parse_toml("jax_dna/input/dna1/default_energy.toml")
     [
         (
             default_params,
-            jd_config.ERR_MISSING_REQUIRED_PARAMS.format(props="sequence_constraints"),
+            "pseq_constraints must be provided",
         ),
     ],
 )
 def test_expected_hb_config_raises_value_error(params: dict, expected_error: str):
     with pytest.raises(ValueError, match=expected_error):
-        jd_energy.ExpectedHydrogenBondingConfiguration(**params["hydrogen_bonding"])
+        jd_energy.HydrogenBondingConfiguration(**params["hydrogen_bonding"]).replace(pseq=(1, 2)).init_params()
 
 
 def test_initialize_expected_hb_config():
@@ -49,8 +48,10 @@ def test_initialize_expected_hb_config():
         idx_to_bp_idx=np.array([[0, 0], [-1, -1], [-1, -1], [0, 1]]),
     )
 
-    jd_energy.ExpectedHydrogenBondingConfiguration(
-        **default_params["hydrogen_bonding"], sequence_constraints=sequence_constraints
+    jd_energy.HydrogenBondingConfiguration(
+        **default_params["hydrogen_bonding"],
+        pseq_constraints=sequence_constraints,
+        pseq=(1, 2),
     )
 
 
@@ -117,23 +118,19 @@ def test_hydrogen_bonding_discrete(base_dir: str):
     ) = get_setup_data(base_dir)
 
     sc = jd_sc.from_bps(16, np.array([[0, 15]]))
-    energy_config = jd_energy.ExpectedHydrogenBondingConfiguration(
-        **default_params["hydrogen_bonding"], sequence_constraints=sc
-    )
+    energy_config = jd_energy.HydrogenBondingConfiguration(**default_params["hydrogen_bonding"])
 
     pseq = jd_sc.dseq_to_pseq(topology.seq, sc)
 
     terms = get_energy_terms(base_dir, "hydrogen_bonding")
 
     # compute energy terms
-    energy_fn = jd_energy.ExpectedHydrogenBonding(
+    energy_fn = jd_energy.HydrogenBonding(
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
-        seq=pseq,
-        bonded_neighbors=topology.bonded_neighbors,
-        unbonded_neighbors=topology.unbonded_neighbors.T,
-        params=energy_config.init_params()
-    )
+        topology=topology,
+        params=energy_config.init_params(),
+    ).with_params(pseq=pseq, pseq_constraints=sc)
 
     states = trajectory.state_rigid_body
     energy = energy_fn.map(states)
@@ -179,13 +176,8 @@ def test_hydrogen_bonding_brute_force():
     ss_hb_weights = ss_hb_weights / ss_hb_weights.sum(axis=1, keepdims=True)
     ss_hb_weights = jnp.array(ss_hb_weights)
 
-    energy_config = jd_energy.ExpectedHydrogenBondingConfiguration(
-        **default_params["hydrogen_bonding"], ss_hb_weights=ss_hb_weights, sequence_constraints=sc
-    )
-
-    energy_config_base = jd_energy.HydrogenBondingConfiguration(
-        **default_params["hydrogen_bonding"],
-        ss_hb_weights=ss_hb_weights,
+    energy_config = jd_energy.HydrogenBondingConfiguration(
+        **default_params["hydrogen_bonding"], ss_hb_weights=ss_hb_weights
     )
 
     bp_pseq = rng.random((sc.n_bp, 4))
@@ -199,30 +191,21 @@ def test_hydrogen_bonding_brute_force():
     pseq = (up_pseq, bp_pseq)
 
     # compute energy terms
-    energy_fn = jd_energy.ExpectedHydrogenBonding(
-        displacement_fn=displacement_fn,
-        transform_fn=transform_fn,
-        seq=pseq,
-        bonded_neighbors=topology.bonded_neighbors,
-        unbonded_neighbors=topology.unbonded_neighbors.T,
-        params=energy_config.init_params()
-    )
-
-    energy_fn_base = jd_energy.HydrogenBonding(
+    energy_fn = jd_energy.HydrogenBonding(
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config_base.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body
 
-    energy = energy_fn.map(states)
+    energy = energy_fn.with_params(pseq=pseq, pseq_constraints=sc).map(states)
 
     @jax.jit
     def compute_base_vals(dseq):
         """Compute the per-state energies given a discrete sequence."""
-        return energy_fn_base.with_props(seq=dseq).map(states)
+        return energy_fn.with_props(seq=dseq).map(states)
 
     # Brute force calculation
     assert len(jd_const.BP_TYPES) == len(jd_const.DNA_ALPHA)
@@ -257,13 +240,15 @@ def test_hydrogen_bonding_brute_force():
     [
         (
             default_params,
-            jd_config.ERR_MISSING_REQUIRED_PARAMS.format(props="sequence_constraints"),
+            "pseq_constraints must be provided",
         ),
     ],
 )
 def test_expected_stacking_config_raises_value_error(params: dict, expected_error: str):
     with pytest.raises(ValueError, match=expected_error):
-        jd_energy.ExpectedStackingConfiguration(**(params["stacking"] | {"kt": 296.15 * 0.1 / 300.0}))
+        jd_energy.StackingConfiguration(**(params["stacking"] | {"kt": 296.15 * 0.1 / 300.0})).replace(
+            pseq=(1, 2)
+        ).init_params()
 
 
 def test_stacking_brute_force():
@@ -283,13 +268,7 @@ def test_stacking_brute_force():
     ss_stack_weights = ss_stack_weights / ss_stack_weights.sum(axis=1, keepdims=True)
     ss_stack_weights = jnp.array(ss_stack_weights)
 
-    energy_config = jd_energy.ExpectedStackingConfiguration(
-        **(default_params["stacking"] | {"kt": 296.15 * 0.1 / 300.0}),
-        ss_stack_weights=ss_stack_weights,
-        sequence_constraints=sc,
-    )
-
-    energy_config_base = jd_energy.StackingConfiguration(
+    energy_config = jd_energy.StackingConfiguration(
         **(default_params["stacking"] | {"kt": 296.15 * 0.1 / 300.0}),
         ss_stack_weights=ss_stack_weights,
     )
@@ -305,28 +284,21 @@ def test_stacking_brute_force():
     pseq = (up_pseq, bp_pseq)
 
     # compute energy terms
-    energy_fn = jd_energy.ExpectedStacking(
+    energy_fn = jd_energy.Stacking(
         displacement_fn=displacement_fn,
         transform_fn=transform_fn,
         topology=topology,
-        params=energy_config.init_params()
-    ).with_props(seq=pseq)
-
-    energy_fn_base = jd_energy.Stacking(
-        displacement_fn=displacement_fn,
-        transform_fn=transform_fn,
-        topology=topology,
-        params=energy_config_base.init_params()
+        params=energy_config.init_params(),
     )
 
     states = trajectory.state_rigid_body
 
-    energy = energy_fn.map(states)
+    energy = energy_fn.with_params(pseq=pseq, pseq_constraints=sc).map(states)
 
     @jax.jit
     def compute_base_vals(dseq):
         """Compute the per-state energies given a discrete sequence."""
-        return energy_fn_base.with_props(seq=dseq).map(states)
+        return energy_fn.with_props(seq=dseq).map(states)
 
     # Brute force calculation
     assert len(jd_const.BP_TYPES) == len(jd_const.DNA_ALPHA)
