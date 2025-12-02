@@ -87,7 +87,7 @@ class BaseConfiguration:
 
         if include_dependent:
             for k in self.dependent_params:
-                if val := getattr(self, k):
+                if (val := getattr(self, k)) is not None:
                     params[k] = val
                 else:
                     warnings.warn(WARN_DEPENDENT_PARAMS_NOT_INITIALIZED, stacklevel=1)

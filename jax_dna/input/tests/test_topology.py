@@ -391,7 +391,7 @@ def test_from_oxdna_file_raises_file_not_found_error():
                         (2, 5),
                     ]
                 ),
-                seq=jnp.array([jd_const.NUCLEOTIDES_IDX[s] for s in "GCATGC"], dtype=jnp.int32),
+                seq=jnp.array([jd_const.NUCLEOTIDES_IDX[s] for s in "ACGCGT"], dtype=jnp.int32),
                 is_end=jnp.array([0, 0, 0, 0, 0, 0]),
                 nt_type=jnp.array([jdt.NucleotideType.UNSPECIFIED] * 3 + [jdt.NucleotideType.DNA] * 3),
             ),
@@ -441,7 +441,7 @@ def test_from_oxdna_file_raises_file_not_found_error():
                         (3, 5),
                     ]
                 ),
-                seq=jnp.array([jd_const.NUCLEOTIDES_IDX[s] for s in "GCATGC"], dtype=jnp.int32),
+                seq=jnp.array([jd_const.NUCLEOTIDES_IDX[s] for s in "ACGCGT"], dtype=jnp.int32),
                 is_end=jnp.array([1, 0, 1, 1, 0, 1]),
                 nt_type=jnp.array([jdt.NucleotideType.UNSPECIFIED] * 3 + [jdt.NucleotideType.DNA] * 3),
             ),

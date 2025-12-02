@@ -153,27 +153,19 @@ class UnbondedExcludedVolume(je_base.BaseEnergyFunction):
         mask = jnp.array(op_i < nucleotide.dna.center.shape[0], dtype=jnp.float32)
 
         dna_dgs = dna1_energy.UnbondedExcludedVolume.create_from(self, params=self.params.dna_config).pairwise_energies(
-            nucleotide.dna,
-            nucleotide.dna,
-            self.unbonded_neighbors
+            nucleotide.dna, nucleotide.dna, self.unbonded_neighbors
         )
 
         rna_dgs = dna1_energy.UnbondedExcludedVolume.create_from(self, params=self.params.rna_config).pairwise_energies(
-            nucleotide.rna,
-            nucleotide.rna,
-            self.unbonded_neighbors
+            nucleotide.rna, nucleotide.rna, self.unbonded_neighbors
         )
 
         drh_dgs = dna1_energy.UnbondedExcludedVolume.create_from(self, params=self.params.drh_config).pairwise_energies(
-            nucleotide.dna,
-            nucleotide.rna,
-            self.unbonded_neighbors
+            nucleotide.dna, nucleotide.rna, self.unbonded_neighbors
         )
 
         rdh_dgs = dna1_energy.UnbondedExcludedVolume.create_from(self, params=self.params.drh_config).pairwise_energies(
-            nucleotide.rna,
-            nucleotide.dna,
-            self.unbonded_neighbors
+            nucleotide.rna, nucleotide.dna, self.unbonded_neighbors
         )
 
         dgs = jnp.where(is_rna_bond, rna_dgs, jnp.where(is_drh_bond, drh_dgs, jnp.where(is_rdh_bond, rdh_dgs, dna_dgs)))

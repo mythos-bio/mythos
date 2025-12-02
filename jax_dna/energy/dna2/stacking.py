@@ -2,6 +2,7 @@
 
 import chex
 import jax.numpy as jnp
+from jax import vmap
 from typing_extensions import override
 
 import jax_dna.energy.dna1 as jd_energy1
@@ -30,8 +31,11 @@ class Stacking(jd_energy1.Stacking):
         # Compute sequence-dependent weight for each bonded pair
         nn_i = bonded_neighbors[:, 0]
         nn_j = bonded_neighbors[:, 1]
-        stack_weights = self.params.ss_stack_weights[seq[nn_i], seq[nn_j]]
 
+        if self.params.pseq:
+            stack_weights = vmap(self.pseq_weights, (0, 0, None))(nn_i, nn_j, self.params.pseq)
+        else:
+            stack_weights = self.params.eps_stack[seq[nn_i], seq[nn_j]]
         return jnp.multiply(stack_weights, v_stack)
 
     @override
