@@ -41,6 +41,9 @@ def test_read_src_h() -> None:
         "HYDR_T3_MESH_POINTS": "HYDR_T2_MESH_POINTS",
         "CXST_T5_MESH_POINTS": 6,
         "FENE_DELTA": 2.0,
+        "FENE_R0_OXDNA": 0.0,
+        "FENE_R0_OXDNA2": 0.0,
+        "CXST_THETA1_SA": 0.0,
     }
     path = Path(__file__).parent / "test_data" / "test.model.h"
     assert oxdna_utils.read_src_h(path) == expected
@@ -49,16 +52,19 @@ def test_read_src_h() -> None:
 def test_write_src_h() -> None:
     params = {
         "FENE_DELTA": 5.0,
+        "FENE_R0_OXDNA": 0.756,
+        "FENE_R0_OXDNA2": 0.756,
         "HYDR_THETA8_T0": 1.5707963267948966,
         "HYDR_T3_MESH_POINTS": "HYDR_T2_MESH_POINTS",
         "CXST_T5_MESH_POINTS": 6,
+        "CXST_THETA1_SA": 20.0,
     }
     test_dir = Path(__file__).parent / "test_data"
     path = test_dir / "out.model.h"
     oxdna_utils.write_src_h(path, params)
 
-    actual = path.read_text().splitlines()[-8:]
-    expected = (test_dir / "expected.model.h").read_text().splitlines()[-8:]
+    actual = path.read_text().splitlines()[-11:]
+    expected = (test_dir / "expected.model.h").read_text().splitlines()[-11:]
     # remove generated file
     path.unlink()
 
@@ -70,6 +76,8 @@ def test_update_params() -> None:
         {
             "delta_backbone": 5.0,
             "theta0_hb_8": 1.5707963267948966,
+            "a_coax_1_f6": 40.0,  # oxdna2 specific param
+            "r0_backbone": 0.756,  # oxdna2 param which shares name with oxdna1 param
         },
         {},
     ]

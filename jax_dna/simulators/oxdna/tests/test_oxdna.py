@@ -207,6 +207,8 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
         new_params={
                 "delta_backbone": 5.0,
                 "theta0_hb_8": 1.5707963267948966,
+                "a_coax_1_f6": 40.0,
+                "r0_backbone": 0.756,
             },
     )
     assert sim.build_dir.is_dir()

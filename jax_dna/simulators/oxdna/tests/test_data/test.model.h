@@ -13,8 +13,10 @@
 //// test comment
 
 #define FENE_DELTA 2.0f
+#define FENE_R0_OXDNA 0.0f
+#define FENE_R0_OXDNA2 0.0f
 #define HYDR_THETA8_T0 (PI*0.5f)
 #define HYDR_T3_MESH_POINTS HYDR_T2_MESH_POINTS
 #define CXST_T5_MESH_POINTS 6   // perfetto
-
+#define CXST_THETA1_SA 0.0f
 #endif /* MODEL_H_ */
