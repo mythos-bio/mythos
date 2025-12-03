@@ -213,4 +213,7 @@ def dseq_to_pseq(dseq: typ.Discrete_Sequence, sc: SequenceConstraints) -> typ.Pr
     if n_bp == 0:
         bp_pseq = np.zeros((1, 4), dtype=np.float64)
 
+    if n_unpaired == 0:
+        up_pseq = np.zeros((1, jd_const.N_NT), dtype=np.float64)
+
     return (jnp.array(up_pseq), jnp.array(bp_pseq))
