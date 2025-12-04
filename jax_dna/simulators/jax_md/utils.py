@@ -73,17 +73,17 @@ class NeighborList(NeighborHelper):
     """Neighbor list for managing unbonded neighbors."""
 
     displacement_fn: InitVar[Callable]
-    topology: jdna_top.Topology
+    topology: InitVar[jdna_top.Topology]
     r_cutoff: float
     dr_threshold: float
     box_size: jnp.ndarray
     init_positions: jax_md.rigid_body.RigidBody
 
-    def __post_init__(self, displacement_fn: Callable) -> None:
+    def __post_init__(self, displacement_fn: Callable, topology: jdna_top.Topology) -> None:
         """Initialize the neighbor list."""
-        dense_mask = np.full((self.topology.n_nucleotides, 2), self.topology.n_nucleotides, dtype=np.int32)
-        counter = np.zeros(self.topology.n_nucleotides, dtype=np.int32)
-        for i, j in self.topology.bonded_neighbors:
+        dense_mask = np.full((topology.n_nucleotides, 2), topology.n_nucleotides, dtype=np.int32)
+        counter = np.zeros(topology.n_nucleotides, dtype=np.int32)
+        for i, j in topology.bonded_neighbors:
             dense_mask[i, counter[i]] = j
             counter[i] += 1
             dense_mask[j, counter[j]] = i
@@ -91,11 +91,11 @@ class NeighborList(NeighborHelper):
         self.dense_mask = jnp.array(dense_mask, dtype=jnp.int32)
 
         def bonded_nbrs_mask_fn(dense_idx: int) -> jnp.ndarray:
-            nbr_mask1 = dense_idx == dense_mask[:, 0].reshape(self.topology.n_nucleotides, 1)
-            dense_idx = jnp.where(nbr_mask1, self.topology.n_nucleotides, dense_idx)
+            nbr_mask1 = dense_idx == dense_mask[:, 0].reshape(topology.n_nucleotides, 1)
+            dense_idx = jnp.where(nbr_mask1, topology.n_nucleotides, dense_idx)
 
-            nbr_mask2 = dense_idx == dense_mask[:, 1].reshape(self.topology.n_nucleotides, 1)
-            return jnp.where(nbr_mask2, self.topology.n_nucleotides, dense_idx)
+            nbr_mask2 = dense_idx == dense_mask[:, 1].reshape(topology.n_nucleotides, 1)
+            return jnp.where(nbr_mask2, topology.n_nucleotides, dense_idx)
 
         self._neighborlist_fn = jax_md.partition.neighbor_list(
             displacement_fn,
