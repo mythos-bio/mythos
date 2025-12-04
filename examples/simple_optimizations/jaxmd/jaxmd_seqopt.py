@@ -18,6 +18,7 @@ import jax_dna.observables as jdna_obs
 from jax_dna.observables.base import get_duplex_quartets
 from jax_dna.observables.persistence_length import PersistenceLength
 import jax_dna.simulators.jax_md as jdna_jaxmd
+from jax_dna.simulators.jax_md.utils import NeighborList
 import jax_dna.utils.types as jdna_types
 import jax_md
 import numpy as np
@@ -86,6 +87,15 @@ def main():
         pseq=pseq, pseq_constraints=sc, **ss_params,
     )
 
+    neighbors = NeighborList(
+        displacement_fn=displacement_fn,
+        box_size=jnp.array([200, 200, 200], dtype=jnp.float64),
+        r_cutoff=10.0,
+        dr_threshold=0.2,
+        topology=topology,
+        init_positions=initial_positions
+    )
+
     simulator = jdna_jaxmd.JaxMDSimulator(
         energy_fn=energy_fn,
         simulator_params=jdna_jaxmd.StaticSimulatorParams(
@@ -99,7 +109,7 @@ def main():
         ),
         space=jax_md.space.free(),
         simulator_init=jax_md.simulate.nvt_langevin,
-        neighbors=jdna_jaxmd.NoNeighborList(unbonded_nbrs=topology.unbonded_neighbors),
+        neighbors=neighbors,
     )
 
     # ==========================================================================
