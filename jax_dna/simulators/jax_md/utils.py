@@ -1,6 +1,7 @@
 """Utilities for JAX-MD samplers."""
 
 from collections.abc import Callable
+from dataclasses import InitVar
 from typing import Protocol
 
 import chex
@@ -71,18 +72,18 @@ class NoNeighborList(NeighborHelper):
 class NeighborList(NeighborHelper):
     """Neighbor list for managing unbonded neighbors."""
 
-    displacement_fn: Callable
+    displacement_fn: InitVar[Callable]
     topology: jdna_top.Topology
     r_cutoff: float
     dr_threshold: float
     box_size: jnp.ndarray
     init_positions: jax_md.rigid_body.RigidBody
 
-    def __post_init__(self) -> None:
+    def __post_init__(self, displacement_fn: Callable) -> None:
         """Initialize the neighbor list."""
         dense_mask = np.full((self.topology.n_nucleotides, 2), self.topology.n_nucleotides, dtype=np.int32)
         counter = np.zeros(self.topology.n_nucleotides, dtype=np.int32)
-        for i, j in self.topology.bonded_nbrs:
+        for i, j in self.topology.bonded_neighbors:
             dense_mask[i, counter[i]] = j
             counter[i] += 1
             dense_mask[j, counter[j]] = i
@@ -97,8 +98,8 @@ class NeighborList(NeighborHelper):
             return jnp.where(nbr_mask2, self.topology.n_nucleotides, dense_idx)
 
         self._neighborlist_fn = jax_md.partition.neighbor_list(
-            self.displacement_fn,
-            box_size=self.box_size,
+            displacement_fn,
+            box=self.box_size,
             r_cutoff=self.r_cutoff,
             dr_threshold=self.dr_threshold,
             custom_mask_function=bonded_nbrs_mask_fn,
