@@ -34,6 +34,9 @@ class LAMMPSoxDNASimulator(BaseSimulation):
             temporary directory.
         input_file_name: Name of the LAMMPS input file (default "input").
         energy_fn: Energy function used in the simulation, for updating parameters.
+        variables: Additional variables to set in the LAMMPS input file before
+            run. These variables must already be defined in the input file using
+            a command of the form "variable name equal value".
     """
     input_dir: Path
     energy_fn: EnergyFunction
