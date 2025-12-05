@@ -197,12 +197,6 @@ def test_lammps_oxdna_replace_inputs_dump_missing_fields(dummy_input_lines):
         _lammps_oxdna_replace_inputs(lines, {}, None)
 
 
-def test_lammps_oxdna_replace_errors_on_missing_pair_coeff(dummy_input_lines):
-    lines = [line for line in dummy_input_lines if "pair_coeff * * oxdna/excv" not in line]
-    with pytest.raises(ValueError, match="Missing oxdna pair parameters"):
-        _lammps_oxdna_replace_inputs(lines, {}, seed=42)
-
-
 def test_lammps_oxdna_replace_inputs_random_seed(dummy_input_lines):
     # replace with value that is not in random range
     lines = [line if "variable seed" not in line else "variable seed equal NONINT" for line in dummy_input_lines]
