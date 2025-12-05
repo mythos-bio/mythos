@@ -5,7 +5,9 @@ import re
 import shutil
 import subprocess
 import tempfile
+from dataclasses import field
 from pathlib import Path
+from typing import Any
 
 import chex
 import numpy as np
@@ -37,6 +39,7 @@ class LAMMPSoxDNASimulator(BaseSimulation):
     energy_fn: EnergyFunction
     overwrite: bool = False
     input_file_name: str = "input"
+    variables: dict[str, Any] = field(default_factory=dict)
 
     @override
     def __post_init__(self) -> None:
@@ -68,15 +71,17 @@ class LAMMPSoxDNASimulator(BaseSimulation):
 
     def _replace_parameters(self, params: Params, seed: int | None) -> None:
         updated_params = self.energy_fn.with_params(params).params_dict(exclude_non_optimizable=True)
-        new_lines = _lammps_oxdna_replace_inputs(self.input_lines, updated_params, seed)
+        new_lines = _lammps_oxdna_replace_inputs(self.input_lines, updated_params, seed, variables=self.variables)
         self.input_dir.joinpath(self.input_file_name).write_text("\n".join(new_lines))
 
 
-def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
+def _lammps_oxdna_replace_inputs(  # noqa: C901, PLR0912 TODO: refactor perhaps to class
         input_lines: list[str],
         params: list[dict[str, float]],
-        seed: int | None
+        seed: int | None,
+        variables: dict[str, Any] | None = None,
     ) -> list[str]:
+    variable_replacements = {"seed": seed or np.random.default_rng().integers(0, 2**24), **(variables or {})}
     new_lines = []
     seen = set()
     multiline_buffer = ""
@@ -88,11 +93,11 @@ def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
         if multiline_buffer:
             line = multiline_buffer + line
             multiline_buffer = ""
-        if line.startswith("variable seed equal"):
-            seen.add("seed")
-            seed = seed or np.random.default_rng().integers(0, 2**24)
-            line = f"variable seed equal {seed}"
-        if line.startswith("dump "):
+        if line.startswith("variable "):
+            var = line.split()[1]
+            if var in variable_replacements:
+                line = f"variable {var} equal {variable_replacements.pop(var)}"
+        elif line.startswith("dump "):
             line_parts = line.split()
             if len(line_parts) > 6:  # noqa: PLR2004
                 fname = line_parts[5]
@@ -107,8 +112,8 @@ def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
         new_lines.append(line)
     if "dump_line" not in seen:
         raise ValueError(f"Required dump not found. Must dump to trajectory.dat fields {LAMMPS_REQUIRED_FIELDS}.")
-    if "seed" not in seen:
-        raise ValueError("Random seed not specified in input")
+    if variable_replacements:
+        raise ValueError("Missing variable for replacements: " + ", ".join(variable_replacements.keys()))
     if missing_params := REPLACEMENT_MAP.keys() - seen:
         raise ValueError(f"Missing oxdna pair parameters in input: {missing_params}")
     return new_lines
