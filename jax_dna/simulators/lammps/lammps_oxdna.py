@@ -101,7 +101,6 @@ def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
                     seen.add("dump_line")
         for key, replacements in REPLACEMENT_MAP.items():
             if line.startswith(key):
-                seen.add(key)
                 new_parts = _replace_parts_in_line(line.removeprefix(key), replacements, params)
                 line = f"{key} {new_parts}"
         new_lines.append(line)
@@ -109,8 +108,6 @@ def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
         raise ValueError(f"Required dump not found. Must dump to trajectory.dat fields {LAMMPS_REQUIRED_FIELDS}.")
     if "seed" not in seen:
         raise ValueError("Random seed not specified in input")
-    if missing_params := REPLACEMENT_MAP.keys() - seen:
-        raise ValueError(f"Missing oxdna pair parameters in input: {missing_params}")
     return new_lines
 
 
@@ -289,6 +286,33 @@ REPLACEMENT_MAP = {
         "a_coax_4p",
         "cos_phi4_star_coax",
     ),
+}
+# Copy common oxdna2 parameters providing overrides where needed
+REPLACEMENT_MAP = {
+    **REPLACEMENT_MAP,
+    **{k.replace("oxdna/", "oxdna2/"): v for k, v in REPLACEMENT_MAP.items() if "oxdna/" in k},
+    "pair_coeff * * oxdna2/coaxstk": (
+        "k_coax",
+        "dr0_coax",
+        "dr_c_coax",
+        "dr_low_coax",
+        "dr_high_coax",
+        "a_coax_1",
+        "theta0_coax_1",
+        "delta_theta_star_coax_1",
+        "a_coax_4",
+        "theta0_coax_4",
+        "delta_theta_star_coax_4",
+        "a_coax_5",
+        "theta0_coax_5",
+        "delta_theta_star_coax_5",
+        "a_coax_6",
+        "theta0_coax_6",
+        "delta_theta_star_coax_6",
+        "a_coax_1_f6",
+        "b_coax_1_f6",
+    ),
+    "pair_coeff * * oxdna2/dh": (None, "salt_conc", "q_eff"),
 }
 
 
