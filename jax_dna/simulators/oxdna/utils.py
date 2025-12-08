@@ -223,6 +223,9 @@ DEFAULT_OXDNA_VARIABLE_MAPPER = {
     "cos_phi4_star_coax": "CXST_PHI4_XS",
     "b_cos_phi4_coax": "CXST_PHI4_B",
     "cos_phi4_c_coax": "CXST_PHI4_XC",
+    # oxdna2 specific coaxial stacking params
+    "a_coax_1_f6": "CXST_THETA1_SA",
+    "b_coax_1_f6": "CXST_THETA1_SB",
 }
 
 MIN_VALID_HEADER_TOKEN_COUNT = 3
@@ -325,6 +328,16 @@ def update_params(src_h: Path, new_params: jd_types.Params | list[jd_types.Param
         mapped_name = DEFAULT_OXDNA_VARIABLE_MAPPER[np]
         if mapped_name in params:
             params[mapped_name] = flattened_params[np]
+            # Convention is that oxdna2 parameters have corresponding oxdna
+            # labeled parameter when they match the same energy function.
+            oxdna2_name = mapped_name.replace("OXDNA", "OXDNA2")
+            if "OXDNA" in mapped_name and oxdna2_name in params:
+                params[oxdna2_name] = flattened_params[np]
+            # special case for oxdna2 specific coaxial stacking param
+            # CXST_THETA1_SA. oxdna standalone assumes it is pre-devided by 2,
+            # whereas this package does not.
+            if mapped_name == "CXST_THETA1_SA":
+                params[mapped_name] = flattened_params[np] / 2
         else:
             raise ValueError(f"Parameter {np} not found in src/model.h")
 
