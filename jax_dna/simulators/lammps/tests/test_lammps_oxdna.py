@@ -52,6 +52,8 @@ def dummy_input_lines():
     def dummy_params(num):
         return " ".join([f"{i+1}.0" for i in range(num)])
     return [
+        "variable myvar equal 0",
+        "variable another_var equal 42",
         "variable seed equal 123",
         "dump unusable all custom 1 unusable.dat id x y z",
         "dump out all custom 1 trajectory.dat id mol type x y z ix iy iz vx vy vz &",
@@ -151,7 +153,7 @@ def test_lammps_oxdna_replace_inputs_missing_dump():
 def test_lammps_oxdna_replace_inputs_missing_seed(dummy_input_lines):
     no_seed = [line for line in dummy_input_lines if "variable seed" not in line]
     params = {"eps_backbone": 1.1, "delta_backbone": 2.2, "r0_backbone": 3.3}
-    with pytest.raises(ValueError, match="Random seed not specified in input"):
+    with pytest.raises(ValueError, match="Missing variable for replacements: seed"):
         _lammps_oxdna_replace_inputs(no_seed, params, seed=42)
 
 
@@ -182,6 +184,19 @@ def test_lammps_oxdna_replace_inputs_random_seed(dummy_input_lines):
     int(seed_line.split()[-1])  # should be convertible to int
 
 
+def test_lammps_oxdna_replace_inputs_with_variables(dummy_input_lines):
+    out = _lammps_oxdna_replace_inputs(dummy_input_lines, {}, seed=42, variables={"myvar": 10, "another_var": 99})
+    myvar_line = next(line for line in out if "variable myvar" in line)
+    another_var_line = next(line for line in out if "variable another_var" in line)
+    assert myvar_line == "variable myvar equal 10"
+    assert another_var_line == "variable another_var equal 99"
+
+
+def test_lammps_oxdna_replace_inputs_with_variables_missing(dummy_input_lines):
+    with pytest.raises(ValueError, match="Missing variable for replacements: nonexistentvar"):
+        _lammps_oxdna_replace_inputs(dummy_input_lines, {}, seed=42, variables={"nonexistentvar": 123})
+
+
 def test_transform_lammps_quat_shape_and_values():
     quat = np.array([1.0, 0.0, 0.0, 0.0])
     out = _transform_lammps_quat(quat)
@@ -202,8 +217,23 @@ def test_simulator_post_init(tmp_path, dummy_input_lines):
     assert sim.input_dir != input_dir
     assert sim.input_dir.joinpath("input").exists()
 
-
-def test_simulator_run_mocks_subprocess(tmp_path, dummy_input_lines, dummy_trajectory_data):
+@pytest.mark.parametrize(
+        ("variables_arg", "expected_lines"),
+        [
+            ({}, ["variable myvar equal 0", "variable another_var equal 42"]),
+            (
+                {"variables": {"myvar": 10, "another_var": 99}},
+                ["variable myvar equal 10", "variable another_var equal 99"]
+            ),
+        ]
+)
+def test_simulator_run_mocks_subprocess(
+    tmp_path,
+    dummy_input_lines,
+    dummy_trajectory_data,
+    variables_arg,
+    expected_lines,
+):
     # Prepare input file
     input_file = tmp_path / "input"
     input_file.write_text("\n".join(dummy_input_lines))
@@ -213,6 +243,7 @@ def test_simulator_run_mocks_subprocess(tmp_path, dummy_input_lines, dummy_traje
         input_dir=tmp_path,
         overwrite=True,
         energy_fn=DummyFunction(),
+        **variables_arg,  # use args unpacking here to ensure we test default (iso None input)
     )
     params = {"eps_backbone": 1.1, "delta_backbone": 2.2, "r0_backbone": 3.3}
     def get_fene_line(file):
@@ -225,10 +256,16 @@ def test_simulator_run_mocks_subprocess(tmp_path, dummy_input_lines, dummy_traje
         m_call.return_value = None
         # sanity check - to protect against test data change that would invalidate the test
         assert not np.allclose(get_fene_line(input_file), np.array(list(params.values())))
+
         result = sim.run(params, seed=123)
         # Params above are updates of the fene params, ensure that we wrote them
         # out correctly in the input file.
         assert np.allclose(get_fene_line(input_file), np.array(list(params.values())))
+
+        # Check that variables were set correctly
+        all_lines = input_file.read_text().splitlines()
+        assert all(line in all_lines for line in expected_lines)
+
         # outputs check, we've already written a dummy trajectory.dat file
         assert isinstance(result, SimulatorTrajectory)
         assert result.length() == 1
