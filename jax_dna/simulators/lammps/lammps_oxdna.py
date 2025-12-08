@@ -78,7 +78,7 @@ class LAMMPSoxDNASimulator(BaseSimulation):
         self.input_dir.joinpath(self.input_file_name).write_text("\n".join(new_lines))
 
 
-def _lammps_oxdna_replace_inputs(  # noqa: C901, PLR0912 TODO: refactor perhaps to class
+def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
         input_lines: list[str],
         params: list[dict[str, float]],
         seed: int | None,
