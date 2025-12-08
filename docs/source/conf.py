@@ -1,7 +1,7 @@
 # Configuration file for the Sphinx documentation builder.
 import datetime
 # -- Project information
-from jax_dna import __project__, __version__
+from mythos import __project__, __version__
 
 project = __project__
 author = "Ryan Krueger, Megan Engel, and the SSEC at JHU"
@@ -21,7 +21,7 @@ extensions = [
     "sphinx.ext.napoleon",
 ]
 
-autoapi_dirs = ["../../jax_dna"]
+autoapi_dirs = ["../../mythos"]
 autoapi_type = "python"
 autoapi_template_dir = "_templates/autoapi"
 autodoc_typehints = "signature"
@@ -50,7 +50,7 @@ if html_theme == "sphinx_book_theme":
     html_theme_options.update({
         "logo": {
             "image_light": "../_static/SSEC_logo_horiz_blue_1152x263.png",
-            "image_dark": "../_staticautoapi/jax_dna/energy/configuration/index/SSEC_logo_vert_white_lg_1184x661.png",
+            "image_dark": "../_staticautoapi/mythos/energy/configuration/index/SSEC_logo_vert_white_lg_1184x661.png",
             "text": f"{html_title}",
         },
         "repository_url": "https://github.com/rkruegs123/jax-dna-dev",
@@ -63,7 +63,7 @@ epub_show_urls = "footnote"
 
 import os
 import sys
-sys.path.insert(0, os.path.abspath("../jax_dna"))
+sys.path.insert(0, os.path.abspath("../mythos"))
 
 def skip_irrelevant(app, what, name, obj, skip, options):
     if (

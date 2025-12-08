@@ -15,16 +15,16 @@ import jax.numpy as jnp
 import jax_md
 import optax
 
-import jax_dna.energy as jdna_energy
-import jax_dna.energy.dna1 as dna1_energy
-import jax_dna.input.tree as jdna_tree
-import jax_dna.observables as jd_obs
-import jax_dna.optimization.simulator as jdna_simulator
-import jax_dna.optimization.objective as jdna_objective
-import jax_dna.optimization.optimization as jdna_optimization
-import jax_dna.simulators.oxdna as oxdna
-import jax_dna.utils.types as jdna_types
-from jax_dna.input import topology
+import mythos.energy as jdna_energy
+import mythos.energy.dna1 as dna1_energy
+import mythos.input.tree as jdna_tree
+import mythos.observables as jd_obs
+import mythos.optimization.simulator as jdna_simulator
+import mythos.optimization.objective as jdna_objective
+import mythos.optimization.optimization as jdna_optimization
+import mythos.simulators.oxdna as oxdna
+import mythos.utils.types as jdna_types
+from mythos.input import topology
 
 jax.config.update("jax_enable_x64", True)
 

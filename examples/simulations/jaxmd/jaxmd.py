@@ -13,10 +13,10 @@ import jax
 import jax.numpy as jnp
 import jax_md
 
-import jax_dna.energy.dna1 as jdna_energy
-import jax_dna.input.topology as jdna_top
-import jax_dna.input.trajectory as jdna_traj
-import jax_dna.simulators.jax_md as jdna_jaxmd
+import mythos.energy.dna1 as jdna_energy
+import mythos.input.topology as jdna_top
+import mythos.input.trajectory as jdna_traj
+import mythos.simulators.jax_md as jdna_jaxmd
 
 # the default precision for jax is float32
 jax.config.update("jax_enable_x64", True)

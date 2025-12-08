@@ -7,10 +7,10 @@ repository. i.e. this file was invoked using:
 """
 from pathlib import Path
 
-import jax_dna.input.trajectory as jdna_traj
-import jax_dna.input.topology as jdna_top
-import jax_dna.simulators.oxdna as jdna_oxdna
-import jax_dna.utils.types as jdna_types
+import mythos.input.trajectory as jdna_traj
+import mythos.input.topology as jdna_top
+import mythos.simulators.oxdna as jdna_oxdna
+import mythos.utils.types as jdna_types
 
 
 def main():

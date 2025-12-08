@@ -6,7 +6,7 @@ Basic Usage
 Installation
 ------------
 
-To use ``jax_dna``, first install it using ``pip``:
+To use ``mythos``, first install it using ``pip``:
 
 .. code-block:: bash
 
@@ -16,7 +16,7 @@ To use ``jax_dna``, first install it using ``pip``:
 Basic Usage
 -----------
 
-The two basic use cases for ``jax_dna`` are:
+The two basic use cases for ``mythos`` are:
 
 1. Running a simulation
 2. Running an optimization
@@ -29,19 +29,19 @@ optimizations.
 Running a single simulation
 ***************************
 
-``jax_dna`` currently supports two simulation engine:
+``mythos`` currently supports two simulation engine:
 `jax_md <https://github.com/jax-md/jax-md>`_ and
 `oxDNA <https://dna.physics.ox.ac.uk/index.php/Main_Page>`_.
 
 Regardless of which engine you choose, setting up the system to simulate is the
-same, as ``jax_dna`` supports reading ``oxDNA`` input, topology, and trajectory
-files. See :doc:`autoapi/jax_dna/input/index` for more details on the input
+same, as ``mythos`` supports reading ``oxDNA`` input, topology, and trajectory
+files. See :doc:`autoapi/mythos/input/index` for more details on the input
 format.
 
 .. code-block:: python
 
-    import jax_dna.input.topology as jdna_top
-    import jax_dna.input.trajectory as jdna_traj
+    import mythos.input.topology as jdna_top
+    import mythos.input.trajectory as jdna_traj
 
     topology = topology.from_oxdna_file("path/to/oxdna/topology.top")
     initial_positions = jdna_traj.from_file("path/to/oxdna/trajectory.conf").states[0].to_rigid_body()
@@ -51,10 +51,10 @@ Using ``jax_md``
 ^^^^^^^^^^^^^^^^
 
 To run a simulation using ``jax_md`` requires a working ``jax`` installation
-which is installed alongside ``jax_dna`` via ``pip`` if it isn't installed
+which is installed alongside ``mythos`` via ``pip`` if it isn't installed
 already. For information on installing ``jax_md`` and ``jax``, please refer to
 the their respective documentation. For more details on the ``jax_md`` simulator
-see :doc:`autoapi/jax_dna/simulators/jax_md/index`.
+see :doc:`autoapi/mythos/simulators/jax_md/index`.
 
 Running a simulation using ``jax_md`` involves reading some input data as shown
 above and then building the energy function:
@@ -67,7 +67,7 @@ above and then building the energy function:
     import jax.numpy as jnp
     import jax_md
 
-    import jax_dna.energy.dna1 as jdna_energy
+    import mythos.energy.dna1 as jdna_energy
 
     experiment_config, energy_config = jdna_energy.default_configs()
 
@@ -111,7 +111,7 @@ that function to the ``jax_md`` simulator:
 
 .. code-block:: python
 
-    import jax_dna.simulators.jax_md as jdna_jaxmd
+    import mythos.simulators.jax_md as jdna_jaxmd
 
     simulator = jdna_jaxmd.JaxMDSimulator(
         energy_configs=energy_fn_configs,
@@ -145,7 +145,7 @@ in the repository.
 Using ``oxDNA``
 ^^^^^^^^^^^^^^^
 
-When running oxDNA simulations, ``jax_dna`` acts as a thin wrapper around the
+When running oxDNA simulations, ``mythos`` acts as a thin wrapper around the
 ``oxDNA`` executable. To run a simulation, you need to have a working oxDNA
 installation. For more information on installing oxDNA, please refer to the
 oxDNA documentation. Additionally, the following environment variable must
@@ -155,10 +155,10 @@ point to the oxDNA executable: ``OXDNA_BIN_PATH``
 
     from pathlib import Path
 
-    import jax_dna.input.trajectory as jdna_traj
-    import jax_dna.input.topology as jdna_top
-    import jax_dna.simulators.oxdna as jdna_oxdna
-    import jax_dna.utils.types as jdna_types
+    import mythos.input.trajectory as jdna_traj
+    import mythos.input.topology as jdna_top
+    import mythos.simulators.oxdna as jdna_oxdna
+    import mythos.utils.types as jdna_types
 
     input_dir = Path("path/to/oxdna-input/dir")
 
@@ -186,7 +186,7 @@ in the repository.
 Running a simple optimization
 *****************************
 
-The main advantage in using ``jax_dna`` is the ability to run optimizations. The
+The main advantage in using ``mythos`` is the ability to run optimizations. The
 optimizations can be run directly through the simulation using ``jax_md`` or
 using ``oxDNA`` and the `DiffTRe
 <https://www.nature.com/articles/s41467-021-27241-4>`_ algorithm.
@@ -216,14 +216,14 @@ First setup the system:
     import jax_md
     import optax
 
-    import jax_dna.energy.dna1 as jdna_energy
-    import jax_dna.input.topology as jdna_top
-    import jax_dna.input.trajectory as jdna_traj
-    import jax_dna.losses.observable_wrappers as jdna_losses
-    import jax_dna.observables as jdna_obs
-    import jax_dna.simulators.jax_md as jdna_jaxmd
-    import jax_dna.ui.loggers.jupyter as jupyter_logger
-    import jax_dna.utils.types as jdna_types
+    import mythos.energy.dna1 as jdna_energy
+    import mythos.input.topology as jdna_top
+    import mythos.input.trajectory as jdna_traj
+    import mythos.losses.observable_wrappers as jdna_losses
+    import mythos.observables as jdna_obs
+    import mythos.simulators.jax_md as jdna_jaxmd
+    import mythos.ui.loggers.jupyter as jupyter_logger
+    import mythos.utils.types as jdna_types
 
     jax.config.update("jax_enable_x64", True)
 

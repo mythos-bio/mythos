@@ -7,23 +7,23 @@ from pathlib import Path
 import fire
 import jax
 import jax.numpy as jnp
-import jax_dna.energy as jdna_energy
-import jax_dna.energy.dna1 as dna1_energy
-import jax_dna.input.topology as jdna_top
-import jax_dna.optimization.objective as jdna_objective
-import jax_dna.optimization.optimization as jdna_optimization
-import jax_dna.utils.types as jdna_types
+import mythos.energy as jdna_energy
+import mythos.energy.dna1 as dna1_energy
+import mythos.input.topology as jdna_top
+import mythos.optimization.objective as jdna_objective
+import mythos.optimization.optimization as jdna_optimization
+import mythos.utils.types as jdna_types
 import jax_md
 import optax
 import ray
-from jax_dna.input import oxdna_input
-from jax_dna.observables import base
-from jax_dna.observables.persistence_length import PersistenceLength
-from jax_dna.simulators import oxdna
-from jax_dna.ui.loggers.console import ConsoleLogger
-from jax_dna.ui.loggers.logger import NullLogger
-from jax_dna.ui.loggers.multilogger import MultiLogger
-from jax_dna.utils.units import get_kt_from_string
+from mythos.input import oxdna_input
+from mythos.observables import base
+from mythos.observables.persistence_length import PersistenceLength
+from mythos.simulators import oxdna
+from mythos.ui.loggers.console import ConsoleLogger
+from mythos.ui.loggers.logger import NullLogger
+from mythos.ui.loggers.multilogger import MultiLogger
+from mythos.utils.units import get_kt_from_string
 from tqdm import tqdm
 
 jax.config.update("jax_enable_x64", True)
@@ -160,7 +160,7 @@ def main(
     # ==========================================================================
 
     if use_aim:
-        from jax_dna.ui.loggers.aim import AimLogger
+        from mythos.ui.loggers.aim import AimLogger
         aim_logger = AimLogger()
         aim_logger.aim_run.set("lp_target", target_lp)
         aim_logger.aim_run.set("lp_learning_rate", learning_rate)

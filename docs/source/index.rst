@@ -1,7 +1,7 @@
-Welcome to jax_dna's documentation!
+Welcome to mythos's documentation!
 ==========================================
 
-**jax_dna** is a Python library for DNA energy function parameter and sequence
+**mythos** is a Python library for DNA energy function parameter and sequence
 optimization
 
 Check out the :doc:`basic_usage` section for further information, including

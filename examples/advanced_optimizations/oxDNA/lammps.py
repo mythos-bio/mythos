@@ -20,19 +20,19 @@ import typing
 import fire
 import jax
 import jax.numpy as jnp
-import jax_dna.energy.dna1 as dna1_energy
-import jax_dna.observables as jd_obs
-import jax_dna.optimization.objective as jdna_objective
-import jax_dna.optimization.optimization as jdna_optimization
-import jax_dna.optimization.simulator as jdna_simulator
-import jax_dna.utils.types as jdna_types
+import mythos.energy.dna1 as dna1_energy
+import mythos.observables as jd_obs
+import mythos.optimization.objective as jdna_objective
+import mythos.optimization.optimization as jdna_optimization
+import mythos.optimization.simulator as jdna_simulator
+import mythos.utils.types as jdna_types
 import jax_md
 import optax
-from jax_dna.input import topology
-from jax_dna.simulators.lammps.lammps_oxdna import LAMMPSoxDNASimulator
-from jax_dna.ui.loggers.console import ConsoleLogger
-from jax_dna.ui.loggers.logger import NullLogger
-from jax_dna.ui.loggers.multilogger import MultiLogger
+from mythos.input import topology
+from mythos.simulators.lammps.lammps_oxdna import LAMMPSoxDNASimulator
+from mythos.ui.loggers.console import ConsoleLogger
+from mythos.ui.loggers.logger import NullLogger
+from mythos.ui.loggers.multilogger import MultiLogger
 
 jax.config.update("jax_enable_x64", True)
 TARGET = jd_obs.propeller.TARGETS["oxDNA"]
@@ -118,7 +118,7 @@ def main(
     )
 
     if use_aim:
-        from jax_dna.ui.loggers.aim import AimLogger
+        from mythos.ui.loggers.aim import AimLogger
         aim_run = AimLogger(experiment="oxdna-lammps-propeller-twist")
         aim_logger = AimLogger(aim_run = aim_run)
     else:
