@@ -3,6 +3,7 @@
 Run an mythos simulation using an oxDNA sampler.
 """
 
+from dataclasses import field
 import logging
 import os
 import shutil
@@ -60,6 +61,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
     source_path: Path | None = None
     ignore_params: bool = False
     overwrite_input: bool = False
+    input_overrides: dict[str, typing.Any] = field(default_factory=dict)
 
 
     def __post_init__(self, *args, **kwds) -> None:
@@ -70,7 +72,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         self.input_dir = Path(self.input_dir).resolve()
         self.base_dir = self.input_dir
         if self.source_path or not self.overwrite_input:
-            self.base_dir = Path(tempfile.mkdtemp(prefix="jaxdna-oxdna-sim-")).resolve()
+            self.base_dir = Path(tempfile.mkdtemp(prefix="mythos-oxdna-sim-")).resolve()
 
         self.build_dir = None
         if self.source_path:
@@ -135,7 +137,8 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
 
         logger.info("oxDNA input file: %s", self.input_file)
 
-        # overwrite the seed
+        # overwrite the seed and other keyvals provided by the user in the input file
+        self.input_config.update(self.input_overrides)
         self.input_config["seed"] = seed or np.random.default_rng().integers(0, 2**32)
         jd_oxdna.write(self.input_config, self.input_file)
 
