@@ -4,7 +4,7 @@ Advanced Usage
 Custom Energy Functions
 -----------------------
 
-``jax_dna`` supports custom energy functions for ``jax_md`` simulations. Energy
+``mythos`` supports custom energy functions for ``jax_md`` simulations. Energy
 functions are generally comprised of two components: an EnergyFunction and
 optionally an EnergyConfiguration.
 
@@ -15,7 +15,7 @@ optionally an EnergyConfiguration.
   jax
 
 Custom energy functions should be implemented as subclasses of the BaseEnergy
-class, see :doc:`autoapi/jax_dna/energy/base/index`. Further, any custom
+class, see :doc:`autoapi/mythos/energy/base/index`. Further, any custom
 energy function should also implement the ``__call__`` function with the
 following signature:
 
@@ -43,7 +43,7 @@ energy functions.
 
 EnergyFunctions are paired with EnergyConfigurations, which are used to store
 the parameters of the energy function. More information is available in the
-BaseEnergyConfiguration class, see :doc:`autoapi/jax_dna/energy/base/index`.
+BaseEnergyConfiguration class, see :doc:`autoapi/mythos/energy/base/index`.
 
 .. warning::
   Any parameters defined in a EnergyConfiguration should be annotated with
@@ -59,8 +59,8 @@ An example of a trivial energy function is show below:
     import chex
 
     import jax.numpy as jnp
-    import jax_dna.energy.base as jdna_energy
-    import jax_dna.utils.types as typ
+    import mythos.energy.base as jdna_energy
+    import mythos.utils.types as typ
 
     @chex.dataclass
     class TrivialEnergyConfiguration(jdna_energy.BaseEnergyConfiguration):
@@ -93,7 +93,7 @@ An example of a trivial energy function is show below:
             return jnp.sum(jnp.linalg.norm(bonded_i - bonded_j)) + self.config.some_dep_parameter
 
 More examples can be found by looking at the implemented energies in
-:doc:`autoapi/jax_dna/energy/base/index`
+:doc:`autoapi/mythos/energy/base/index`
 
 
 Advanced Optimizations
@@ -101,10 +101,10 @@ Advanced Optimizations
 
 Beyond the simple optimization covered in :doc:`basic_usage` more sophisticated
 optimizations require multiple heterogenous simulations and with multiple kinds
-of loss functions. To accommodate this, ``jax_dna`` sets up optimizations using
+of loss functions. To accommodate this, ``mythos`` sets up optimizations using
 the following abstractions:
 
-.. image:: ../_static/jax_dna_opt_diagram.svg
+.. image:: ../_static/mythos_opt_diagram.svg
     :align: center
 
 
@@ -120,13 +120,13 @@ the following abstractions:
   the parameters we are interested in.
 
 
-Using these abstractions ``jax_dna`` leverages the `ray <https://ray.io>`_
+Using these abstractions ``mythos`` leverages the `ray <https://ray.io>`_
 library to run ``Simulators`` and ``Objectives`` in parallel across multiple
-heterogenous devices. This allows for ``jax_dna`` to schedule ``Simulators`` and
+heterogenous devices. This allows for ``mythos`` to schedule ``Simulators`` and
 calculate gradients using ``Objectives`` in parallel. This is particularly useful
 when the ``Simulators`` are slow to run and the ``Objectives`` are expensive to
 compute.
 
 See `advanced_optimizations
-<https://github.com/ssec-jhu/jax-dna/tree/master/examples/advanced_optimizations/oxdna>`_
+<https://github.com/ssec-jhu/mythos/tree/master/examples/advanced_optimizations/oxdna>`_
 for more details and examples.

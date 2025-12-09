@@ -1,5 +1,5 @@
 [project]
-name = "jax_dna"
+name = "mythos"
 dynamic = ["version"]
 authors = [
     {name = "Ryan Kreuger", email = "ryan_krueger@g.harvard.edu"},
@@ -44,21 +44,21 @@ docs = [
 ]
 
 [project.urls]
-homepage = "https://github.com/rkruegs123/jax-dna"
-documentation = "https://jax-dna.readthedocs.io/en/latest/"
-repository = "https://github.com/rkruegs123/jax-dna"
+homepage = "https://github.com/mythos-bio/mythos"
+documentation = "https://mythos.readthedocs.io/en/latest/"
+repository = "https://github.com/mythos-bio/mythos"
 
 [build-system]
 requires = ["setuptools>=61.2", "setuptools_scm[toml]>=8.0"]
 build-backend = "setuptools.build_meta"
 
 [tool.setuptools]
-packages = ["jax_dna"]
+packages = ["mythos"]
 zip-safe = false
 include-package-data = true
 
 [tool.setuptools_scm]
-write_to = "jax_dna/_version.py"
+write_to = "mythos/_version.py"
 
 [tool.bandit]
 exclude_dirs = ["tests"]
@@ -80,7 +80,7 @@ lint.ignore = [
     # added for ruff formatter compatability
     "ISC001", # https://docs.astral.sh/ruff/rules/single-line-implicit-string-concatenation/
     "COM812", # https://docs.astral.sh/ruff/rules/missing-trailing-comma/
-    # added for jax_dna
+    # added for mythos
     "FIX002", # https://docs.astral.sh/ruff/rules/line-contains-todo/
     "D107", # https://docs.astral.sh/ruff/rules/undocumented-public-init
     "SIM115", # https://docs.astral.sh/ruff/rules/open-file-with-context-handler
@@ -115,7 +115,7 @@ exclude = [
     "_version.py"
 ]
 target-version = "py311"
-src=["jax_dna"]
+src=["mythos"]
 
 [tool.ruff.lint.per-file-ignores]
 "**/test{s,}/*.py" = [
@@ -146,7 +146,7 @@ convention = "google"
 [tool.pytest.ini_options]
 minversion = "6.0"
 testpaths = [
-    "jax_dna",
+    "mythos",
 ]
 python_files = [
     "test_*.py",

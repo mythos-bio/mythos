@@ -1,13 +1,13 @@
 ### Getting Started
 
 To start working, first [fork the
-repository](https://github.com/rkruegs123/jax-dna/fork), clone it to your local
+repository](https://github.com/mythos-bio/mythos/fork), clone it to your local
 machine, and create a new branch for your changes. You can do this with the
 following commands:
 
 ```bash
-git clone https://github.com/<username-or-org>/jax-dna.git
-cd jax-dna
+git clone https://github.com/<username-or-org>/mythos.git
+cd mythos
 git checkout -b <branch-name>
 ```
 
@@ -19,10 +19,10 @@ If you are adding a new feature or changing functionality, please make sure that
 you have added tests for your changes. We use
 [pytest](https://docs.pytest.org/en/stable/) to run our tests. You can find
 examples of tests in a subdirectory called `tests`, wherever you are adding
-functionality. JAX-DNA currently requires at least 90% test coverage in the
+functionality. mythos currently requires at least 90% test coverage in the
 overall project code and 80% test coverage in the code that has been added.
 
-JAX-DNA uses `tox` to manage development and testing.
+mythos uses `tox` to manage development and testing.
 
 `tox` is used to:
 - Run tests (`tox -e test`)
@@ -62,7 +62,7 @@ should be a link in the output from the `push` command that you can click that
 looks like:
 
 ```
-https://github.com/<username-or-org>/jax-dna/pull/new/<branch_name>
+https://github.com/<username-or-org>/mythos/pull/new/<branch_name>
 ```
 
 If you don't see that link, you can go to the main repository and click on the

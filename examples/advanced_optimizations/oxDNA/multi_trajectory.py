@@ -19,20 +19,20 @@ import optax
 import ray
 from tqdm import tqdm
 
-import jax_dna.energy as jdna_energy
-import jax_dna.energy.dna1 as dna1_energy
-import jax_dna.input.toml as toml_reader
-import jax_dna.input.topology as jdna_top
-import jax_dna.input.trajectory as jdna_traj
-import jax_dna.input.tree as jdna_tree
-import jax_dna.observables as jd_obs
-import jax_dna.optimization.simulator as jdna_simulator
-import jax_dna.optimization.objective as jdna_objective
-import jax_dna.optimization.optimization as jdna_optimization
-import jax_dna.simulators.oxdna as oxdna
-import jax_dna.simulators.io as jdna_sio
-import jax_dna.utils.types as jdna_types
-import jax_dna.ui.loggers.console as console_logger
+import mythos.energy as jdna_energy
+import mythos.energy.dna1 as dna1_energy
+import mythos.input.toml as toml_reader
+import mythos.input.topology as jdna_top
+import mythos.input.trajectory as jdna_traj
+import mythos.input.tree as jdna_tree
+import mythos.observables as jd_obs
+import mythos.optimization.simulator as jdna_simulator
+import mythos.optimization.objective as jdna_objective
+import mythos.optimization.optimization as jdna_optimization
+import mythos.simulators.oxdna as oxdna
+import mythos.simulators.io as jdna_sio
+import mythos.utils.types as jdna_types
+import mythos.ui.loggers.console as console_logger
 
 
 jax.config.update("jax_enable_x64", True)
@@ -91,8 +91,8 @@ def main():
         "filemode": "w",
     }
 
-    kT = toml_reader.parse_toml("jax_dna/input/dna1/default_simulation.toml")["kT"]
-    geometry = toml_reader.parse_toml("jax_dna/input/dna1/default_energy.toml")["geometry"]
+    kT = toml_reader.parse_toml("mythos/input/dna1/default_simulation.toml")["kT"]
+    geometry = toml_reader.parse_toml("mythos/input/dna1/default_energy.toml")["geometry"]
 
     template_dir = Path("data/templates/simple-helix")
     topology_fname = template_dir / "sys.top"

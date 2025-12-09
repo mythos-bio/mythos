@@ -14,15 +14,15 @@ import jax.numpy as jnp
 import jax_md
 import optax
 
-from jax_dna.energy.base import ComposedEnergyFunction
-import jax_dna.energy.dna1 as jdna_energy
-from jax_dna.energy.dna1.stacking import Stacking
-import jax_dna.input.topology as jdna_top
-import jax_dna.input.trajectory as jdna_traj
-import jax_dna.losses.observable_wrappers as jdna_losses
-import jax_dna.observables as jdna_obs
-import jax_dna.simulators.jax_md as jdna_jaxmd
-import jax_dna.utils.types as jdna_types
+from mythos.energy.base import ComposedEnergyFunction
+import mythos.energy.dna1 as jdna_energy
+from mythos.energy.dna1.stacking import Stacking
+import mythos.input.topology as jdna_top
+import mythos.input.trajectory as jdna_traj
+import mythos.losses.observable_wrappers as jdna_losses
+import mythos.observables as jdna_obs
+import mythos.simulators.jax_md as jdna_jaxmd
+import mythos.utils.types as jdna_types
 
 jax.config.update("jax_enable_x64", True)
 
@@ -135,8 +135,8 @@ def main():
     grad_fn = jax.jit(jax.value_and_grad(graddable_loss, has_aux=True))
 
     # Now we setup an simple optimization loop. This is just to show an example.
-    # In practice, ``jax_dna`` has abstracted and generalized this process in
-    # the ``jax_dna.optimization`` module.
+    # In practice, ``mythos`` has abstracted and generalized this process in
+    # the ``mythos.optimization`` module.
 
     key = jax.random.key(1234)
     optimizer = optax.adam(learning_rate=run_config["learning_rate"])
