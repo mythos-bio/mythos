@@ -7,6 +7,7 @@ from pathlib import Path
 
 import mythos.utils.types as typ
 import pytest
+from mythos.input import oxdna_input
 from mythos.simulators import oxdna
 
 file_dir = Path(os.path.realpath(__file__)).parent
@@ -36,7 +37,7 @@ def setup_test_dir(test_dir: Path | None = None, add_input: bool = True):  # noq
         test_dir.mkdir(parents=True)
     if add_input:
         with (test_dir / "input").open("w") as f:
-            f.write("trajectory_file = test.conf\ntopology = test.top\n")
+            f.write("trajectory_file = test.conf\ntopology = test.top\nT=300K\n")
 
         shutil.copyfile(
             "data/test-data/dna1/simple-helix/generated.top",
@@ -137,6 +138,23 @@ def test_oxdna_override_input(tmp_path, mock_energy_fn):
     assert sim.base_dir == tmp_path
     assert sim.input_file == tmp_path / "input"
     assert tmp_path.joinpath("oxdna.out.log").exists()
+
+
+def test_oxdna_override_keyvals(tmp_path, mock_energy_fn):
+    """Test that the oxDNA simulator ignores params when configured."""
+    setup_test_dir(tmp_path, add_input=True)
+    sim = oxdna.oxDNASimulator(
+        input_dir=tmp_path,
+        sim_type=typ.oxDNASimulatorType.DNA1,
+        energy_fn=mock_energy_fn,
+        binary_path=shutil.which("echo"),
+        input_overrides={"steps": 10000, "T": "275K"},
+    )
+    sim._read_trajectory = lambda: None
+    sim.run()
+    input_content = oxdna_input.read(sim.base_dir / "input")
+    assert input_content["steps"] == 10000
+    assert input_content["T"] == "275K"
 
 
 @pytest.mark.parametrize(("bin_path", "source_path"), [(None, None), ("x", "x")])
