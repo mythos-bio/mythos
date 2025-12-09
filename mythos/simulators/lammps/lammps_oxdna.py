@@ -1,4 +1,4 @@
-"""LAMMPS-based OxDNA simulator for JAX-DNA."""
+"""LAMMPS-based OxDNA simulator for mythos."""
 
 import logging
 import re
@@ -375,7 +375,7 @@ def _read_lammps_output(output_file: Path) -> Trajectory:
         output_file: Path to the LAMMPS trajectory dump file.
 
     Returns:
-        A Trajectory object in JAX-DNA format.
+        A Trajectory object in mythos format.
     """
     ts = []
     bs = []

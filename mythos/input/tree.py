@@ -24,6 +24,6 @@ def load_pytree(filename: jdna_types.PathOrStr) -> jdna_types.PyTree:
         # files that we write. So we can ignore this for now, but if there
         # another way we should consider switching to that.
         # TODO(ryanhausen): Investigate a more secure way to load the file.
-        # https://github.com/rkruegs123/jax-dna/issues/7
+        # https://github.com/mythos-bio/mythos/issues/7
         leaves, treedef = pickle.load(f)  # nosec B301 # noqa: S301
     return jax.tree_util.tree_unflatten(treedef, leaves)

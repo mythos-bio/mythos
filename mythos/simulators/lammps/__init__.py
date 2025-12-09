@@ -1,1 +1,1 @@
-"""LAMMPS-based simulators for JAX-DNA."""
+"""LAMMPS-based simulators for mythos."""

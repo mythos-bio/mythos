@@ -1,4 +1,4 @@
-"""Helper functions for the JAX-DNA package."""
+"""Helper functions for the mythos package."""
 
 import itertools
 import sys

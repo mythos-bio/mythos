@@ -128,5 +128,5 @@ when the ``Simulators`` are slow to run and the ``Objectives`` are expensive to
 compute.
 
 See `advanced_optimizations
-<https://github.com/ssec-jhu/jax-dna/tree/master/examples/advanced_optimizations/oxdna>`_
+<https://github.com/ssec-jhu/mythos/tree/master/examples/advanced_optimizations/oxdna>`_
 for more details and examples.

@@ -402,7 +402,7 @@ def test_hydrogen_bonding(base_dir: str):
         "data/test-data/na1/simple-coax-dna-dna-dna",
         "data/test-data/na1/simple-coax-rna-rna-rna",
         # TODO (rkruegs123): there's a bug in oxNA standalone code! spring constant for DRH is read as 0.0
-        # https://github.com/ssec-jhu/jax-dna/issues/22
+        # https://github.com/ssec-jhu/mythos/issues/22
         # "data/test-data/na1/simple-coax-dna-dna-rna",
     ],
 )

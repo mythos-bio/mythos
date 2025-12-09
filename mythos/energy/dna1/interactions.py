@@ -138,7 +138,7 @@ def exc_vol_unbonded(
 # comments from original code
 # Note that we use r_stack instead of dr_stack
 # TODO(rkruegs123): fix this one with bs and rcs
-# https://github.com/ssec-jhu/jax-dna/issues/7
+# https://github.com/ssec-jhu/mythos/issues/7
 def stacking(
     # obervables
     r_stack: typ.ARR_OR_SCALAR,

@@ -10,7 +10,7 @@ To use ``mythos``, first install it using ``pip``:
 
 .. code-block:: bash
 
-    pip install git+https://github.com/rkruegs123/jax-dna.git
+    pip install git+https://github.com/mythos-bio/mythos.git
 
 
 Basic Usage
@@ -138,7 +138,7 @@ that function to the ``jax_md`` simulator:
     trajectory = sim_fn(params)
 
 A runnable version of this example can be found in the examples
-`folder <https://github.com/ssec-jhu/jax-dna/tree/master/examples/simulations/jaxmd>`_
+`folder <https://github.com/ssec-jhu/mythos/tree/master/examples/simulations/jaxmd>`_
 in the repository.
 
 
@@ -180,7 +180,7 @@ point to the oxDNA executable: ``OXDNA_BIN_PATH``
 .. https://jwodder.github.io/kbits/posts/rst-hyperlinks/#gotcha-duplicate-link-text
 
 A runnable version of this example can be found in the examples
-`folder <https://github.com/ssec-jhu/jax-dna/tree/master/examples/simulations/oxdna>`__
+`folder <https://github.com/ssec-jhu/mythos/tree/master/examples/simulations/oxdna>`__
 in the repository.
 
 Running a simple optimization

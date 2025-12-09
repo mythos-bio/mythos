@@ -44,9 +44,9 @@ docs = [
 ]
 
 [project.urls]
-homepage = "https://github.com/rkruegs123/jax-dna"
-documentation = "https://jax-dna.readthedocs.io/en/latest/"
-repository = "https://github.com/rkruegs123/jax-dna"
+homepage = "https://github.com/mythos-bio/mythos"
+documentation = "https://mythos.readthedocs.io/en/latest/"
+repository = "https://github.com/mythos-bio/mythos"
 
 [build-system]
 requires = ["setuptools>=61.2", "setuptools_scm[toml]>=8.0"]

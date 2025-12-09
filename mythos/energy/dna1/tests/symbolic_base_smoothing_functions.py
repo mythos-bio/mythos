@@ -5,7 +5,7 @@ def _solve_f1_b(x: float, a: float, x0: float, xc: float) -> float:
     """Solve for the smoothing parameter b in the f1 smoothing function.
 
     For derivation see:
-    https://github.com/rkruegs123/jax-dna/blob/master/bak/v1/src/smoothing.py
+    https://github.com/mythos-bio/mythos/blob/master/bak/v1/src/smoothing.py
     """
     return float(
         sp.parsing.sympy_parser.parse_expr(
@@ -20,7 +20,7 @@ def _solve_f1_xc_star(x: float, a: float, x0: float, xc: float) -> float:
     """Solve for the smoothing parameter b in the f1 smoothing function.
 
     For derivation see:
-    https://github.com/rkruegs123/jax-dna/blob/master/bak/v1/src/smoothing.py
+    https://github.com/mythos-bio/mythos/blob/master/bak/v1/src/smoothing.py
     """
     return float(
         sp.parsing.sympy_parser.parse_expr(
