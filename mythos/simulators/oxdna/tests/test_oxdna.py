@@ -5,9 +5,9 @@ import shutil
 import uuid
 from pathlib import Path
 
-from mythos.input import oxdna_input
 import mythos.utils.types as typ
 import pytest
+from mythos.input import oxdna_input
 from mythos.simulators import oxdna
 
 file_dir = Path(os.path.realpath(__file__)).parent

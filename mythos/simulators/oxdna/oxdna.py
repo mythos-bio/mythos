@@ -3,13 +3,13 @@
 Run an mythos simulation using an oxDNA sampler.
 """
 
-from dataclasses import field
 import logging
 import os
 import shutil
 import subprocess
 import tempfile
 import typing
+from dataclasses import field
 from pathlib import Path
 
 import chex
