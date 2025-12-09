@@ -15,6 +15,7 @@ def read_ss_weights(file: str) -> dict[str, jnp.ndarray]:
     file, which include stacking parameters:
         - ss_stack_weights (from STCK_X_Y entries)
         - eps_stack_kt_coeff (from STCK_FACT_EPS)
+
     and hydrogen-bonding parameters:
         - ss_hb_weights (from HYDR_X_Y entries, requires on or both of HYDR_A_T
           or HYDR_T_A and HYDR_G_C or HYDR_C_G to be present)
