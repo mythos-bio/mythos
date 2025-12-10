@@ -1,6 +1,8 @@
 """Tests for the oxdna_utils module."""
 
+import importlib
 from pathlib import Path
+import resource
 
 import mythos.simulators.oxdna.utils as oxdna_utils
 import pytest
@@ -93,6 +95,24 @@ def test_update_params() -> None:
     # remove generated file
     tmp_path.unlink()
     assert actual == expected
+
+
+def test_read_last_hist() -> None:
+    test_dir = importlib.resources.files("mythos").parent / "data/test-data/melting_temp"
+    hist_df = oxdna_utils.read_last_hist(test_dir)
+
+    expected_columns = [
+        "bond",
+        "mindistance",
+        "count",
+        "unbiased_count",
+    ]
+    assert list(hist_df.columns[:len(expected_columns)]) == expected_columns
+    # 13 temp extraps plus above columns, permutations of 8 bonds plus unbonded
+    # = 9 and bool mindistance = 2 -> 18 rows
+    assert hist_df.shape == (18, 17)
+    assert set(hist_df["bond"].unique()) == set(range(9))
+    assert set(hist_df["mindistance"].unique()) == {0, 1}
 
 
 if __name__ == "__main__":
