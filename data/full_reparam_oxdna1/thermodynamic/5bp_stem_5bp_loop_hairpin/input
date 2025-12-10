@@ -1,0 +1,50 @@
+# Program parameters
+backend = CPU
+backend_precision = double
+seed = 0
+#interaction_type = DNA_nomesh
+interaction_type = DNA
+# Simulation parameters
+sim_type = VMMC
+ensemble = NVT
+max_cluster_size = 10
+steps = 1e6
+equilibration_steps = 1e5
+#max_backbone_force = 5.
+#max_backbone_force_far = 10.
+
+#delta_translation = 0.1
+#delta_rotation = 0.1
+delta_translation = 0.22
+delta_rotation = 0.22
+T = 52C
+verlet_skin = 1.00
+umbrella_sampling = 1
+op_file = op.txt
+weights_file = wfile.txt
+safe_weights = 0
+default_weight = 0
+extrapolate_hist = 36C, 42C, 45C, 48C, 51C, 52C, 54C, 57C, 60C, 63C, 66C, 69C
+small_system = 1
+
+salt_concentration = 0.5
+dh_half_charged_ends = 1
+
+# Define sequence dependence
+use_average_seq = 1
+
+# Input/output
+topology = 5bp_stem_5bp_loop_hairpin.top
+conf_file = 5bp_stem_5bp_loop_hairpin.conf
+#conf_file = last_conf.dat
+log_file = sim.log
+trajectory_file = trajectory.dat
+no_stdout_energy = 0
+restart_step_counter = 1
+energy_file = energy.dat
+lastconf_file = last_conf.dat
+last_hist_file = last_hist.dat
+traj_hist_file = traj_hist.dat
+print_conf_interval = 1e3
+print_energy_every = 1e3
+time_scale = linear
