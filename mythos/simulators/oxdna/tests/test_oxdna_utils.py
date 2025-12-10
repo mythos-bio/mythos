@@ -2,7 +2,6 @@
 
 import importlib
 from pathlib import Path
-import resource
 
 import mythos.simulators.oxdna.utils as oxdna_utils
 import pytest

@@ -410,5 +410,5 @@ def read_last_hist(simulation_dir: Path) -> pd.DataFrame:
     extrap_temps = inputs.get("extrapolate_hist", "").split(",")
     order_param_types = _get_order_parameter_names(simulation_dir / inputs["op_file"])
     # set the histogram dataframe columns
-    hist_df_columns = order_param_types + ["count", "unbiased_count"] + extrap_temps
+    hist_df_columns = [*order_param_types, "count", "unbiased_count", *extrap_temps]
     return pd.read_table(hist_file, sep=r"\s+", header=None, skiprows=1, names=hist_df_columns)
