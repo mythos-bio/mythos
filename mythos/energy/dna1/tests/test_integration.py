@@ -43,20 +43,20 @@ def get_potential_energy(base_dir: str) -> np.ndarray:
     return potential_energies[1:]  # ignore the initial state
 
 
-def get_topology(base_dir: str) -> jd_top.Topology:
-    return jd_top.from_oxdna_file(base_dir + "/generated.top")
+def get_topology(base_dir: str, top_file: str) -> jd_top.Topology:
+    return jd_top.from_oxdna_file(Path(base_dir) / top_file)
 
 
 def get_trajectory(base_dir: str, topology: jd_top.Topology) -> jd_traj.Trajectory:
     return jd_traj.from_file(
         base_dir + "/output.dat",
         topology.strand_counts,
-        is_oxdna=False,
+        is_5p_3p=False,
     )
 
 
-def get_setup_data(base_dir: str, box_size: float = 20.0):
-    topology = get_topology(base_dir)
+def get_setup_data(base_dir: str, box_size: float = 20.0, top_file: str = "generated.top"):
+    topology = get_topology(base_dir, top_file)
     trajectory = get_trajectory(base_dir, topology)
     default_params = jd_toml.parse_toml("mythos/input/dna1/default_energy.toml")
 
@@ -190,22 +190,24 @@ def test_fene(base_dir: str):
 
 
 @pytest.mark.parametrize(
-    ("base_dir", "weights_file", "use_pseq"),
+    ("base_dir", "weights_file", "use_pseq", "top_file"),
     [
-        ("data/test-data/dna1/simple-helix", None, False),
-        ("data/test-data/dna1/simple-helix", None, True),
-        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", False),
-        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True),
+        ("data/test-data/dna1/simple-helix", None, False, "generated.top"),
+        ("data/test-data/dna1/simple-helix", None, True, "generated.top"),
+        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", False, "generated.top"),
+        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True, "generated.top"),
+        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", False, "generated-new.top"),
+        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True, "generated-new.top"),
     ]
 )
-def test_hydrogen_bonding(base_dir: str, weights_file: str, *, use_pseq: bool):
+def test_hydrogen_bonding(base_dir: str, weights_file: str, *, use_pseq: bool, top_file: str):
     (
         topology,
         trajectory,
         default_params,
         transform_fn,
         displacement_fn,
-    ) = get_setup_data(base_dir)
+    ) = get_setup_data(base_dir, top_file=top_file)
 
     terms = get_energy_terms(base_dir, "hydrogen_bonding")
     # compute energy terms

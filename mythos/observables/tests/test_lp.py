@@ -24,7 +24,7 @@ def sim_traj():
     test_traj = from_file(
         path=TEST_INPUT / "output.dat",
         strand_lengths=top.strand_counts,
-        is_oxdna=False,
+        is_5p_3p=False,
     )
 
     return SimulatorTrajectory(rigid_body=test_traj.state_rigid_body)

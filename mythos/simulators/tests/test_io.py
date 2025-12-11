@@ -76,6 +76,6 @@ def test_simulator_trajectory_to_file(tmp_path, n_states, n_nucleotides):
     output = tmp_path / "test.traj"
     traj.to_file(output)
 
-    read_back = trajectory.from_file(output, strand_lengths=[n_nucleotides], is_oxdna=False)
+    read_back = trajectory.from_file(output, strand_lengths=[n_nucleotides], is_5p_3p=False)
     assert jnp.allclose(read_back.state_rigid_body.center, traj.rigid_body.center)
     assert jnp.allclose(read_back.state_rigid_body.orientation.vec, traj.rigid_body.orientation.vec)

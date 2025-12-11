@@ -70,7 +70,7 @@ def melting_temp_fn(energy_info):
 def traj_info():
     def read_traj():
         top = jdna_top.from_oxdna_file(DATA_PATH / "sys.top")
-        traj = from_file(DATA_PATH / "trajectory.dat", top.strand_counts, is_oxdna=False)
+        traj = from_file(DATA_PATH / "trajectory.dat", top.strand_counts, is_5p_3p=False)
         return SimulatorTrajectory(rigid_body=traj.state_rigid_body)
 
     traj = read_traj()
