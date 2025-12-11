@@ -11,7 +11,7 @@ import pandas as pd
 import sympy
 
 import mythos.utils.types as jd_types
-from mythos.input import oxdna_input, topology
+from mythos.input import oxdna_input, topology, trajectory
 from mythos.input.trajectory import Trajectory
 from mythos.utils.types import PathOrStr, oxDNAFormat, oxDNAModelHType
 
@@ -388,22 +388,22 @@ def read_energy(simulation_dir: Path) -> pd.DataFrame:
     return energy_df
 
 
-def read_output_trajectory(oxdna_input: PathOrStr) -> Trajectory:
+def read_output_trajectory(input_file: PathOrStr) -> Trajectory:
     """Read trajectory from an oxDNA input directory.
 
     This is a convenience function that reads the topology and trajectory files
     from an oxDNA input directory to determine the correct read format.
 
     Args:
-        oxdna_input (PathOrStr): path to the oxDNA input file.
+        input_file (PathOrStr): path to the oxDNA input file.
     """
-    input_dict = oxdna_input.read(Path(oxdna_input))
-    oxdna_dir = Path(oxdna_input).parent
+    input_dict = oxdna_input.read(Path(input_file))
+    oxdna_dir = Path(input_file).parent
 
     top, fmt = topology.from_oxdna_file(oxdna_dir / input_dict["topology"], return_format=True)
-    return Trajectory.from_file(
+    return trajectory.from_file(
         oxdna_dir / input_dict["trajectory_file"],
-        top.strand_lengths,
+        top.strand_counts,
         is_5p_3p=(fmt == oxDNAFormat.NEW),
     )
 

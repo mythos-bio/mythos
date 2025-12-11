@@ -161,7 +161,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         return self._read_trajectory()
 
     def _read_trajectory(self) -> jd_sio.SimulatorTrajectory:
-        trajectory = oxdna_utils.read_output_trajectory(oxdna_input=self.base_dir / "input")
+        trajectory = oxdna_utils.read_output_trajectory(input_file=self.base_dir / "input")
 
         logger.debug("oxDNA trajectory com size: %s", trajectory.state_rigid_body.center.shape)
 
