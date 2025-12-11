@@ -247,8 +247,6 @@ def test_oxdna_simulator_trajectory_read(monkeypatch) -> None:
     assert isinstance(traj, SimulatorTrajectory)
     assert traj.rigid_body.center.shape == (100, 16, 3)
 
-    tear_down_test_dir(test_dir)
-
 
 if __name__ == "__main__":
     test_oxdna_build()
