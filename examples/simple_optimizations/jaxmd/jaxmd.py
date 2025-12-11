@@ -41,7 +41,7 @@ def main():
         jdna_traj.from_file(
             experiment_dir / "init.conf",
             topology.strand_counts,
-            is_oxdna=False,
+            is_5p_3p=False,
         )
         .states[0]
         .to_rigid_body()

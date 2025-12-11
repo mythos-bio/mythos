@@ -120,8 +120,18 @@ class Topology:
         check_valid_seq(self.seq, self.n_nucleotides)
 
 
-def from_oxdna_file(path: typ.PathOrStr) -> Topology:
-    """Read topology information from an oxDNA file."""
+def from_oxdna_file(path: typ.PathOrStr, *, return_format: bool = False) -> Topology | tuple[Topology, typ.oxDNAFormat]:
+    """Read topology information from an oxDNA file.
+
+    Args:
+        path (typ.PathOrStr): Path to the oxDNA topology file.
+        return_format (bool, optional): Whether to return the oxDNA format along
+            with the topology as a tuple (top, fmt). Defaults to False.
+
+    Returns:
+        Topology or tuple[Topology, typ.oxDNAFormat]: The parsed topology, and
+            optionally the format.
+    """
     path = Path(path)
 
     if not path.exists():
@@ -130,8 +140,10 @@ def from_oxdna_file(path: typ.PathOrStr) -> Topology:
     with path.open() as f:
         lines = f.readlines()
 
-    _, parse_f = _determine_oxdna_format(lines[0])
+    fmt, parse_f = _determine_oxdna_format(lines[0])
 
+    if return_format:
+        return parse_f(lines), fmt
     return parse_f(lines)
 
 
@@ -276,7 +288,7 @@ def _from_file_oxdna_new(lines: list[str]) -> Topology:
     nt_type = []
     for line in lines[1:]:
         nucleotides = line.strip().split()[0]
-        sequence.append(nucleotides)
+        sequence.append(nucleotides[::-1])  # reverse the sequence to go 5'->3' to 3'->5'
         strand_counts.append(len(nucleotides))
         strand_is_circular = "circular=true" in line
         is_circular.append(strand_is_circular)

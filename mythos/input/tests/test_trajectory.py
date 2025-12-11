@@ -324,7 +324,7 @@ def test_validate_box_size_raises_value_error(state_box_sizes: list[np.ndarray],
     (
         "datafile",
         "strand_lengths",
-        "is_oxdna",
+        "is_5p_3p",
         "n_procs",
         "expected_ts",
         "expected_energies",
@@ -390,7 +390,7 @@ def test_validate_box_size_raises_value_error(state_box_sizes: list[np.ndarray],
 def test_trajectory_from_file(
     datafile: Path,
     strand_lengths: list[int],
-    is_oxdna: bool,  # noqa: FBT001
+    is_5p_3p: bool,  # noqa: FBT001
     n_procs: int,
     expected_ts: np.ndarray,
     expected_energies: np.ndarray,
@@ -399,7 +399,7 @@ def test_trajectory_from_file(
     trajectory = jdt.from_file(
         datafile,
         strand_lengths,
-        is_oxdna=is_oxdna,
+        is_5p_3p=is_5p_3p,
         n_processes=n_procs,
     )
 
@@ -420,7 +420,7 @@ def test_trajectory_to_file(tmp_path: Path):
     trajectory = jdt.from_file(
         input_filepath,
         strand_lengths,
-        is_oxdna=False,
+        is_5p_3p=False,
     )
 
     trajectory.to_file(output_filepath)
@@ -429,7 +429,7 @@ def test_trajectory_to_file(tmp_path: Path):
     read_back_trajectory = jdt.from_file(
         output_filepath,
         strand_lengths,
-        is_oxdna=False,
+        is_5p_3p=False,
     )
 
     np.testing.assert_equal(trajectory.times, read_back_trajectory.times)

@@ -194,31 +194,32 @@ def from_file(
     path: typ.PathOrStr,
     strand_lengths: list[int],
     *,
-    is_oxdna: bool = True,
+    is_5p_3p: bool = True,
     n_processes: int = 1,
 ) -> Trajectory:
     """Parse a trajectory file.
 
-    Trajectory files are in the following format:
-    t = number
-    b = number number number
-    E = number number number
-    com_x com_y com_z a1_x a1_y a1_z a3_x a3_y a3_z v_x v_y v_z L_x L_y L_z
-    ...repeated n_nucleotides times in total
-    com_x com_y com_z a1_x a1_y a1_z a3_x a3_y a3_z v_x v_y v_z L_x L_y L_z
+    Trajectory files are in the following format: t = number b = number number
+    number E = number number number com_x com_y com_z a1_x a1_y a1_z a3_x a3_y
+    a3_z v_x v_y v_z L_x L_y L_z ...repeated n_nucleotides times in total com_x
+    com_y com_z a1_x a1_y a1_z a3_x a3_y a3_z v_x v_y v_z L_x L_y L_z
 
     where the com_x, ..., L_z are all floating point numbers.
 
     This can be repeated a total of "timestep" number of times.
 
-    In oxDNA the states are stored in 3'->5' order so we flip the order per strand
-    and need the topology to get the boundaries of each strand.
+    In oxDNA the states are stored in 3'->5' in the original format. We use that
+    format for the internal memory layout. When the new oxdna topology format is
+    used, it will write in 5'->3' order, and thus we must reverse the order per
+    strand.
 
     Args:
-        path (PathOrStr): path to the trajectory file
-        strand_lengths (list[int]): if this is an oxDNA trajectory,
-            the lengths of each strand, so that they can be flipped to 5'->3' order
-        is_oxdna (bool): whether the trajectory is in oxDNA format
+        path (PathOrStr): path to the trajectory file strand_lengths
+        (list[int]): if this is an oxDNA trajectory,
+            the lengths of each strand, so that they can be flipped to 5'->3'
+            order
+        is_5p_3p (bool): whether the trajectory is in 5'->3' format (for example
+            if the topology file used in oxdna standalone is in the new oxdna format)
         n_processes (int): number of processors to use for reading the file
 
     Returns:
@@ -231,9 +232,9 @@ def from_file(
         raise FileNotFoundError(ERR_TRAJECTORY_FILE_NOT_FOUND.format(path))
 
     if n_processes == 1:
-        ts, bs, es, states = _read_file(path, 0, path.stat().st_size, strand_lengths, is_3p_5p=is_oxdna)
+        ts, bs, es, states = _read_file(path, 0, path.stat().st_size, strand_lengths, is_5p_3p=is_5p_3p)
     else:
-        ts, bs, es, states = _read_parallel(path, strand_lengths, is_oxdna=is_oxdna, n_processes=n_processes)
+        ts, bs, es, states = _read_parallel(path, strand_lengths, is_5p_3p=is_5p_3p, n_processes=n_processes)
 
     validate_box_size(bs)
 
@@ -247,13 +248,13 @@ def from_file(
     )
 
 
-def _read_parallel(path: Path, strand_lengths: list[int], *, is_oxdna: bool, n_processes: int) -> RawTrajectory:
+def _read_parallel(path: Path, strand_lengths: list[int], *, is_5p_3p: bool, n_processes: int) -> RawTrajectory:
     boundaries = np.linspace(0, path.stat().st_size, n_processes + 1, dtype=np.int64)
     n_runs = len(boundaries) - 1
     with cf.ProcessPoolExecutor(n_processes, mp_context=mp.get_context("spawn")) as pool:
         vals = pool.map(
             _read_file_process_wrapper,
-            [(path, boundaries[i], boundaries[i + 1], strand_lengths, is_oxdna) for i in range(n_runs)],
+            [(path, boundaries[i], boundaries[i + 1], strand_lengths, is_5p_3p) for i in range(n_runs)],
         )
 
     # this is now an list of iterables where each iterable is a concatenated
@@ -263,11 +264,11 @@ def _read_parallel(path: Path, strand_lengths: list[int], *, is_oxdna: bool, n_p
 
 def _read_file_process_wrapper(args: tuple[Path, int, int, list[int], bool]) -> RawTrajectory:
     """Wrapper for reading a trajectory file."""
-    file_path, start, end, strand_lengths, is_3p_5p = args
-    return _read_file(file_path, start, end, strand_lengths, is_3p_5p=is_3p_5p)
+    file_path, start, end, strand_lengths, is_5p_3p = args
+    return _read_file(file_path, start, end, strand_lengths, is_5p_3p=is_5p_3p)
 
 
-def _read_file(file_path: Path, start: int, end: int, strand_lengths: list[int], *, is_3p_5p: bool) -> RawTrajectory:
+def _read_file(file_path: Path, start: int, end: int, strand_lengths: list[int], *, is_5p_3p: bool) -> RawTrajectory:
     """Read a trajectory file object."""
     # we don't know where we are in the file, but we can be only in one of two
     # situations: We are at the start of the state or we are in the midle of a
@@ -305,7 +306,7 @@ def _read_file(file_path: Path, start: int, end: int, strand_lengths: list[int],
             if len(state) == state_length:
                 # if the trajectory is stored in 3'->5' order, we need to flip
                 # the order of the nucleotides in each strand
-                if is_3p_5p:
+                if is_5p_3p:
                     state = list(itertools.chain.from_iterable([state[s:e][::-1] for s, e in strand_bounds]))
                     state = np.array(state, dtype=np.float64)
                 states.append(np.array(state, dtype=np.float64))

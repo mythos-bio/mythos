@@ -1,4 +1,5 @@
 
+from pathlib import Path
 import jax
 import jax.numpy as jnp
 import jax_md
@@ -48,7 +49,7 @@ def get_trajectory(base_dir: str, topology: jd_top.Topology) -> jd_traj.Trajecto
     return jd_traj.from_file(
         base_dir + "/output.dat",
         topology.strand_counts,
-        is_oxdna=False,
+        is_5p_3p=False,
     )
 
 
