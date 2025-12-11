@@ -214,8 +214,8 @@ def from_file(
     strand.
 
     Args:
-        path (PathOrStr): path to the trajectory file strand_lengths
-        (list[int]): if this is an oxDNA trajectory,
+        path (PathOrStr): path to the trajectory file
+        strand_lengths (list[int]): if this is an oxDNA trajectory,
             the lengths of each strand, so that they can be flipped to 5'->3'
             order
         is_5p_3p (bool): whether the trajectory is in 5'->3' format (for example

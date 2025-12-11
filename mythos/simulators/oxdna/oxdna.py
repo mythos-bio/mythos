@@ -15,7 +15,6 @@ import chex
 import numpy as np
 
 import mythos.input.oxdna_input as jd_oxdna
-import mythos.input.topology as jd_top
 import mythos.input.trajectory as jd_traj
 import mythos.simulators.base as jd_base
 import mythos.simulators.io as jd_sio

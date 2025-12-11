@@ -10,9 +10,9 @@ import jax.numpy as jnp
 import pandas as pd
 import sympy
 
-from mythos.input.trajectory import Trajectory
 import mythos.utils.types as jd_types
 from mythos.input import oxdna_input, topology
+from mythos.input.trajectory import Trajectory
 from mythos.utils.types import PathOrStr, oxDNAFormat, oxDNAModelHType
 
 ERR_CANNOT_PROCESS_SRC_H = "Cannot process src/model.h file. Failed parsing: {}"
