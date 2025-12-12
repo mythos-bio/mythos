@@ -1,0 +1,25 @@
+{
+	order_parameter = bond
+	name = all_native_bonds
+	pair1 = 0, 19
+	pair2 = 1, 18
+	pair3 = 2, 17
+	pair4 = 3, 16
+	pair5 = 6, 13
+	pair6 = 7, 12
+	pair7 = 8, 11
+	pair8 = 9, 10
+}
+{
+	order_parameter = mindistance
+	name = caca1
+	pair1 = 0, 19
+	pair2 = 1, 18
+	pair3 = 2, 17
+	pair4 = 3, 16
+	pair5 = 6, 13
+	pair6 = 7, 12
+	pair7 = 8, 11
+	pair8 = 9, 10
+	interfaces=4.
+}
