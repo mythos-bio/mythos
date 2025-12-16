@@ -199,10 +199,13 @@ def from_file(
 ) -> Trajectory:
     """Parse a trajectory file.
 
-    Trajectory files are in the following format: t = number b = number number
-    number E = number number number com_x com_y com_z a1_x a1_y a1_z a3_x a3_y
-    a3_z v_x v_y v_z L_x L_y L_z ...repeated n_nucleotides times in total com_x
-    com_y com_z a1_x a1_y a1_z a3_x a3_y a3_z v_x v_y v_z L_x L_y L_z
+    Trajectory files are in the following format: 
+    t = number 
+    b = number number number 
+    E = number number number 
+    com_x com_y com_z a1_x a1_y a1_z a3_x a3_y a3_z v_x v_y v_z L_x L_y L_z 
+    ...repeated n_nucleotides times in total
+    com_x com_y com_z a1_x a1_y a1_z a3_x a3_y a3_z v_x v_y v_z L_x L_y L_z
 
     where the com_x, ..., L_z are all floating point numbers.
 
