@@ -1,5 +1,6 @@
 """Tests for oxDNA simulator."""
 
+import importlib
 import os
 import shutil
 import uuid
@@ -9,6 +10,7 @@ import mythos.utils.types as typ
 import pytest
 from mythos.input import oxdna_input
 from mythos.simulators import oxdna
+from mythos.simulators.io import SimulatorTrajectory
 
 file_dir = Path(os.path.realpath(__file__)).parent
 
@@ -247,6 +249,21 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
 
     sim.cleanup_build()
     assert not sim.build_dir.exists()
+
+def test_oxdna_simulator_trajectory_read(monkeypatch) -> None:
+    """Test for oxdna trajectory reading after run."""
+
+    test_dir = importlib.resources.files("mythos").parent / "data" / "test-data" / "simple-helix"
+    sim = oxdna.oxDNASimulator(
+        input_dir=test_dir,
+        overwrite_input=True,  # We use this obj as shell to read, so no write
+        sim_type=typ.oxDNASimulatorType.DNA1,
+        energy_fn=1,
+        binary_path="dummy",
+    )
+    traj = sim._read_trajectory()
+    assert isinstance(traj, SimulatorTrajectory)
+    assert traj.rigid_body.center.shape == (100, 16, 3)
 
 
 if __name__ == "__main__":

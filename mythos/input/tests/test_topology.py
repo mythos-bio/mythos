@@ -415,7 +415,7 @@ def test_from_oxdna_file_raises_file_not_found_error():
                         (2, 5),
                     ]
                 ),
-                seq=jnp.array([jd_const.NUCLEOTIDES_IDX[s] for s in "GCATGC"], dtype=jnp.int32),
+                seq=jnp.array([jd_const.NUCLEOTIDES_IDX[s] for s in "ACGCGT"], dtype=jnp.int32),
                 is_end=jnp.array([0, 0, 0, 0, 0, 0]),
                 nt_type=jnp.array([jdt.NucleotideType.UNSPECIFIED] * 6),
             ),
@@ -467,7 +467,7 @@ def test_from_oxdna_file_raises_file_not_found_error():
                         (3, 5),
                     ]
                 ),
-                seq=jnp.array([jd_const.NUCLEOTIDES_IDX[s] for s in "GCATGC"], dtype=jnp.int32),
+                seq=jnp.array([jd_const.NUCLEOTIDES_IDX[s] for s in "ACGCGT"], dtype=jnp.int32),
                 is_end=jnp.array([1, 0, 1, 1, 0, 1]),
                 nt_type=jnp.array([jdt.NucleotideType.UNSPECIFIED] * 6),
             ),
@@ -488,3 +488,19 @@ def test_from_oxdna_file(file_path: str, expected: jdt.Topology):
             assert (actual[key] == expected[key]).all()
         else:
             assert actual[key] == expected[key]
+
+
+# parametrize for classic and new formats
+@pytest.mark.parametrize(
+    ("file_path", "expected_format"),
+    [
+        (TEST_FILES_DIR / "simple-helix-topology-circular-oxdna-classic.top", typ.oxDNAFormat.CLASSIC),
+        (TEST_FILES_DIR / "simple-helix-topology-circular-oxdna-new.top", typ.oxDNAFormat.NEW),
+        (TEST_FILES_DIR / "simple-helix-topology-linear-oxdna-classic.top", typ.oxDNAFormat.CLASSIC),
+        (TEST_FILES_DIR / "simple-helix-topology-linear-oxdna-new.top", typ.oxDNAFormat.NEW),
+    ],
+)
+def test_from_oxdna_file_format_only(file_path, expected_format):
+    _, detected_format = jdt.from_oxdna_file(file_path, return_format=True)
+    assert detected_format == expected_format
+

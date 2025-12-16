@@ -16,7 +16,6 @@ import chex
 import numpy as np
 
 import mythos.input.oxdna_input as jd_oxdna
-import mythos.input.topology as jd_top
 import mythos.input.trajectory as jd_traj
 import mythos.simulators.base as jd_base
 import mythos.simulators.io as jd_sio
@@ -197,11 +196,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         return self._read_trajectory()
 
     def _read_trajectory(self) -> jd_sio.SimulatorTrajectory:
-        trajectory_file = self.base_dir / self.input_config["trajectory_file"]
-        topology_file = self.base_dir / self.input_config["topology"]
-
-        topology = jd_top.from_oxdna_file(topology_file)
-        trajectory = jd_traj.from_file(trajectory_file, topology.strand_counts, is_oxdna=False)
+        trajectory = oxdna_utils.read_output_trajectory(input_file=self.base_dir / "input")
 
         logger.debug("oxDNA trajectory com size: %s", trajectory.state_rigid_body.center.shape)
 

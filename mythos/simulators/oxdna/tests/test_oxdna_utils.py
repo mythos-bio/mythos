@@ -5,6 +5,7 @@ from pathlib import Path
 
 import mythos.simulators.oxdna.utils as oxdna_utils
 import pytest
+from mythos.input.trajectory import Trajectory
 
 
 @pytest.mark.parametrize(
@@ -94,6 +95,14 @@ def test_update_params() -> None:
     # remove generated file
     tmp_path.unlink()
     assert actual == expected
+
+
+def test_read_output_trajectory() -> None:
+    test_input = importlib.resources.files("mythos").parent / "data" / "test-data" / "simple-helix" / "input"
+    traj = oxdna_utils.read_output_trajectory(test_input)
+
+    assert isinstance(traj, Trajectory)
+    assert traj.state_rigid_body.center.shape == (100, 16, 3)
 
 
 def test_read_last_hist() -> None:

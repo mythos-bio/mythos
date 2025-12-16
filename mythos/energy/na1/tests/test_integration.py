@@ -38,11 +38,11 @@ def get_topology(base_dir: str) -> jd_top.Topology:
     return jd_top.from_oxdna_file(base_dir + "/generated.top")
 
 
-def get_trajectory(base_dir: str, topology: jd_top.Topology, *, is_oxdna: bool = True) -> jd_traj.Trajectory:
+def get_trajectory(base_dir: str, topology: jd_top.Topology, *, is_5p_3p: bool = True) -> jd_traj.Trajectory:
     return jd_traj.from_file(
         base_dir + "/output.dat",
         topology.strand_counts,
-        is_oxdna=is_oxdna,
+        is_5p_3p=is_5p_3p,
     )
 
 

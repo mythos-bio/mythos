@@ -11,8 +11,9 @@ import pandas as pd
 import sympy
 
 import mythos.utils.types as jd_types
-from mythos.input import oxdna_input
-from mythos.utils.types import oxDNAModelHType
+from mythos.input import oxdna_input, topology, trajectory
+from mythos.input.trajectory import Trajectory
+from mythos.utils.types import PathOrStr, oxDNAFormat, oxDNAModelHType
 
 ERR_CANNOT_PROCESS_SRC_H = "Cannot process src/model.h file. Failed parsing: {}"
 ERR_INVALID_HEADER_TYPE = "Invalid header value variable {} with value {}"
@@ -387,6 +388,26 @@ def read_energy(simulation_dir: Path) -> pd.DataFrame:
     energy_df_columns = energy_df_columns_base + order_param_types + ["weight"]
     energy_df.columns = energy_df_columns
     return energy_df
+
+
+def read_output_trajectory(input_file: PathOrStr) -> Trajectory:
+    """Read trajectory from an oxDNA input directory.
+
+    This is a convenience function that reads the topology and trajectory files
+    from an oxDNA input directory to determine the correct read format.
+
+    Args:
+        input_file (PathOrStr): path to the oxDNA input file.
+    """
+    input_dict = oxdna_input.read(Path(input_file))
+    oxdna_dir = Path(input_file).parent
+
+    top, fmt = topology.from_oxdna_file(oxdna_dir / input_dict["topology"], return_format=True)
+    return trajectory.from_file(
+        oxdna_dir / input_dict["trajectory_file"],
+        top.strand_counts,
+        is_5p_3p=(fmt == oxDNAFormat.NEW),
+    )
 
 
 def read_last_hist(simulation_dir: Path) -> pd.DataFrame:
