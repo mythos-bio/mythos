@@ -9,6 +9,7 @@ import shutil
 import subprocess
 import tempfile
 import typing
+from dataclasses import field
 from pathlib import Path
 
 import chex
@@ -49,7 +50,39 @@ def _guess_binary_location(bin_name: str, env_var: str) -> Path | None:
 
 @chex.dataclass
 class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special word
-    """A sampler base on running an oxDNA simulation."""
+    """A sampler base on running an oxDNA simulation.
+
+    This simulator runs an oxDNA simulation in a subprocess, first compiling
+    oxDNA from source with the provided parameters, or by using a precompiled
+    binary (in the case parameter updates are not desired).
+
+    Arguments:
+        input_dir: Path to the directory containing the oxDNA input file.
+        sim_type: The type of oxDNA simulation to run.
+        energy_fn: The energy function to use for default parameter updates.
+        n_build_threads: Number of threads to use when building oxDNA from
+            source.
+        logger_config: Configuration for the logger.
+        binary_path: Path to a precompiled oxDNA binary to use. This is mutually
+            exclusive with source_path. When provided, the binary will be called
+            and no recompilation will be performed. In such a case, parameters
+            cannot be updated, and if supplied to the run will result in an
+            error unless ignore_params is set to True.
+        source_path: Path to the oxDNA source code to compile. Updating
+            parameters in this simulator requires compiling oxDNA from source
+            with the parameters built into the object code.
+        ignore_params: Whether to ignore provided parameters when running the
+            simulation. This argument is required to be True if there is no
+            source_path set and parameters are passed.
+        overwrite_input: Whether to overwrite the input directory or copy it. If
+            this is False (default), the contents of the input_dir will be
+            copied to a temporary directory for running the simulation to avoid
+            overwriting input.
+        input_overrides: Key-value pairs to override in the input file. The
+            values accept scalar values that can be converted to str. For
+            example: {"T": "275K", "steps": 10000}. WARNING: no validation is
+            performed on the provided key-value pairs.
+    """
 
     input_dir: Path
     sim_type: jd_types.oxDNASimulatorType
@@ -60,6 +93,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
     source_path: Path | None = None
     ignore_params: bool = False
     overwrite_input: bool = False
+    input_overrides: dict[str, typing.Any] = field(default_factory=dict)
 
 
     def __post_init__(self, *args, **kwds) -> None:
@@ -70,7 +104,7 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
         self.input_dir = Path(self.input_dir).resolve()
         self.base_dir = self.input_dir
         if self.source_path or not self.overwrite_input:
-            self.base_dir = Path(tempfile.mkdtemp(prefix="jaxdna-oxdna-sim-")).resolve()
+            self.base_dir = Path(tempfile.mkdtemp(prefix="mythos-oxdna-sim-")).resolve()
 
         self.build_dir = None
         if self.source_path:
@@ -135,7 +169,8 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
 
         logger.info("oxDNA input file: %s", self.input_file)
 
-        # overwrite the seed
+        # overwrite the seed and other keyvals provided by the user in the input file
+        self.input_config.update(self.input_overrides)
         self.input_config["seed"] = seed or np.random.default_rng().integers(0, 2**32)
         jd_oxdna.write(self.input_config, self.input_file)
 
