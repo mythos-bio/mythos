@@ -5,7 +5,6 @@ repository. i.e. this file was invoked using:
 
 python examples/advanced_optimizations/oxDNA/tm_optimization.py
 """
-import itertools
 import logging
 import typing
 from pathlib import Path
@@ -13,13 +12,13 @@ from pathlib import Path
 import fire
 import jax
 import jax.numpy as jnp
+import jax_md
 import mythos.energy as jdna_energy
 import mythos.energy.dna1 as jdna1_energy
 import mythos.input.topology as jdna_top
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
 import mythos.utils.types as jdna_types
-import jax_md
 import optax
 import pandas as pd
 import ray
@@ -27,6 +26,7 @@ from mythos.input import oxdna_input
 from mythos.observables.melting_temp import MeltingTemp
 from mythos.simulators import oxdna
 from mythos.simulators.oxdna.utils import read_energy
+from mythos.simulators.ray import RayMultiGangSimulation
 from mythos.ui.loggers.console import ConsoleLogger
 from mythos.ui.loggers.logger import NullLogger
 from mythos.ui.loggers.multilogger import MultiLogger
@@ -80,80 +80,54 @@ def main(
     class EnergyInfo(pd.DataFrame):
         pass
 
-    # Create a simple class for running the simulator remotely, while also
-    # modifying the run function to return both trajectory and energy data, for
-    # use with the melting temp objective. The chex.dataclass decorator is not
-    # compatible with ray actors, so we keep the underlying simulator as an
-    # internal attribute.
-    @ray.remote
-    class RaySimulator:
-        def __init__(self, **kwargs):
-            self.simulator = oxdna.oxDNASimulator(**kwargs)
+    class HistogramInfo(pd.DataFrame):
+        pass
 
-        def run(self, params, meta_data=None):
-            traj = self.simulator.run(params, meta_data)
-            energy_df = EnergyInfo(read_energy(self.simulator.base_dir))
-            # note we directly pass the python objects to objective here as
-            # opposed to files.
-            return traj, energy_df
+    class oxDNAUmbrellaSampler(oxdna.oxDNASimulator):
+        exposed_observables: typing.ClassVar[list[str]] = ["trajectory", "energy_info", "histogram_info"]
 
-        def get_hist(self):
-            hist_file = self.simulator.base_dir / self.simulator.input_config["last_hist_file"]
+        def run(self, params: jdna_types.Params, meta_data: typing.Any = None) -> jax_md.rigid_body.RigidBody:
+            traj = super().run(params, meta_data)
+            energy_df = EnergyInfo(read_energy(self.base_dir))
+            hist_df = HistogramInfo(self.get_hist())
+            return traj, energy_df, hist_df
+
+        def update_weights(self, weights: pd.DataFrame) -> None:
+            weights_file = self.base_dir / self.input_config["weights_file"]
+            weights.to_csv(weights_file, sep=" ", header=False)
+
+        def get_hist(self) -> pd.DataFrame:
+            hist_file = self.base_dir / self.input_config["last_hist_file"]
             hist_df_columns = ["bind", "mindist", "unbiased"]
             hist_df = pd.read_csv(hist_file, names=hist_df_columns, sep="\s+", usecols=[0,1,3], skiprows=1) \
                 .set_index(["bind", "mindist"])
             hist_df["unbiased_normed"] = hist_df["unbiased"] / hist_df["unbiased"].sum()
             return hist_df
 
-        def update_weights(self, weights):
-            weights_file = self.simulator.base_dir / self.simulator.input_config["weights_file"]
-            weights.to_csv(weights_file, sep=" ", header=False)
+    class oxDNAUmbrellaSamplerGang(RayMultiGangSimulation):
+        def pre_run(self, *args, **kwargs) -> None:
+            pass
 
-    # Make a wrapper class to run all of these remote simulators as though they
-    # are a single simulator, but implement the simulator interface that has
-    # exposes function so it can be used in the optimizer
-    class MultiRaySimulator:
-        def __init__(self, simulators):
-            self.simulators = simulators
-
-        def run(self, params, meta_data=None):
-            # Run all the simulators in parallel and wait for all to be finished
-            # before gathering results here
-            futures = [sim.run.options(max_task_retries=3, retry_exceptions=True).remote(params, meta_data) for sim in self.simulators]
-            results = ray.get(futures)
-            # Flatten the list, [traj, energy, traj, energy, ...]
-            observables = list(itertools.chain.from_iterable(results))
-            # Prior to next run, update the umbrella weights based on the histograms
-            self.update_weights()
-            return observables
-
-        def update_weights(self):
-            hist = ray.get([simulator.get_hist.remote() for simulator in self.simulators])
-            hist = pd.concat(hist).reset_index().groupby(["bind", "mindist"]).sum()
+        def post_run(self, observables: list[typing.Any], *args, **kwargs) -> list[typing.Any]:
+            hist = pd.concat([i for i in observables if isinstance(i, HistogramInfo)])
+            hist = hist.reset_index().groupby(["bind", "mindist"]).sum()
             weights = hist.query("unbiased_normed > 0").eval("weights = 1 / unbiased_normed")
             weights["weights"] /= weights["weights"].min()  # for numerical stability
             weights = weights[["weights"]]
             # fill in zeroed states
             weights = weights.reindex(hist.index, fill_value=0)
             # Update these in all simulators
-            ray.get([simulator.update_weights.remote(weights) for simulator in self.simulators])
+            ray.get([simulator.call_async("update_weights", weights) for simulator in self.simulations])
+            return observables
 
-        def exposes(self):
-            # each simulator returns 2 observables: traj and energy, but doesn't
-            # really matter what they are called here, just they are unique
-            return [f"obs-{i}" for i in range(2*len(self.simulators))]
-
-    # Construct multi simulator, it expects a list of simulator actors to be
-    # passed in
-    multi_simulator = MultiRaySimulator([
-        RaySimulator.options(num_cpus=1).remote(
-            input_dir=input_dir,
-            sim_type=jdna_types.oxDNASimulatorType.DNA1,
-            energy_fn=energy_fn,
-            source_path=oxdna_src,
-        )
-        for _ in range(num_sims)
-    ])
+    multi_simulator = oxDNAUmbrellaSamplerGang.create(
+        num_sims,
+        oxDNAUmbrellaSampler,
+        input_dir=input_dir,
+        sim_type=jdna_types.oxDNASimulatorType.DNA1,
+        energy_fn=energy_fn,
+        source_path=oxdna_src,
+    )
 
     # Setup the melting temp function, loss and objective
     melting_temp_fn = MeltingTemp(
@@ -186,7 +160,6 @@ def main(
     melting_temp_objective = jdna_objective.DiffTReObjective(
         name="prop_twist",
         required_observables=multi_simulator.exposes(),
-        needed_observables=multi_simulator.exposes(), # do we need to supply both?
         logging_observables=["loss", "melting_temp", "neff"],
         grad_or_loss_fn=melting_temp_loss_fn,
         energy_fn=energy_fn,
@@ -225,7 +198,7 @@ def main(
     for i in range(opt_steps):
         state, opt_params, _ = optimizer.step(opt_params)
 
-        for metric, value in optimizer.objective.logging_observables():
+        for metric, value in optimizer.objective.logging_observables().items():
             logger.log_metric(metric, value, i)
 
         optimizer.post_step(state, opt_params)

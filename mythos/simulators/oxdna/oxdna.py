@@ -47,7 +47,7 @@ def _guess_binary_location(bin_name: str, env_var: str) -> Path | None:
     raise FileNotFoundError(f"executable {bin_loc}")
 
 
-@chex.dataclass
+@chex.dataclass(kw_only=True)
 class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special word
     """A sampler base on running an oxDNA simulation.
 
@@ -94,9 +94,9 @@ class oxDNASimulator(jd_base.BaseSimulation):  # noqa: N801 oxDNA is a special w
     overwrite_input: bool = False
     input_overrides: dict[str, typing.Any] = field(default_factory=dict)
 
-
-    def __post_init__(self, *args, **kwds) -> None:
+    def __post_init__(self, *args, **kwargs) -> None:
         """Check the validity of the configuration."""
+        jd_base.BaseSimulation.__post_init__(self)
         if not (bool(self.binary_path) ^ bool(self.source_path)):
             raise ValueError("Must set one and only one of binary_path or source_path")
 
