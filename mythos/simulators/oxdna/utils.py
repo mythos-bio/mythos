@@ -345,6 +345,15 @@ def update_params(src_h: Path, new_params: jd_types.Params | list[jd_types.Param
     write_src_h(src_h, params)
 
 
+def _get_order_parameter_names(op_file: Path) -> list[str]:
+    with op_file.open("r") as f:
+        return [
+            line.strip().split("=")[1].strip()
+            for line in f
+            if line.strip().startswith("order_parameter")
+        ]
+
+
 def read_energy(simulation_dir: Path) -> pd.DataFrame:
     """Read the energy.dat file from an oxDNA simulation.
 
@@ -375,14 +384,7 @@ def read_energy(simulation_dir: Path) -> pd.DataFrame:
         energy_df.columns = energy_df_columns_base
         return energy_df
 
-    # get the order parameter types from the op_file
-    with simulation_dir.joinpath(inputs["op_file"]).open("r") as f:
-        order_param_types = [
-            line.strip().split("=")[1].strip()
-            for line in f
-            if line.strip().startswith("order_parameter")
-        ]
-
+    order_param_types = _get_order_parameter_names(simulation_dir / inputs["op_file"])
     energy_df_columns = energy_df_columns_base + order_param_types + ["weight"]
     energy_df.columns = energy_df_columns
     return energy_df
@@ -408,4 +410,26 @@ def read_output_trajectory(input_file: PathOrStr) -> Trajectory:
     )
 
 
+def read_last_hist(simulation_dir: Path) -> pd.DataFrame:
+    """Read the last histogram from an oxDNA simulation with umbrella sampling.
 
+    Args:
+        simulation_dir: Path to the simulation directory containing the
+            histograms and other simulation files. this directory must also
+            contain the input file, which is read to determine the shape of the
+            histogram file.
+
+    Returns:
+        A pandas DataFrame containing the last histogram data. The columns
+        correspond to the order parameters specified in the "op_file", as well
+        as the counts and unbiased counts, and any extrapolation temperatures
+        specified in the input file's extrapolate_hist parameter.
+    """
+    inputs = oxdna_input.read(simulation_dir / "input")
+    hist_file = simulation_dir / inputs["last_hist_file"]
+
+    extrap_temps = inputs.get("extrapolate_hist", "").split(",")
+    order_param_types = _get_order_parameter_names(simulation_dir / inputs["op_file"])
+    # set the histogram dataframe columns
+    hist_df_columns = [*order_param_types, "count", "unbiased_count", *extrap_temps]
+    return pd.read_table(hist_file, sep=r"\s+", header=None, skiprows=1, names=hist_df_columns)
