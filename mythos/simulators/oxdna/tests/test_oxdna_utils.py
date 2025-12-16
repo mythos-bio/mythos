@@ -103,7 +103,7 @@ def test_read_output_trajectory() -> None:
 
     assert isinstance(traj, Trajectory)
     assert traj.state_rigid_body.center.shape == (100, 16, 3)
-    
+
 
 def test_read_last_hist() -> None:
     test_dir = importlib.resources.files("mythos").parent / "data/test-data/melting_temp"
