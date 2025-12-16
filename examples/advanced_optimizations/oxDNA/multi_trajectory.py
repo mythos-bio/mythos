@@ -54,10 +54,7 @@ simulator_logging_config = objective_logging_config | {"filename": "simulator.lo
 def tree_mean(trees:tuple[jdna_types.PyTree]) -> jdna_types.PyTree:
     if len(trees) <= 1:
         return trees[0]
-    summed = jax.tree.map(operator.add, *trees)
-    return jax.tree.map(lambda x: x / len(trees), summed)
-
-
+    return jax.tree.map(lambda *x: jnp.mean(jnp.stack(x)), *trees)
 
 
 def main():

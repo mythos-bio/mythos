@@ -112,17 +112,10 @@ class MultiOptimizer(Optimizer, ABC):
 
     def __post_init__(self) -> None:
         """Validate the initialization of the Optimization."""
-        if not self.objectives:
-            raise ValueError(ERR_MISSING_OBJECTIVES)
-
-        if not self.simulators:
-            raise ValueError(ERR_MISSING_SIMULATORS)
-
-        if self.aggregate_grad_fn is None:
-            raise ValueError(ERR_MISSING_AGG_GRAD_FN)
-
-        if self.optimizer is None:
-            raise ValueError(ERR_MISSING_OPTIMIZER)
+        if not all(hasattr(obj, "calculate_async") for obj in self.objectives):
+            raise ValueError("All objectives must implement calculate_async.")
+        if not all(hasattr(obj, "run_async") for obj in self.simulators):
+            raise ValueError("All simulators must implement run_async.")
 
         # cache the provided observables for each simulator, since this
         # information may make a remote call and is not expected to change.

@@ -81,7 +81,7 @@ class RaySimulation(AsyncSimulation):
         return self.simulator.call.remote(method, *args, **kwargs)
 
 
-@chex.dataclass(kw_only=True)
+@chex.dataclass(kw_only=True, eq=False)
 class RayMultiSimulation(MultiSimulation, AsyncSimulation):
     """A simulator that runs simulations in parallel using Ray."""
 
@@ -115,6 +115,8 @@ class RayMultiSimulation(MultiSimulation, AsyncSimulation):
             sim_refs = sim.run_async(*args, **kwargs)
             sim_refs = [sim_refs] if isinstance(sim_refs, ray.ObjectRef) else sim_refs
             refs.extend(sim_refs)
+        if len(refs) == 1:
+            return refs[0]
         return refs
 
 

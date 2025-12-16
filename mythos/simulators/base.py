@@ -34,7 +34,7 @@ class BaseSimulation(ABC):
         return object.__hash__(self)
 
 
-@chex.dataclass(kw_only=True)
+@chex.dataclass(kw_only=True, eq=False)
 class MultiSimulation(BaseSimulation):
     """A simulation that runs multiple simulations in sequence."""
 

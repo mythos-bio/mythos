@@ -8,6 +8,7 @@ import types
 import typing
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+import uuid
 
 import jax
 import jax.numpy as jnp
@@ -322,11 +323,16 @@ class RayObjective(Objective):
 
     def __init__(self, objective_class: type[Objective], *args, **kwds) -> "RayObjective":
         """Initialize the Ray objective."""
-        self.objective = ray.remote(objective_class)(*args, **kwds)
+        self._name = f"Ray({objective_class}).{uuid.uuid4()}" if "name" not in kwds else kwds["name"]
+        self.objective = ray.remote(objective_class).remote(*args, **kwds)
 
     @override
     def update(self, *args, **kwargs) -> None:
         ray.get(self.objective.update.remote(*args, **kwargs))
+
+    @override
+    def update_one(self, name: str, value: typing.Any) -> None:
+        ray.get(self.objective.update_one.remote(name, value))
 
     @override
     def needed_observables(self) -> set[str]:
@@ -343,6 +349,10 @@ class RayObjective(Objective):
     @override
     def post_step(self, opt_params: dict) -> None:
         ray.get(self.objective.post_step.remote(opt_params))
+
+    @override
+    def logging_observables(self) -> dict[str, typing.Any]:
+        return ray.get(self.objective.logging_observables.remote())
 
     @override
     def calculate_async(self) -> ray.ObjectRef:

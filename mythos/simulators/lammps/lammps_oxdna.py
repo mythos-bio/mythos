@@ -46,6 +46,7 @@ class LAMMPSoxDNASimulator(BaseSimulation):
 
     @override
     def __post_init__(self) -> None:
+        BaseSimulation.__post_init__(self)
         if not self.overwrite:
             input_input_dir = self.input_dir
             self.input_dir = Path(tempfile.mkdtemp(prefix="jaxdna-lammps-oxdna-sim-"))
