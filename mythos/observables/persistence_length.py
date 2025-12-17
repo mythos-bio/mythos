@@ -82,6 +82,7 @@ def compute_metadata(
 ) -> tuple[jnp.ndarray, float]:
     """Computes (i) average correlations in alignment decay and (ii) average distance between base pairs."""
     all_l_vectors, l0_vals = get_all_l_vectors(quartets, base_sites, displacement_fn)
+    print("base_sites: ", base_sites)
     autocorr = vector_autocorrelate(all_l_vectors)
     return autocorr, jnp.mean(l0_vals)
 
@@ -174,14 +175,14 @@ class PersistenceLength(jd_obs.BaseObservable):
         """
         nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory.rigid_body)
         base_sites = nucleotides.base_sites
-
+        all_corrs_full, all_l0_vals_full = vmap(compute_metadata, (0, None, None))(
+            base_sites, self.quartets, self.displacement_fn
+        )
         if self.skip_ends:
-            all_corrs, all_l0_vals = vmap(compute_metadata, (0, None, None))(
-                base_sites[:, 2:-2, :], self.quartets[2:-2], self.displacement_fn
-            )
+            all_corrs = all_corrs_full[2:-2]
+            all_l0_vals = all_l0_vals_full[2:-2]
         else:
-            all_corrs, all_l0_vals = vmap(compute_metadata, (0, None, None))(
-                base_sites, self.quartets, self.displacement_fn
-            )
+            all_corrs = all_corrs_full
+            all_l0_vals = all_l0_vals_full
 
         return all_corrs, all_l0_vals
