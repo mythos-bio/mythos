@@ -82,7 +82,6 @@ def compute_metadata(
 ) -> tuple[jnp.ndarray, float]:
     """Computes (i) average correlations in alignment decay and (ii) average distance between base pairs."""
     all_l_vectors, l0_vals = get_all_l_vectors(quartets, base_sites, displacement_fn)
-    print("base_sites: ", base_sites)
     autocorr = vector_autocorrelate(all_l_vectors)
     return autocorr, jnp.mean(l0_vals)
 
