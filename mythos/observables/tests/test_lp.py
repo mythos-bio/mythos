@@ -47,14 +47,16 @@ def lp_fun():
     )
 
 
-def test_persistence_length_fit(lp_fun, sim_traj):
-    lp = lp_fun(sim_traj)
-    assert jnp.isclose(lp, 54.175785)
+@pytest.mark.parametrize(("skip_ends", "expected"), [(True, 56.22561), (False, 56.57765)])
+def test_persistence_length_fit(lp_fun, sim_traj, skip_ends, expected):
+    lp = lp_fun.replace(skip_ends=skip_ends)(sim_traj)
+    assert jnp.isclose(lp, expected)
 
 
-def test_persistence_length_fit_truncate(lp_fun, sim_traj):
-    lp = lp_fun.replace(truncate=10)(sim_traj)
-    assert jnp.isclose(lp, 32.105633)
+@pytest.mark.parametrize(("skip_ends", "expected"), [(True, 45.709587), (False, 45.532185)])
+def test_persistence_length_fit_truncate(lp_fun, sim_traj, skip_ends, expected):
+    lp = lp_fun.replace(truncate=10, skip_ends=skip_ends)(sim_traj)
+    assert jnp.isclose(lp, expected)
 
 
 def test_persistence_length_fit_weights(lp_fun, sim_traj):
