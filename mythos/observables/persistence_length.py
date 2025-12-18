@@ -78,7 +78,7 @@ get_all_l_vectors = vmap(jd_obs.local_helical_axis_with_norm, in_axes=(0, None, 
 
 
 def compute_metadata(
-    base_sites: jnp.ndarray, quartets: jnp.ndarray, displacement_fn: Callable, skip_ends: bool  # noqa: FBT002 -- vmap
+    base_sites: jnp.ndarray, quartets: jnp.ndarray, displacement_fn: Callable, skip_ends: bool  # noqa: FBT001 -- vmap
 ) -> tuple[jnp.ndarray, float]:
     """Computes (i) average correlations in alignment decay and (ii) average distance between base pairs."""
     all_l_vectors, l0_vals = get_all_l_vectors(quartets, base_sites, displacement_fn)
