@@ -3,13 +3,16 @@
 import importlib
 import os
 import shutil
+import subprocess
 import uuid
 from pathlib import Path
+from unittest.mock import MagicMock
 
 import mythos.utils.types as typ
 import pytest
 from mythos.input import oxdna_input
 from mythos.simulators import oxdna
+from mythos.simulators.base import SimulatorOutput
 from mythos.simulators.io import SimulatorTrajectory
 
 file_dir = Path(os.path.realpath(__file__)).parent
@@ -76,7 +79,7 @@ def test_oxdna_init(mock_energy_fn):
 def test_oxdna_run_raises_fnf(mock_energy_fn):
     """Test that the oxDNA simulator raises FileNotFoundError."""
     test_dir = setup_test_dir(add_input=False)
-    with pytest.raises(FileNotFoundError, match="No such file or directory"):
+    with pytest.raises(FileNotFoundError, match="Input file not found at"):
         oxdna.oxDNASimulator(
             input_dir=test_dir,
             sim_type=typ.oxDNASimulatorType.DNA1,
@@ -112,9 +115,10 @@ def test_oxdna_binary_mode_raises_for_params_input(tmp_path, mock_energy_fn):
         sim.run(opt_params=[{"some_param": 1.0}])
 
 
-def test_oxdna_binary_mode_ignore_params(tmp_path, mock_energy_fn):
+def test_oxdna_binary_mode_ignore_params(tmp_path, mock_energy_fn, monkeypatch):
     """Test that the oxDNA simulator ignores params when configured."""
     setup_test_dir(tmp_path, add_input=True)
+    monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
         sim_type=typ.oxDNASimulatorType.DNA1,
@@ -122,12 +126,12 @@ def test_oxdna_binary_mode_ignore_params(tmp_path, mock_energy_fn):
         binary_path=shutil.which("echo"),
         ignore_params=True,
     )
-    sim._read_trajectory = lambda: None
     sim.run(opt_params=[{"some_param": 1.0}])
 
-def test_oxdna_override_input(tmp_path, mock_energy_fn):
+def test_oxdna_override_input(tmp_path, mock_energy_fn, monkeypatch):
     """Test that the oxDNA simulator ignores params when configured."""
     setup_test_dir(tmp_path, add_input=True)
+    monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
         sim_type=typ.oxDNASimulatorType.DNA1,
@@ -135,26 +139,24 @@ def test_oxdna_override_input(tmp_path, mock_energy_fn):
         binary_path=shutil.which("echo"),
         overwrite_input=True,
     )
-    sim._read_trajectory = lambda: None
     sim.run()
-    assert sim.base_dir == tmp_path
-    assert sim.input_file == tmp_path / "input"
     assert tmp_path.joinpath("oxdna.out.log").exists()
 
 
-def test_oxdna_override_keyvals(tmp_path, mock_energy_fn):
-    """Test that the oxDNA simulator ignores params when configured."""
+def test_oxdna_override_keyvals(tmp_path, mock_energy_fn, monkeypatch):
+    """Test that the oxDNA simulator overrides input values."""
     setup_test_dir(tmp_path, add_input=True)
+    monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
         sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         binary_path=shutil.which("echo"),
         input_overrides={"steps": 10000, "T": "275K"},
+        overwrite_input=True,
     )
-    sim._read_trajectory = lambda: None
     sim.run()
-    input_content = oxdna_input.read(sim.base_dir / "input")
+    input_content = oxdna_input.read(tmp_path / "input")
     assert input_content["steps"] == 10000
     assert input_content["T"] == "275K"
 
@@ -174,19 +176,17 @@ def test_oxdna_run_raises_on_non_exclusive_bin_source_paths(bin_path, source_pat
     tear_down_test_dir(test_dir)
 
 
-def test_oxdna_run(mock_energy_fn):
+def test_oxdna_run(mock_energy_fn, monkeypatch):
     """Test the oxDNA simulator run function."""
     test_dir = setup_test_dir()
+    monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
     sim = oxdna.oxDNASimulator(
         input_dir=test_dir,
         sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         binary_path=shutil.which("echo"),
     )
-    sim._read_trajectory = lambda: None
     sim.run()
-    with (sim.base_dir / "oxdna.out.log").open() as f:
-        assert f.read() == "input\n"
     tear_down_test_dir(test_dir)
 
 
@@ -224,6 +224,7 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
     )
 
     sim.build(
+        input_dir=tmp_path,
         new_params={
                 "delta_backbone": 5.0,
                 "theta0_hb_8": 1.5707963267948966,
@@ -231,8 +232,7 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
                 "r0_backbone": 0.756,
             },
     )
-    assert sim.build_dir.is_dir()
-    new_lines = (sim.build_dir / "model.h").read_text().splitlines()
+    new_lines = (tmp_path / "oxdna-build" / "model.h").read_text().splitlines()
     expected_lines = expected_model_h.read_text().splitlines()
     assert new_lines[10:] == expected_lines[10:], "model.h content does not match expected"
 
@@ -241,29 +241,43 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
 
     with pytest.raises(ValueError, match="No valid"):
         sim.build(
+            input_dir=tmp_path,
             new_params={
                 "a": 1,
                 "b": 2,
             },
         )
 
-    sim.cleanup_build()
-    assert not sim.build_dir.exists()
 
-def test_oxdna_simulator_trajectory_read(monkeypatch) -> None:
+def test_oxdna_simulator_trajectory_read(monkeypatch, tmp_path) -> None:
     """Test for oxdna trajectory reading after run."""
 
     test_dir = importlib.resources.files("mythos").parent / "data" / "test-data" / "simple-helix"
+
+    # mock for the simulation function to "write" a trajectory file
+    shutil.copytree(test_dir, tmp_path, dirs_exist_ok=True)
+    def copy_traj():
+        shutil.copyfile(
+            test_dir / "output.dat",
+            tmp_path / "output.dat",
+        )
+    monkeypatch.setattr(subprocess, "check_call", lambda *_args, **_kwargs: copy_traj())
+
     sim = oxdna.oxDNASimulator(
-        input_dir=test_dir,
+        input_dir=tmp_path,
         overwrite_input=True,  # We use this obj as shell to read, so no write
         sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=1,
-        binary_path="dummy",
+        binary_path="echo",
     )
-    traj = sim._read_trajectory()
+    traj = sim._read_trajectory(tmp_path)
     assert isinstance(traj, SimulatorTrajectory)
     assert traj.rigid_body.center.shape == (100, 16, 3)
+
+    output = sim.run()
+    assert isinstance(output, SimulatorOutput)
+    assert len(output.observables) == 1
+    assert isinstance(output.observables[0], SimulatorTrajectory)
 
 
 if __name__ == "__main__":

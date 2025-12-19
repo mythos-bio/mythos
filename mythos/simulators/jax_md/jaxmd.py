@@ -18,8 +18,8 @@ import mythos.utils.types as jd_types
 SIM_STATE = tuple[jaxmd_utils.SimulationState, jaxmd_utils.NeighborHelper]
 
 
-@chex.dataclass
-class JaxMDSimulator(jd_sim_base.BaseSimulation):
+@chex.dataclass(frozen=True, kw_only=True)
+class JaxMDSimulator(jd_sim_base.Simulator):
     """A sampler based on running a jax_md simulation routine."""
 
     energy_fn: jd_energy_fn.EnergyFunction

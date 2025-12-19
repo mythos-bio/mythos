@@ -12,6 +12,7 @@ from mythos.energy import dna2
 from mythos.energy.dna1 import create_default_energy_fn
 from mythos.input.topology import from_oxdna_file
 from mythos.input.trajectory import Trajectory
+from mythos.simulators.base import SimulatorOutput
 from mythos.simulators.io import SimulatorTrajectory
 from mythos.simulators.lammps.lammps_oxdna import (
     LAMMPS_REQUIRED_FIELDS,
@@ -234,12 +235,11 @@ def test_transform_lammps_state_shape():
     assert out.shape == (3 + 6 + 3 + 3,)
 
 
-def test_simulator_post_init(tmp_path, dummy_input_lines):
+def test_simulator_fails_on_no_input_file(tmp_path, dummy_input_lines):
     input_dir = tmp_path
-    (input_dir / "input").write_text("\n".join(dummy_input_lines))
-    sim = LAMMPSoxDNASimulator(input_dir=input_dir, energy_fn=DummyFunction())
-    assert sim.input_dir != input_dir
-    assert sim.input_dir.joinpath("input").exists()
+    with pytest.raises(FileNotFoundError, match="LAMMPS input file not found"):
+        LAMMPSoxDNASimulator(input_dir=input_dir, energy_fn=DummyFunction())
+
 
 @pytest.mark.parametrize(
         ("variables_arg", "expected_lines"),
@@ -265,7 +265,7 @@ def test_simulator_run_mocks_subprocess(
     # Create a dummy trajectory.dat file to be read
     sim = LAMMPSoxDNASimulator(
         input_dir=tmp_path,
-        overwrite=True,
+        overwrite_input=True,
         energy_fn=DummyFunction(),
         **variables_arg,  # use args unpacking here to ensure we test default (iso None input)
     )
@@ -291,8 +291,10 @@ def test_simulator_run_mocks_subprocess(
         assert all(line in all_lines for line in expected_lines)
 
         # outputs check, we've already written a dummy trajectory.dat file
-        assert isinstance(result, SimulatorTrajectory)
-        assert result.length() == 1
+        assert isinstance(result, SimulatorOutput)
+        traj = result.observables[0]
+        assert isinstance(traj, SimulatorTrajectory)
+        assert traj.length() == 1
         m_call.assert_called_once()
 
 
@@ -392,8 +394,8 @@ def test_check_dna1_default_energy_fn_replacements(dummy_input_dir):
     )
 
     energy_fn = create_default_energy_fn(topology=mock.MagicMock())
-    sim = LAMMPSoxDNASimulator(input_dir=dummy_input_dir, energy_fn=energy_fn, overwrite=True)
-    sim._replace_parameters(params={}, seed=42)
+    sim = LAMMPSoxDNASimulator(input_dir=dummy_input_dir, energy_fn=energy_fn, overwrite_input=True)
+    sim._replace_parameters(input_dir=sim.input_dir, params={}, seed=42)
 
     _check_replacement_coeff_lines(
         sim.input_dir.joinpath("input").read_text().splitlines(), expected, skiplist, shouldmatch=True
@@ -439,8 +441,8 @@ def test_check_dna2_default_energy_fn_replacements(dummy_input_dir_dna2):
     )
 
     energy_fn = dna2.create_default_energy_fn(topology=mock.MagicMock())
-    sim = LAMMPSoxDNASimulator(input_dir=dummy_input_dir_dna2, energy_fn=energy_fn, overwrite=True)
-    sim._replace_parameters(params={}, seed=42)
+    sim = LAMMPSoxDNASimulator(input_dir=dummy_input_dir_dna2, energy_fn=energy_fn, overwrite_input=True)
+    sim._replace_parameters(input_dir=sim.input_dir, params={}, seed=42)
 
     _check_replacement_coeff_lines(
         sim.input_dir.joinpath("input").read_text().splitlines(), expected, skiplist, shouldmatch=True

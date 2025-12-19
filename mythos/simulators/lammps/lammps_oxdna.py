@@ -1,10 +1,7 @@
 """LAMMPS-based OxDNA simulator for mythos."""
 
-import logging
 import re
-import shutil
 import subprocess
-import tempfile
 from dataclasses import field
 from pathlib import Path
 from typing import Any
@@ -15,13 +12,13 @@ from typing_extensions import override
 
 from mythos.energy.base import EnergyFunction
 from mythos.input.trajectory import NucleotideState, Trajectory, validate_box_size
-from mythos.simulators.base import BaseSimulation
+from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.simulators.io import SimulatorTrajectory
 from mythos.utils.types import Params
 
 
-@chex.dataclass
-class LAMMPSoxDNASimulator(BaseSimulation):
+@chex.dataclass(frozen=True, kw_only=True)
+class LAMMPSoxDNASimulator(InputDirSimulator):
     """LAMMPS-based OxDNA simulator.
 
     Please note that for LAMMPS simulations of oxDNA, BondedExcludedVolume
@@ -38,44 +35,39 @@ class LAMMPSoxDNASimulator(BaseSimulation):
             run. These variables must already be defined in the input file using
             a command of the form "variable name equal value".
     """
-    input_dir: Path
     energy_fn: EnergyFunction
-    overwrite: bool = False
     input_file_name: str = "input"
     variables: dict[str, Any] = field(default_factory=dict)
 
     @override
     def __post_init__(self) -> None:
-        if not self.overwrite:
-            input_input_dir = self.input_dir
-            self.input_dir = Path(tempfile.mkdtemp(prefix="jaxdna-lammps-oxdna-sim-"))
-            logging.info("Copying LAMMPS OxDNA input files to temporary directory: %s", self.input_dir)
-            shutil.copytree(input_input_dir, self.input_dir, dirs_exist_ok=True)
-        else:
-            self.input_dir = Path(self.input_dir)
-        self.input_lines = self.input_dir.joinpath(self.input_file_name).read_text().splitlines()
+        if not (Path(self.input_dir) / self.input_file_name).is_file():
+            raise FileNotFoundError(f"LAMMPS input file not found: {self.input_file_name}")
 
     @override
-    def run(self, params: list[dict[str, float]], seed: int | None = None) -> Path:
-        self._replace_parameters(params, seed)
-        with self.input_dir.joinpath("lmp.out").open("a") as f:
+    def run_simulation(self, input_dir: Path, params: Params, seed: int|None = None) -> SimulatorOutput:
+        self._replace_parameters(input_dir, params, seed)
+        with input_dir.joinpath("lmp.out").open("a") as f:
             subprocess.check_call(
                 ["lmp", "-in", self.input_file_name],
-                cwd=self.input_dir,
+                cwd=input_dir,
                 shell=False,
                 stdout=f,
                 stderr=f
             )
-        traj = _read_lammps_output(self.input_dir.joinpath("trajectory.dat"))
+        traj = _read_lammps_output(input_dir.joinpath("trajectory.dat"))
 
-        return SimulatorTrajectory(
-            rigid_body=traj.state_rigid_body,
+        return SimulatorOutput(
+            observables=[SimulatorTrajectory(rigid_body=traj.state_rigid_body)]
         )
 
-    def _replace_parameters(self, params: Params, seed: int | None) -> None:
+    def _replace_parameters(self, input_dir: Path, params: Params, seed: int | None) -> None:
         updated_params = self.energy_fn.with_params(params).params_dict(exclude_non_optimizable=True)
-        new_lines = _lammps_oxdna_replace_inputs(self.input_lines, updated_params, seed, variables=self.variables)
-        self.input_dir.joinpath(self.input_file_name).write_text("\n".join(new_lines))
+
+        input_lines = input_dir.joinpath(self.input_file_name).read_text().splitlines()
+        new_lines = _lammps_oxdna_replace_inputs(input_lines, updated_params, seed, variables=self.variables)
+
+        input_dir.joinpath(self.input_file_name).write_text("\n".join(new_lines))
 
 
 def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class

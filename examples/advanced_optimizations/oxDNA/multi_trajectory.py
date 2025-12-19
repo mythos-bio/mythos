@@ -246,7 +246,7 @@ def main():
     # Optimization =============================================================
     objectives = [propeller_twist_objective]
 
-    opt = jdna_optimization.Optimization(
+    opt = jdna_optimization.RayOptimizer(
         objectives=objectives,
         simulators=simulators,
         optimizer = optax.adam(learning_rate=1e-3),
