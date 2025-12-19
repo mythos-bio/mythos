@@ -203,3 +203,23 @@ def test_simulatortrajectory_filter_preserves_data() -> None:
     # Should have states 0 and 2
     assert jnp.allclose(filtered_traj.rigid_body.center[0], jnp.array([1, 2, 3]))
     assert jnp.allclose(filtered_traj.rigid_body.center[1], jnp.array([7, 8, 9]))
+
+
+@pytest.mark.parametrize(
+    ("n_states", "n_md"),
+    [
+        (5, 3),
+        (8, 1),
+    ],
+)
+def test_simulatortrajectory_errors_on_wrong_metadata_shape(n_states, n_md) -> None:
+    with pytest.raises(ValueError, match="does not match trajectory length"):
+        jd_sio.SimulatorTrajectory(
+            rigid_body=jax_md.rigid_body.RigidBody(
+                center=jnp.zeros((n_states, 3)),
+                orientation=jax_md.rigid_body.Quaternion(
+                    vec=jnp.zeros((n_states, 4)),
+                ),
+            ),
+            metadata=[{"value": i} for i in range(n_md)],
+        )
