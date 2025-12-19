@@ -1,45 +1,79 @@
 """Runs an optimization loop using Ray actors for objectives and simulators."""
 
-import dataclasses as dc
-import itertools
-import typing
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+from dataclasses import field
+from typing import Any
 
 import chex
 import optax
 import ray
+from ray import ObjectRef as RayRef
+from typing_extensions import override
 
-import mythos.optimization.objective as jdna_objective
-import mythos.optimization.simulator as jdna_actor
-import mythos.utils.types as jdna_types
+from mythos.optimization.objective import Objective, ObjectiveOutput
+from mythos.simulators.base import Simulator
 from mythos.ui.loggers import logger as jdna_logger
+from mythos.utils.types import Grads, Params
 
 ERR_MISSING_OBJECTIVES = "At least one objective is required."
 ERR_MISSING_SIMULATORS = "At least one simulator is required."
 ERR_MISSING_AGG_GRAD_FN = "An aggregate gradient function is required."
 ERR_MISSING_OPTIMIZER = "An optimizer is required."
-
-# we assign at the global level to make it easier to mock for testing
-get_fn = ray.get
-wait_fn = ray.wait
-grad_update_fn = optax.apply_updates
-
-
-def split_by_ready(
-    objectives: list[jdna_objective.Objective],
-) -> tuple[list[jdna_objective.Objective], list[jdna_objective.Objective]]:
-    """Splits a list of objectives into two lists: ready and not ready."""
-    ready, not_ready = [], []
-    for objective in objectives:
-        if get_fn(objective.is_ready.remote()):
-            ready.append(objective)
-        else:
-            not_ready.append(objective)
-
-    return ready, not_ready
+# to prevent infinite unresolvable loops in step. The first call may use cached
+# observables, so may required rerun of sims. After this, we don't expect any
+# new information, so not-ready state after this is an error.
+OBJECTIVE_PER_STEP_CALL_LIMIT = 2
 
 
-@chex.dataclass(frozen=True)
-class Optimization:
+@chex.dataclass(frozen=True, kw_only=True)
+class OptimizerState:
+    """State container for optimization loops.
+
+    This dataclass stores all mutable state needed during optimization,
+    allowing optimizers to work with frozen objective dataclasses.
+
+    Attributes:
+        observables: Current observable values from simulators.
+        state: Per-objective/simulator state (keyed by name).
+            Both objective and simulator state share this namespace,
+            so names should be unique across objectives and simulators.
+        optimizer_state: Current optax optimizer state.
+    """
+
+    observables: dict[str, Any] = field(default_factory=dict)
+    component_state: dict[str, dict[str, Any]] = field(default_factory=dict)
+    optimizer_state: Any | None = None  # optax.OptState
+
+
+@chex.dataclass(frozen=True, kw_only=True)
+class OptimizerOutput:
+    """Output container for optimization steps."""
+    grads: Grads
+    opt_params: Params
+    state: OptimizerState
+    observables: dict[str, Any] = field(default_factory=dict)
+
+
+@chex.dataclass(frozen=True, kw_only=True)
+class Optimizer(ABC):
+    """Abstract base class for optimizers."""
+
+    @abstractmethod
+    def step(self, params: Params, state: OptimizerState | None = None) -> OptimizerOutput:
+        """Perform a single optimization step.
+
+        Args:
+            params: The current parameters.
+            state: The current optimization state. If None, an empty state is initialized.
+
+        Returns:
+            An optimizer output including params, new state, grads, and observables.
+        """
+
+
+@chex.dataclass(frozen=True, kw_only=True)
+class RayOptimizer(Optimizer):
     """Optimization of a list of objectives using a list of simulators.
 
     Parameters:
@@ -51,12 +85,11 @@ class Optimization:
         logger: A logger to use for the optimization.
     """
 
-    objectives: list[jdna_objective.Objective]
-    simulators: list[tuple[jdna_actor.SimulatorActor, jdna_types.MetaData]]
-    aggregate_grad_fn: typing.Callable[[list[jdna_types.Grads]], jdna_types.Grads]
+    objectives: list[Objective]
+    simulators: list[Simulator]
+    aggregate_grad_fn: Callable[[list[Grads]], Grads]
     optimizer: optax.GradientTransformation
-    optimizer_state: optax.OptState | None = None
-    logger: jdna_logger.Logger = dc.field(default_factory=jdna_logger.NullLogger)
+    logger: jdna_logger.Logger = field(default_factory=jdna_logger.NullLogger)
 
     def __post_init__(self) -> None:
         """Validate the initialization of the Optimization."""
@@ -72,151 +105,194 @@ class Optimization:
         if self.optimizer is None:
             raise ValueError(ERR_MISSING_OPTIMIZER)
 
-    def step(self, params: jdna_types.Params) -> tuple[optax.OptState, list[jdna_types.Grads], list[jdna_types.Grads]]:
-        """Perform a single optimization step.
+        # Check for conflicts in global namespaces that we use for coordination
+        all_names = [obj.name for obj in self.objectives] \
+            + [sim.name for sim in self.simulators] \
+            + [exp for sim in self.simulators for exp in sim.exposes()]
+        if len(all_names) != len(set(all_names)):
+            raise ValueError("All objective, simulator, and exposes names must be unique")
 
-        Args:
-            params: The current parameters.
+    def _create_and_run_remote(self, fun: callable, ray_options: dict, *args) -> RayRef|list[RayRef]:
+        remote_fun = ray.remote(fun).options(**ray_options)
+        return remote_fun.remote(*args)
 
-        Returns:
-            A tuple containing the updated optimizer state, new params, and the gradients.
-        """
-        # get the currently needed observables
-        # some objectives might use difftre and not actually need something rerun
-        # so check which objectives have observables that need to be run
-        ready_objectives, not_ready_objectives = split_by_ready(self.objectives)
+    def _run_simulator(
+            self, simulator: Simulator, params: Params, **state
+        ) -> tuple[list[RayRef], RayRef]:
+        def simulator_run_fn(params: Params, md: dict[str, Any]) -> list[RayRef]|RayRef:
+            output = simulator.run(opt_params=params, **md)
+            return *output.observables, output.state
 
-        grad_refs = [objective.calculate.remote() for objective in ready_objectives]
+        ray_opts = {"name": "simulator_run:" + simulator.name, "num_returns": 1 + len(simulator.exposes())}
+        refs = self._create_and_run_remote(simulator_run_fn, ray_opts, params, state)
+        return refs[:-1], refs[-1]  # observables as a list, state
 
-        ready_names = get_fn([objective.name.remote() for objective in ready_objectives])
-        ready_funcs = itertools.repeat(self.logger.set_objective_running, len(ready_names))
+    def _run_objective(
+            self, objective: Objective, observables: dict[str, RayRef], params: Params, **state
+        ) -> RayRef:
+        def objective_compute_fn(obs: dict[str, RayRef], params: Params, md: dict[str, Any]) -> ObjectiveOutput:
+            obs = {k: ray.get(v) for k, v in obs.items()}
+            return objective.compute(observables=obs, opt_params=params, **md)
 
-        not_ready_names = get_fn([objective.name.remote() for objective in not_ready_objectives])
-        not_ready_funcs = itertools.repeat(self.logger.set_objective_started, len(not_ready_names))
+        ray_opts = {"name": "objective_compute:" + objective.name}
+        return self._create_and_run_remote(objective_compute_fn, ray_opts, observables, params, state)
 
-        sim_names = get_fn([sim.name.remote() for sim in self.simulators])
-        sim_funcs = itertools.repeat(self.logger.set_simulator_started, len(sim_names))
+    def _wait_remotes(self, refs: list[RayRef]) -> list[RayRef]:
+            ref_list = list(refs)
+            ray.wait(ref_list, fetch_local=False, num_returns=1)
+            # The below is to maximize our chance of getting multiple at once
+            # (for example multiple observables and state from a simulator)
+            ready, _ = ray.wait(ref_list, fetch_local=False, timeout=0.1)
+            return ready
 
-        names = itertools.chain(ready_names, not_ready_names, sim_names)
-        funcs = itertools.chain(ready_funcs, not_ready_funcs, sim_funcs)
-        for name, func in zip(names, funcs, strict=True):
-            func(name)
+    @override
+    def step(self, params: Params, state: OptimizerState|None = None) -> OptimizerOutput:  # noqa: C901, PLR0912
+        state = state or OptimizerState()
+        state_observables, component_state = state.observables.copy(), state.component_state.copy()
 
-        need_observables = list(
-            itertools.chain.from_iterable(get_fn([co.needed_observables.remote() for co in not_ready_objectives]))
-        )
+        obj_lookup = {obj.name: obj for obj in self.objectives}
+        call_count = {obj.name: 0 for obj in self.objectives}
+        sim_lookup = {sim.name: sim for sim in self.simulators}
+        expose_lookup = {exp: sim for sim in self.simulators for exp in sim.exposes()}
+        ref_map, grads_completed, output_observables = {}, {}, {}
 
-        needed_simulators = [
-            sim for sim in self.simulators if set(get_fn(sim.exposes.remote())) & set(need_observables)
-        ]
+        # schedule all objectives that already have their observables in state
+        while needed_objectives := set(obj_lookup) - set(grads_completed):
+            for obj_name in needed_objectives:
+                objective = obj_lookup[obj_name]
+                # skip if we are currently running it
+                if objective.name in ref_map.values():
+                    continue
+                # It is an unresolvable state if we have called the objective
+                # more than twice
+                if call_count[objective.name] > OBJECTIVE_PER_STEP_CALL_LIMIT:
+                    raise RuntimeError(f"Objective {objective.name} could not be resolved after multiple attempts.")
+                # If we have all the observables in state, we make an attempt at
+                # the objective. This may return a not ready signal, in which
+                # case observables will be cleared to trigger this logic again.
+                if set(objective.required_observables).issubset(state_observables):
+                    obj_observables = {k: state_observables[k] for k in objective.required_observables}
+                    obj_state = component_state.get(objective.name, {})
+                    ref = self._run_objective(objective, obj_observables, params, **obj_state)
+                    ref_map[ref] = objective.name
+                    call_count[objective.name] += 1
+                # there are simulators running that provide some of what we
+                # need, so we have gone through the scheduling step
+                elif set(objective.required_observables).intersection(ref_map.values()):
+                    continue
+                else:
+                    needed_sims = {expose_lookup[exp].name for exp in objective.required_observables}
+                    # filter out sims we know are running based on state ref
+                    for sim_name in needed_sims - set(ref_map.values()):
+                        sim = sim_lookup[sim_name]
+                        # make sure we aren't waiting on any of the observables
+                        # this provides. It may be possible that the ref of
+                        # state or some observables become available separately
+                        if set(sim.exposes()).intersection(ref_map.values()):
+                            continue
+                        sim_state = component_state.get(sim.name, {})
+                        refs, md_ref = self._run_simulator(sim, params, **sim_state)
+                        for r, exp in zip(refs, sim.exposes(), strict=True):
+                            ref_map[r] = exp
+                        ref_map[md_ref] = sim.name
 
-        needed_names = get_fn([sim.name.remote() for sim in needed_simulators])
-        needed_exposes = get_fn([sim.exposes.remote() for sim in needed_simulators])
+            # wait for anything to finish. We do a second wait without num
+            # returns but non-blocking to gather as many as we can at once
+            ready = self._wait_remotes(ref_map.keys())
 
-        sim_remotes = [sim.run.remote(params) for sim in needed_simulators]
+            for ref in ready:
+                producer = ref_map.pop(ref)
+                if producer in obj_lookup:
+                    output = ray.get(ref)
+                    component_state[producer] = output.state
+                    if output.is_ready:
+                        grads_completed[producer] = output.grads
+                        output_observables.update(output.observables)
+                    else:
+                        # remove the needs from the state observables so the
+                        # above loop check will schedule the providing simulator
+                        state_observables = {k: v for k, v in state.observables.items() if k not in output.needs_update}
+                elif producer in expose_lookup:
+                    state_observables[producer] = ref
+                else:  # finally it must be simulator state
+                    component_state[producer] = ray.get(ref)
 
-        simid_exposes = {}
-        simid_name = {}
-        for sr, name, exposes in zip(sim_remotes, needed_names, needed_exposes, strict=True):
-            simid_exposes[sr.task_id().hex()] = exposes
-            simid_name[sr.task_id().hex()] = name
-
-            self.logger.set_simulator_running(name)
-            [self.logger.set_observable_running(e) for e in exposes]
-
-        # wait for the simulators to finish
-        while not_ready_objectives:
-            # `done` is a list of object refs that are ready to collect.
-            #  sim_remotes is a list of object refs that are not ready to collect.
-            done, sim_remotes = wait_fn(sim_remotes)
-            if done:
-                captured_results = []
-                for d in done:
-                    task_id = d.task_id().hex()
-                    exposes = simid_exposes[task_id]
-                    result = get_fn(d)
-                    captured_results.append((exposes, result))
-                    if self.logger:
-                        self.logger.set_simulator_complete(simid_name[task_id])
-                        for expose in exposes:
-                            self.logger.set_observable_complete(expose)
-
-                # update the objectives with the new observables and check if they are ready
-                get_fn([objective.update.remote(captured_results) for objective in not_ready_objectives])
-                ready_objectives, not_ready_objectives = split_by_ready(not_ready_objectives)
-                for name in get_fn([objective.name.remote() for objective in ready_objectives]):
-                    self.logger.set_objective_running(name)
-
-                grad_refs += [objective.calculate.remote() for objective in ready_objectives]
-
-        grads_resolved = get_fn(grad_refs)
-
-        for name in get_fn([o.name.remote() for o in self.objectives]):
-            self.logger.set_objective_complete(name)
-
-        grads = self.aggregate_grad_fn(grads_resolved)
-
-        opt_state = self.optimizer.init(params) if self.optimizer_state is None else self.optimizer_state
-
+        grads = self.aggregate_grad_fn(list(grads_completed.values()))
+        opt_state = state.optimizer_state or self.optimizer.init(params)
         updates, opt_state = self.optimizer.update(grads, opt_state, params)
+        new_params = optax.apply_updates(params, updates)
 
-        new_params = grad_update_fn(params, updates)
-
-        return opt_state, new_params, grads
-
-    def post_step(
-        self,
-        optimizer_state: optax.OptState,
-        opt_params: jdna_types.Params,
-    ) -> "Optimization":
-        """An update step intended to be called after an optimization step."""
-        _ = get_fn([o.post_step.remote(opt_params) for o in self.objectives])
-        return self.replace(optimizer_state=optimizer_state)
+        return OptimizerOutput(
+            opt_params=new_params,
+            state=state.replace(
+                optimizer_state=opt_state,
+                component_state=component_state,
+                observables=state_observables,
+            ),
+            grads=grads,
+            observables=output_observables,
+        )
 
 
 @chex.dataclass(frozen=True)
-class SimpleOptimizer:
-    """A simple optimizer that uses a single objective and simulator."""
+class SimpleOptimizer(Optimizer):
+    """A simple optimizer that uses a single objective and simulator.
 
-    objective: jdna_objective.Objective
-    simulator: jdna_actor.SimulatorActor
+    This optimizer manages the state for a frozen Objective dataclass,
+    passing observables and state through the compute method.
+    State is managed via OptimizationState which is passed in and out.
+    """
+
+    objective: Objective
+    simulator: Simulator
     optimizer: optax.GradientTransformation
-    optimizer_state: optax.OptState | None = None
-    logger: jdna_logger.Logger = dc.field(default_factory=jdna_logger.NullLogger)
+    logger: jdna_logger.Logger = field(default_factory=jdna_logger.NullLogger)
 
-    def step(self, params: jdna_types.Params) -> tuple[optax.OptState, list[jdna_types.Grads], list[jdna_types.Grads]]:
-        """Perform a single optimization step.
+    @override
+    def step(self, params: Params, state: OptimizerState | None = None) -> OptimizerOutput:
+        state = state or OptimizerState()
+        obj_state = state.component_state.get(self.objective.name, {})
+        sim_state = state.component_state.get(self.simulator.name, {})
+        obj_output = None
 
-        Args:
-            params: The current parameters.
+        if state.observables:
+            obj_output = self.objective.compute(state.observables, opt_params=params, **obj_state)
+            obj_state = obj_output.state
 
-        Returns:
-            A tuple containing the updated optimizer state, new params, and the gradients.
-        """
-        # get the currently needed observables
-        # some objectives might use difftre and not actually need something rerun
-        # so check which objectives have observables that need to be run
-        if self.objective.is_ready():
-            grads = self.objective.calculate()
-        else:
-            observables = self.simulator.run(params)
+        if obj_output is None or not obj_output.is_ready:
+            sim_output = self.simulator.run(params, **sim_state)
+            sim_state = sim_output.state
             exposes = self.simulator.exposes()
-            self.objective.update(
-                [
-                    (exposes, observables),
-                ]
-            )
-            grads = self.objective.calculate()
+            state = state.replace(observables=dict(zip(exposes, sim_output.observables, strict=True)))
 
-        opt_state = self.optimizer.init(params) if self.optimizer_state is None else self.optimizer_state
+            # Try again with updated observables
+            obj_output = self.objective.compute(state.observables, opt_params=params, **obj_state)
+            obj_state = obj_output.state
 
+            if not obj_output.is_ready:
+                # this should be an impossible state, could end up in infinite loop
+                raise ValueError("Objective readiness check failed after simulation run.")
+
+        grads = obj_output.grads
+        opt_state = state.optimizer_state or self.optimizer.init(params)
         updates, opt_state = self.optimizer.update(grads, opt_state, params)
+        new_params = optax.apply_updates(params, updates)
 
-        new_params = grad_update_fn(params, updates)
+        # should this be filtered? also be allowed to return filtered from
+        # simulators?
+        output_observables = obj_output.observables
 
-        return opt_state, new_params, grads
+        return OptimizerOutput(
+            opt_params=new_params,
+            state=state.replace(
+                optimizer_state=opt_state,
+                component_state={
+                    **state.component_state,
+                        self.objective.name: obj_state,
+                        self.simulator.name: sim_state,
+                    },
+            ),
+            grads=grads,
+            observables=output_observables
+        )
 
-    def post_step(self, optimizer_state: optax.OptState, opt_params: jdna_types.Params) -> "SimpleOptimizer":
-        """An update step intended to be called after an optimization step."""
-        self.objective.post_step(opt_params)
-        return self.replace(optimizer_state=optimizer_state)
