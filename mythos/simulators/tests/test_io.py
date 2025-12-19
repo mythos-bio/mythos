@@ -203,4 +203,3 @@ def test_simulatortrajectory_filter_preserves_data() -> None:
     # Should have states 0 and 2
     assert jnp.allclose(filtered_traj.rigid_body.center[0], jnp.array([1, 2, 3]))
     assert jnp.allclose(filtered_traj.rigid_body.center[1], jnp.array([7, 8, 9]))
-
