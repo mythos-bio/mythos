@@ -1,7 +1,6 @@
 """Utility functions for computing stretch-torsion moduli."""
 
 import dataclasses as dc
-import functools
 from collections.abc import Callable
 
 import chex
@@ -14,7 +13,6 @@ import mythos.utils.math as jd_math
 import mythos.utils.types as jd_types
 
 
-@functools.partial(jax.vmap, in_axes=(0, None, None, None))
 def single_angle_xy(quartet: jnp.ndarray, base_sites: jnp.ndarray, displacement_fn: Callable) -> jd_types.ARR_OR_SCALAR:
     """Computes the angle in the X-Y plane between adjacent base pairs."""
     # Extract the base pairs
@@ -71,7 +69,8 @@ class TwistXY(jd_obs.BaseObservable):
 
         base_sites = nucleotides.base_sites
 
-        angles = jax.vmap(single_angle_xy, (None, 0, 0, None))(self.quartets, base_sites, self.displacement_fn)
+        per_state_mapper = jax.vmap(single_angle_xy, (0, None, None))
+        angles = jax.vmap(per_state_mapper, (None, 0, None))(self.quartets, base_sites, self.displacement_fn)
         return jnp.sum(angles, axis=1)
 
 
@@ -79,18 +78,21 @@ def single_extension_z(
     center: jd_types.Arr_Nucleotide_3,
     bp1: jnp.ndarray,
     bp2: jnp.ndarray,
+    displacement_fn: Callable,
 ) -> jd_types.ARR_OR_SCALAR:
     """Computes the distance between the midpoints of two base pairs."""
     # Extract the base pair indices
     a1, b1 = bp1
     a2, b2 = bp2
 
-    # Compute the midpoints of each base pair
-    bp1_midp = (center[a1] + center[b1]) / 2
-    bp2_midp = (center[a2] + center[b2]) / 2
+    # Compute the midpoints of each base pair using displacement_fn for PBC
+    bp1_midp = center[a1] + displacement_fn(center[b1], center[a1]) / 2
+    bp2_midp = center[a2] + displacement_fn(center[b2], center[a2]) / 2
 
     # Compute the extension between the two base pairs in the Z-direction
-    return jnp.abs(bp1_midp[2] - bp2_midp[2])
+    # displacement(bp2, bp1) = bp2 - bp1, giving vector from bp1 to bp2
+    extension = displacement_fn(bp2_midp, bp1_midp)
+    return jnp.abs(extension[2])
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -130,7 +132,7 @@ class ExtensionZ(jd_obs.BaseObservable):
         center = nucleotides.center
 
         # return the extensions
-        return jax.vmap(single_extension_z, (None, 0, 0, None))(center, self.bp1, self.bp2, self.displacement_fn)
+        return jax.vmap(single_extension_z, (0, None, None, None))(center, self.bp1, self.bp2, self.displacement_fn)
 
 
 def stretch(forces: jnp.ndarray, extensions: jnp.ndarray) -> tuple[float, float, float]:
