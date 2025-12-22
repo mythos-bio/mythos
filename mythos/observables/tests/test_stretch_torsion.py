@@ -119,7 +119,7 @@ class TestSingleExtensionZ:
         result = st.single_extension_z(center, bp1, bp2, displacement_fn)
         np.testing.assert_allclose(result, 5.0, atol=1e-6)
 
-    def test_extension_negative_z(self) -> None:
+    def test_extension_negative_z_results_abs(self) -> None:
         center = jnp.array([
             [0.0, 0.0, 10.0],  # a1
             [2.0, 0.0, 10.0],  # b1
@@ -130,7 +130,7 @@ class TestSingleExtensionZ:
         bp2 = jnp.array([2, 3])
 
         result = st.single_extension_z(center, bp1, bp2, displacement_fn)
-        np.testing.assert_allclose(result, -7.0, atol=1e-6)
+        np.testing.assert_allclose(result, 7.0, atol=1e-6)
 
     def test_extension_zero_z(self) -> None:
         center = jnp.array([

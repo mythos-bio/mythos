@@ -92,7 +92,7 @@ def single_extension_z(
     # Compute the extension between the two base pairs in the Z-direction
     # displacement(bp2, bp1) = bp2 - bp1, giving vector from bp1 to bp2
     extension = displacement_fn(bp2_midp, bp1_midp)
-    return extension[2]
+    return jnp.abs(extension[2])
 
 
 @chex.dataclass(frozen=True, kw_only=True)
