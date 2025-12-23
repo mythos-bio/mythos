@@ -48,11 +48,21 @@ class OptimizerState:
 
 @chex.dataclass(frozen=True, kw_only=True)
 class OptimizerOutput:
-    """Output container for optimization steps."""
+    """Output container for optimization steps.
+
+    Attributes:
+        grads: The computed (aggregate) gradients from the optimization step.
+        opt_params: The updated parameters after the optimization step.
+        state: The updated optimizer state after the optimization step. This
+            data structure should be passed back into the next call to step.
+        observables: The logged observables from the optimization step. These
+            are keyed by component name (e.g. objective) and each value should
+            itself be a dict of observable name to value.
+    """
     grads: Grads
     opt_params: Params
     state: OptimizerState
-    observables: dict[str, Any] = field(default_factory=dict)
+    observables: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -207,7 +217,7 @@ class RayOptimizer(Optimizer):
                     component_state[producer] = output.state
                     if output.is_ready:
                         grads_completed[producer] = output.grads
-                        output_observables.update(output.observables)
+                        output_observables[producer] = output.observables
                     else:
                         # remove the needs from the state observables so the
                         # above loop check will schedule the providing simulator
@@ -280,7 +290,7 @@ class SimpleOptimizer(Optimizer):
 
         # should this be filtered? also be allowed to return filtered from
         # simulators?
-        output_observables = obj_output.observables
+        output_observables = {self.objective.name: obj_output.observables}
 
         return OptimizerOutput(
             opt_params=new_params,
