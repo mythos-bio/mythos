@@ -371,12 +371,14 @@ class TestOptimizationStep:
         params = {"param": jnp.array(1.0)}
         output = opt.step(params=params)
 
-        assert "total" in output.observables
-        assert "mean" in output.observables
-        assert "custom_metric" in output.observables
-        assert float(output.observables["total"]) == 6.0
-        assert float(output.observables["mean"]) == 2.0
-        assert float(output.observables["custom_metric"]) == 42.0
+        obj_observables = output.observables.get("test_obj", {})
+
+        assert "total" in obj_observables
+        assert "mean" in obj_observables
+        assert "custom_metric" in obj_observables
+        assert float(obj_observables["total"]) == 6.0
+        assert float(obj_observables["mean"]) == 2.0
+        assert float(obj_observables["custom_metric"]) == 42.0
 
     def test_step_initializes_optimizer_state(
         self, basic_objective, basic_simulator
@@ -493,7 +495,8 @@ class TestOptimizationStep:
         assert output.grads is not None
         assert output.opt_params is not None
         # Both objectives should have contributed to output
-        assert "total" in output.observables
+        assert "total" in output.observables["obj_1"]
+        assert "total" in output.observables["obj_2"]
 
     def test_step_with_multi_observable_simulator_and_objective(
         self, basic_optimizer
@@ -546,9 +549,9 @@ class TestOptimizationStep:
         assert output.grads is not None
         assert output.opt_params is not None
         # Verify all observables were properly passed and computed
-        assert output.observables["combined_total"] == 36.5
+        assert output.observables["multi_obj"]["combined_total"] == 36.5
         for obs, res in zip(simulator.exposes(), [6.0, 30.0, 0.5], strict=True):
-            assert output.observables[f"{obs}_sum"] == res
+            assert output.observables["multi_obj"][f"{obs}_sum"] == res
 
 
     def test_step_handles_objective_not_ready(

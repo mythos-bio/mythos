@@ -125,7 +125,7 @@ class TestSimpleOptimizerStep:
 
         # Simulator should not have been called - no simulator metadata
         assert output.state.component_state.get(simulator.name) == {}
-        assert output.observables == {"total": jnp.array(3.0)}
+        assert output.observables == {"test": {"total": jnp.array(3.0)}}
         assert output.grads == {"param": jnp.array(0.1)}
 
     def test_step_updates_params_with_gradients(self):
