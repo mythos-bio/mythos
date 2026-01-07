@@ -1,10 +1,13 @@
 """Common data structures for simulator I/O."""
 
+from collections.abc import Callable
 from pathlib import Path
+from typing import Any
 
 import chex
 import jax.numpy as jnp
 import jax_md
+from typing_extensions import override
 
 from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state
@@ -16,11 +19,41 @@ class SimulatorTrajectory:
     """A trajectory of a simulation run."""
 
     rigid_body: jax_md.rigid_body.RigidBody
+    metadata: jnp.ndarray | None = None
 
-    def slice(self, key: int | slice) -> "SimulatorTrajectory":
+    @override
+    def __post_init__(self) -> None:
+        if self.metadata is None:
+            self.metadata = [None] * self.rigid_body.center.shape[0]
+        if len(self.metadata) != self.rigid_body.center.shape[0]:
+            raise ValueError(
+                f"Metadata length {len(self.metadata)} does not match "
+                f"trajectory length {self.rigid_body.center.shape[0]}"
+            )
+
+    def with_state_metadata(self, metadata: Any) -> "SimulatorTrajectory":
+        """Set the same metadata for all states in the trajectory."""
+        return self.replace(metadata=[metadata] * self.length())
+
+    def filter(self, filter_fn: Callable[[Any], bool]) -> "SimulatorTrajectory":
+        """Filter the trajectory based on metadata.
+
+        Args:
+            filter_fn: A function that takes in metadata and returns a boolean
+                indicating whether to keep the state.
+
+        Returns:
+            A new SimulatorTrajectory with only the states that pass the filter.
+        """
+        indices = [i for i, md in enumerate(self.metadata) if filter_fn(md)]
+        return self.slice(indices)
+
+    def slice(self, key: int | slice | jnp.ndarray | list) -> "SimulatorTrajectory":
         """Slice the trajectory."""
         if isinstance(key, int):
             key = slice(key, key + 1)
+
+        metadata = self.metadata[key] if isinstance(key, slice) else [self.metadata[i] for i in key]
 
         return self.replace(
             rigid_body=jax_md.rigid_body.RigidBody(
@@ -28,7 +61,8 @@ class SimulatorTrajectory:
                 orientation=jax_md.rigid_body.Quaternion(
                     vec=self.rigid_body.orientation.vec[key, ...],
                 ),
-            )
+            ),
+            metadata=metadata,
         )
 
     def length(self) -> int:
@@ -54,7 +88,8 @@ class SimulatorTrajectory:
                 orientation=jax_md.rigid_body.Quaternion(
                     vec=jnp.concatenate([self.rigid_body.orientation.vec, other.rigid_body.orientation.vec], axis=0)
                 ),
-            )
+            ),
+            metadata=self.metadata + other.metadata,
         )
 
     def to_file(self, filepath: Path, box_size: Vector3D = (0, 0, 0)) -> None:

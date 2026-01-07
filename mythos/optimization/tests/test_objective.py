@@ -35,7 +35,7 @@ def make_mock_energy_fn(return_value = None) -> EnergyFunction:
         def map(self, n):
             if return_value is not None:
                 return return_value
-            return jnp.array(n)
+            return jnp.array(n.center)
 
         def with_params(self, *_args, **_kwargs):
             return self
@@ -273,8 +273,18 @@ def test_compute_weights_and_neff(
         (
             {},
             1.0,
-            jdna_sio.SimulatorTrajectory(rigid_body=np.array([1, 2, 3])),
-            jdna_sio.SimulatorTrajectory(rigid_body=np.array([1, 2, 3])),
+            jdna_sio.SimulatorTrajectory(
+                rigid_body=jax_md.rigid_body.RigidBody(
+                    center=np.array([1, 2, 3]),
+                    orientation=np.array([1, 0, 0, 0]),
+                ),
+            ),
+            jdna_sio.SimulatorTrajectory(
+                rigid_body=jax_md.rigid_body.RigidBody(
+                    center=np.array([1, 2, 3]),
+                    orientation=np.array([1, 0, 0, 0]),
+                ),
+            ),
             0.0,
             ("test", 1.0),
         ),
