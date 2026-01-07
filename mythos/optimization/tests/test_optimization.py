@@ -41,7 +41,7 @@ class MockObjective(jdna_objective.Objective):
     output_observables: dict = field(default_factory=dict)
     state_tracker: dict = field(default_factory=dict)  # external object to track state passed in
 
-    def compute(self, observables, opt_params, **state):
+    def calculate(self, observables, opt_params, **state):
         self.state_tracker.update(state)
         obs = next(iter(observables.values()))
         grads = {k: v * 0.1 for k, v in opt_params.items()}
@@ -283,7 +283,7 @@ class TestOptimizationStep:
         @chex.dataclass(frozen=True, kw_only=True)
         class StatefulObjective(jdna_objective.Objective):
             @override
-            def compute(self, observables, opt_params, **state):
+            def calculate(self, observables, opt_params, **state):
                 call_records.append(dict(state))
                 call_count = state.get("call_count", 0)
 
@@ -504,7 +504,7 @@ class TestOptimizationStep:
         @chex.dataclass(frozen=True, kw_only=True)
         class MultiInputObjective(jdna_objective.Objective):
             @override
-            def compute(self, observables, opt_params, **_state):
+            def calculate(self, observables, opt_params, **_state):
                 sums = {f"{k}_sum": v.sum() for k, v in observables.items()}
                 combined = sum([i.sum() for i in observables.values()])
                 return jdna_objective.ObjectiveOutput(
@@ -562,7 +562,7 @@ class TestOptimizationStep:
         @chex.dataclass(frozen=True, kw_only=True)
         class ConditionalReadyObjective(jdna_objective.Objective):
             @override
-            def compute(self, observables, opt_params, **state):
+            def calculate(self, observables, opt_params, **state):
                 call_count[0] += 1
                 if call_count[0] == 1:
                     return jdna_objective.ObjectiveOutput(
@@ -608,7 +608,7 @@ class TestOptimizationStep:
         @chex.dataclass(frozen=True, kw_only=True)
         class FixedGradObjective(jdna_objective.Objective):
             @override
-            def compute(self, observables, opt_params, **_state):
+            def calculate(self, observables, opt_params, **_state):
                 return jdna_objective.ObjectiveOutput(
                     is_ready=True,
                     grads={"param": jnp.array(1.0)},  # Fixed gradient of 1.0
@@ -643,7 +643,7 @@ class TestOptimizationStep:
         @chex.dataclass(frozen=True, kw_only=True)
         class NeverReadyObjective(jdna_objective.Objective):
             @override
-            def compute(self, observables, opt_params, **_state):
+            def calculate(self, observables, opt_params, **_state):
                 return jdna_objective.ObjectiveOutput(
                     is_ready=False,
                     needs_update=("trajectory",),

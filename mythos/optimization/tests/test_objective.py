@@ -128,7 +128,7 @@ def test_objective_compute_is_ready(
         grad_or_loss_fn=lambda *args: (args, []),
     )
 
-    output = obj.compute(observables)
+    output = obj.calculate(observables)
     assert output.is_ready == expected
 
 
@@ -147,7 +147,7 @@ def test_objective_compute() -> None:
         "c": 3.0,
     }
 
-    output = obj.compute(observables)
+    output = obj.calculate(observables)
 
     assert output.is_ready
     assert output.grads == 1.0
@@ -165,7 +165,7 @@ def test_objective_compute_returns_needs_update() -> None:
 
     observables = {"a": 1.0}
 
-    output = obj.compute(observables)
+    output = obj.calculate(observables)
 
     assert not output.is_ready
     assert set(output.needs_update) == {"b", "c"}
@@ -296,7 +296,7 @@ def test_difftreobjective_compute_raises_without_opt_params() -> None:
     state = {"opt_steps": 1}
 
     with pytest.raises(TypeError, match="opt_params"):
-        obj.compute(observables, **state)  # opt_params not provided
+        obj.calculate(observables, **state)  # opt_params not provided
 
 
 def test_difftreobjective_compute() -> None:
@@ -325,7 +325,7 @@ def test_difftreobjective_compute() -> None:
     state = {"opt_steps": 1}
     opt_params = {"test": 1.0}
 
-    output = obj.compute(observables, **state, opt_params=opt_params)
+    output = obj.calculate(observables, **state, opt_params=opt_params)
 
     expected_grad = {"test": jnp.array(0.0)}
     assert output.is_ready
@@ -350,7 +350,7 @@ def test_difftreobjective_compute_returns_needs_update_when_missing() -> None:
     state = {"opt_steps": 1}
     opt_params = {"test": 1.0}
 
-    output = obj.compute(observables, **state, opt_params=opt_params)
+    output = obj.calculate(observables, **state, opt_params=opt_params)
 
     assert not output.is_ready
     assert "test" in output.needs_update
@@ -382,7 +382,7 @@ def test_difftreobjective_state_preserved() -> None:
     state = {"opt_steps": 1}
     opt_params = {"test": 1.0}
 
-    output = obj.compute(observables, **state, opt_params=opt_params)
+    output = obj.calculate(observables, **state, opt_params=opt_params)
 
     # Output state should contain reference_states and reference_energies
     assert output.is_ready

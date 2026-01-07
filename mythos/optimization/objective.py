@@ -55,8 +55,8 @@ class Objective:
     """Frozen dataclass for objectives that calculate gradients.
 
     Objectives are immutable - all state is passed in and out through the
-    compute method. The ObjectiveOutput.state field carries state that
-    needs to persist between compute calls (e.g., reference states for DiffTRe).
+    calculate method. The ObjectiveOutput.state field carries state that
+    needs to persist between calculate calls (e.g., reference states for DiffTRe).
 
     Attributes:
         name: The name of the objective.
@@ -81,7 +81,7 @@ class Objective:
         if self.grad_or_loss_fn is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="grad_or_loss_fn"))
 
-    def compute(
+    def calculate(
         self,
         observables: dict[str, typing.Any],
         opt_params: jdna_types.Params | None = None,  # noqa: ARG002 - base class ignores opt_params
@@ -238,7 +238,7 @@ class DiffTReObjective(Objective):
         if self.n_equilibration_steps is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="n_equilibration_steps"))
 
-    def compute(
+    def calculate(
         self,
         observables: dict[str, typing.Any],
         opt_params: jdna_types.Params,
@@ -249,9 +249,9 @@ class DiffTReObjective(Objective):
 
         Args:
             observables: Dictionary mapping observable names to their values.
-            metadata: State from previous compute call containing:
-                - reference_states: Previously computed reference states
-                - reference_energies: Previously computed reference energies
+            metadata: State from previous calculate call containing:
+                - reference_opt_params: Optimization parameters used to compute
+                    reference energies.
                 - opt_steps: Current optimization step count
             opt_params: Current optimization parameters for energy computation.
             opt_steps: Current optimization step count.

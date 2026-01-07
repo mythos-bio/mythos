@@ -129,8 +129,8 @@ class RayOptimizer(Optimizer):
     def _run_simulator(
             self, simulator: Simulator, params: Params, **state
         ) -> tuple[list[RayRef], RayRef]:
-        def simulator_run_fn(params: Params, md: dict[str, Any]) -> list[RayRef]|RayRef:
-            output = simulator.run(opt_params=params, **md)
+        def simulator_run_fn(params: Params, state: dict[str, Any]) -> tuple[list[RayRef], RayRef]:
+            output = simulator.run(opt_params=params, **state)
             return *output.observables, output.state
 
         ray_opts = {"name": "simulator_run:" + simulator.name, "num_returns": 1 + len(simulator.exposes())}
@@ -140,9 +140,9 @@ class RayOptimizer(Optimizer):
     def _run_objective(
             self, objective: Objective, observables: dict[str, RayRef], params: Params, **state
         ) -> RayRef:
-        def objective_compute_fn(obs: dict[str, RayRef], params: Params, md: dict[str, Any]) -> ObjectiveOutput:
+        def objective_compute_fn(obs: dict[str, RayRef], params: Params, state: dict[str, Any]) -> ObjectiveOutput:
             obs = {k: ray.get(v) for k, v in obs.items()}
-            return objective.compute(observables=obs, opt_params=params, **md)
+            return objective.calculate(observables=obs, opt_params=params, **state)
 
         ray_opts = {"name": "objective_compute:" + objective.name}
         return self._create_and_run_remote(objective_compute_fn, ray_opts, observables, params, state)
@@ -266,7 +266,7 @@ class SimpleOptimizer(Optimizer):
         obj_output = None
 
         if state.observables:
-            obj_output = self.objective.compute(state.observables, opt_params=params, **obj_state)
+            obj_output = self.objective.calculate(state.observables, opt_params=params, **obj_state)
             obj_state = obj_output.state
 
         if obj_output is None or not obj_output.is_ready:
@@ -276,7 +276,7 @@ class SimpleOptimizer(Optimizer):
             state = state.replace(observables=dict(zip(exposes, sim_output.observables, strict=True)))
 
             # Try again with updated observables
-            obj_output = self.objective.compute(state.observables, opt_params=params, **obj_state)
+            obj_output = self.objective.calculate(state.observables, opt_params=params, **obj_state)
             obj_state = obj_output.state
 
             if not obj_output.is_ready:

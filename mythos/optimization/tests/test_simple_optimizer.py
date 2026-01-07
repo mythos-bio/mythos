@@ -34,7 +34,7 @@ class MockObjective(jdna_objective.Objective):
 
     readiness_function: Callable = field(default=lambda _: True)
 
-    def compute(self, observables, opt_params, call_count=0, **_kwargs):
+    def calculate(self, observables, opt_params, call_count=0, **_kwargs):
         obs = next(iter(observables.values()))
         grads = {k: v*0.1 for k, v in opt_params.items()}
         return jdna_objective.ObjectiveOutput(
@@ -214,7 +214,7 @@ class TestSimpleOptimizerStatePassing:
         @chex.dataclass(frozen=True, kw_only=True)
         class TrackingObjective(jdna_objective.Objective):
             @override
-            def compute(self, observables, call_count=0, **_kwargs):
+            def calculate(self, observables, call_count=0, **_kwargs):
                 call_counts_received.append(call_count)
                 return jdna_objective.ObjectiveOutput(
                     is_ready=True,
