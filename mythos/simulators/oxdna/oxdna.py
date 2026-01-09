@@ -125,7 +125,7 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
             elif not self.ignore_params:
                 raise ValueError("params provided without source_path. Set ignore_params to override")
         elif self.source_path:
-            self.build(input_dir = input_dir, new_params=[], input_config=input_config)
+            self.build(input_dir = input_dir, new_params={}, input_config=input_config)
         binary_path = self.binary_path or input_dir / "oxdna-build" / "bin" / "oxDNA"
 
         # remove existing trajectory and energy files (others?), otherwise they
@@ -161,7 +161,7 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
         )
 
 
-    def build(self, *, input_dir: Path, new_params: list[dict], input_config: dict|None = None) -> None:
+    def build(self, *, input_dir: Path, new_params: Params, input_config: dict|None = None) -> None:
         """Update the simulation.
 
         This function will recompile the oxDNA binary with the new parameters.
