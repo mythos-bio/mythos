@@ -8,7 +8,6 @@ import uuid
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import mythos.utils.types as typ
 import pytest
 from mythos.input import oxdna_input
 from mythos.simulators import oxdna
