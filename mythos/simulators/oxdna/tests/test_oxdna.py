@@ -8,7 +8,6 @@ import uuid
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import mythos.utils.types as typ
 import pytest
 from mythos.input import oxdna_input
 from mythos.simulators import oxdna
@@ -68,7 +67,6 @@ def test_oxdna_init(mock_energy_fn):
     test_dir = setup_test_dir()
     sim = oxdna.oxDNASimulator(
         input_dir=test_dir,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         source_path="src",
     )
@@ -82,7 +80,6 @@ def test_oxdna_run_raises_fnf(mock_energy_fn):
     with pytest.raises(FileNotFoundError, match="Input file not found at"):
         oxdna.oxDNASimulator(
             input_dir=test_dir,
-            sim_type=typ.oxDNASimulatorType.DNA1,
             energy_fn=mock_energy_fn,
             source_path="src",
         )
@@ -94,7 +91,6 @@ def test_oxdna_binary_mode_run_raises_for_missing_bin(tmp_path, mock_energy_fn):
     setup_test_dir(tmp_path, add_input=True)
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         binary_path="some/non/existent/path",
     )
@@ -107,7 +103,6 @@ def test_oxdna_binary_mode_raises_for_params_input(tmp_path, mock_energy_fn):
     setup_test_dir(tmp_path, add_input=True)
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         binary_path=shutil.which("echo"),
     )
@@ -121,7 +116,6 @@ def test_oxdna_binary_mode_ignore_params(tmp_path, mock_energy_fn, monkeypatch):
     monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         binary_path=shutil.which("echo"),
         ignore_params=True,
@@ -134,7 +128,6 @@ def test_oxdna_override_input(tmp_path, mock_energy_fn, monkeypatch):
     monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         binary_path=shutil.which("echo"),
         overwrite_input=True,
@@ -149,7 +142,6 @@ def test_oxdna_override_keyvals(tmp_path, mock_energy_fn, monkeypatch):
     monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         binary_path=shutil.which("echo"),
         input_overrides={"steps": 10000, "T": "275K"},
@@ -168,7 +160,6 @@ def test_oxdna_run_raises_on_non_exclusive_bin_source_paths(bin_path, source_pat
     with pytest.raises(ValueError, match="Must set one and only one"):
         oxdna.oxDNASimulator(
             input_dir=test_dir,
-            sim_type=typ.oxDNASimulatorType.DNA1,
             energy_fn=None,
             source_path=source_path,
             binary_path=bin_path,
@@ -182,7 +173,6 @@ def test_oxdna_run(mock_energy_fn, monkeypatch):
     monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
     sim = oxdna.oxDNASimulator(
         input_dir=test_dir,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=mock_energy_fn,
         binary_path=shutil.which("echo"),
     )
@@ -218,7 +208,6 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
 
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=MockEnergyFunction({}),
         source_path=tmp_path,
     )
@@ -266,7 +255,6 @@ def test_oxdna_simulator_trajectory_read(monkeypatch, tmp_path) -> None:
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
         overwrite_input=True,  # We use this obj as shell to read, so no write
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=1,
         binary_path="echo",
     )
