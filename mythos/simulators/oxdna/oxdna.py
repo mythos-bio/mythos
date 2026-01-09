@@ -177,7 +177,7 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
 
         model_h = build_dir / "model.h"
         if not model_h.exists():
-            model_h.write_text(self.source_path.joinpath("src/model.h").read_text())
+            model_h.write_text(Path(self.source_path).joinpath("src/model.h").read_text())
 
         updated_params = self.energy_fn.with_params(new_params).params_dict(exclude_non_optimizable=True)
         oxdna_utils.update_params(model_h, updated_params)
