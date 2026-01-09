@@ -217,7 +217,7 @@ class DiffTReObjective(Objective):
     Attributes:
         energy_fn: The energy function used to compute energies.
         beta: The inverse temperature.
-        n_equilibration_steps: Number of equilibration steps to skip.
+        n_equilibration_steps: Number of equilibration steps (snapshot states, not timesteps) to skip.
         min_n_eff_factor: Minimum normalized effective sample size threshold.
         max_valid_opt_steps: Maximum optimization steps before requiring new trajectory.
     """
@@ -280,6 +280,10 @@ class DiffTReObjective(Objective):
             return slice(self.n_equilibration_steps, n, None)
 
         reference_states = functools.reduce(operator.add, [obs.slice(slc_f(obs.length())) for obs in trajectories])
+        if reference_states.length() == 0:
+            raise ValueError(
+                "Equilibration slicing yields no states! Note slicing is in number of snapshots, not timesteps."
+            )
         # The reference opt params will be returned in state while we are still
         # within neff tolerance (or max_valid_opt_steps). These params are then
         # used to compute reference energies.

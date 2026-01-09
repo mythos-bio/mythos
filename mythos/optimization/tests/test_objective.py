@@ -388,3 +388,31 @@ def test_difftreobjective_state_preserved() -> None:
     assert output.is_ready
     assert "reference_opt_params" in output.state
     assert output.state["reference_opt_params"] is not None
+
+
+def test_difftreobjective_raises_when_equilibration_exceeds_trajectory() -> None:
+    """Test that DiffTReObjective raises when n_equilibration_steps >= trajectory length."""
+    obj = o.DiffTReObjective(
+        name="test",
+        required_observables=("test",),
+        logging_observables=(),
+        grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
+        energy_fn=make_mock_energy_fn(jnp.ones(100)),
+        beta=1.0,
+        n_equilibration_steps=50,  # More than trajectory length
+    )
+
+    # Create a trajectory with only 10 frames (less than n_equilibration_steps)
+    trajectory = jdna_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=np.arange(10),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=np.arange(40).reshape(10, 4),
+            ),
+        )
+    )
+
+    observables = {"test": trajectory}
+
+    with pytest.raises(ValueError, match="Equilibration slicing yields no states"):
+        obj.calculate(observables, opt_params={})
