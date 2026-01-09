@@ -1,5 +1,6 @@
 """Stretch-torsion optimization for DNA mechanical properties (S_eff, C, g)."""
 
+import argparse
 import logging
 from collections.abc import Callable
 from dataclasses import InitVar
@@ -185,57 +186,44 @@ def create_stretch_torsion_objectives(
     # Conversion factor from simulation units to nm (oxDNA length unit is 0.8518 nm)
     length_conversion = 0.8518
 
-    def filter_by_metadata(
-        traj: Any,
-        weights: jnp.ndarray,
-        extract_key: str,
-        held_key: str,
-        held_value: float,
-    ) -> tuple[Any, jnp.ndarray, jnp.ndarray]:
-        """Filter trajectory by held_key==held_value, return (traj, weights, extract_key values)."""
-        idx = jnp.array([i for i, md in enumerate(traj.metadata) if md[held_key] == held_value])
-        conditions = jnp.array([traj.metadata[int(i)][extract_key] for i in idx])
-        return traj.slice(idx), weights[idx], conditions
-
-    def get_expectation(
-        conditions: jnp.ndarray,
-        weights: jnp.ndarray,
-        values: jnp.ndarray,
-        scale: float = 1.0,
-    ) -> tuple[jnp.ndarray, jnp.ndarray]:
-        """Compute weighted mean of values for each unique condition."""
-        unique_conditions, inverse_indices = jnp.unique(conditions, return_inverse=True)
-        weighted_sums = jax.ops.segment_sum(weights * values, inverse_indices)
-        weight_sums = jax.ops.segment_sum(weights, inverse_indices)
-        mean_values = scale * weighted_sums / weight_sums
-        return unique_conditions, mean_values
-
     def compute_moduli_from_traj(
         traj: Any, weights: jnp.ndarray
     ) -> tuple[float, float, float]:
         """Compute (s_eff, c, g) moduli from trajectory with force/torque metadata."""
-        # Filter for stretch experiments (held torque = stretch_torque)
-        traj_force, weights_force, forces = filter_by_metadata(
-            traj, weights, extract_key="force", held_key="torque", held_value=stretch_torque
-        )
+        # Pre-compute metadata arrays as constants (outside gradient)
+        forces_arr = jnp.array([md.get("force", 0.0) for md in traj.metadata])
+        torques_arr = jnp.array([md.get("torque", 0.0) for md in traj.metadata])
 
-        # Compute weighted mean extensions for each force condition
-        unique_forces, force_extensions = get_expectation(
-            forces, weights_force, extension_obs(traj_force), scale=length_conversion
-        )
+        # Create boolean masks for filtering (these are constants, not differentiable)
+        stretch_mask = torques_arr == stretch_torque  # held torque for stretch experiments
+        twist_mask = forces_arr == twist_force  # held force for twist experiments
 
-        # Filter for twist experiments (held force = twist_force)
-        traj_torque, weights_torque, torques = filter_by_metadata(
-            traj, weights, extract_key="torque", held_key="force", held_value=twist_force
-        )
+        # Compute observables for all states once
+        all_extensions = extension_obs(traj) * length_conversion
+        all_twists = twist_obs(traj)
 
-        # Compute weighted mean extensions and twists for each torque condition
-        unique_torques, torque_extensions = get_expectation(
-            torques, weights_torque, extension_obs(traj_torque), scale=length_conversion
-        )
-        _, torque_twists = get_expectation(
-            torques, weights_torque, twist_obs(traj_torque)
-        )
+        # For stretch experiments: weighted average extension per force level
+        unique_forces = jnp.unique(forces_arr[stretch_mask])
+        force_extensions = []
+        for f in unique_forces:
+            mask = stretch_mask & (forces_arr == f)
+            w = jnp.where(mask, weights, 0.0)
+            w = w / (jnp.sum(w) + 1e-10)  # normalize within this group
+            force_extensions.append(jnp.sum(w * all_extensions))
+        force_extensions = jnp.array(force_extensions)
+
+        # For twist experiments: weighted average extension and twist per torque level
+        unique_torques = jnp.unique(torques_arr[twist_mask])
+        torque_extensions = []
+        torque_twists = []
+        for t in unique_torques:
+            mask = twist_mask & (torques_arr == t)
+            w = jnp.where(mask, weights, 0.0)
+            w = w / (jnp.sum(w) + 1e-10)
+            torque_extensions.append(jnp.sum(w * all_extensions))
+            torque_twists.append(jnp.sum(w * all_twists))
+        torque_extensions = jnp.array(torque_extensions)
+        torque_twists = jnp.array(torque_twists)
 
         return stretch_torsion(
             unique_forces, force_extensions, unique_torques, torque_extensions, torque_twists
@@ -244,20 +232,20 @@ def create_stretch_torsion_objectives(
     def stretch_modulus_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
         """Compute stretch modulus loss."""
         s_eff, c, g = compute_moduli_from_traj(traj, weights)
-        loss = (s_eff - target_stretch_modulus) ** 2
+        loss = jnp.sqrt((s_eff - target_stretch_modulus) ** 2)
         return loss, (("stretch_modulus", s_eff), {"torsional_modulus": c, "twist_stretch_coupling": g})
 
     def torsional_modulus_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
         """Compute torsional modulus loss."""
         s_eff, c, g = compute_moduli_from_traj(traj, weights)
-        loss = (c - target_torsion_modulus) ** 2
+        loss = jnp.sqrt((c - target_torsion_modulus) ** 2)
         return loss, (("torsional_modulus", c), {"stretch_modulus": s_eff, "twist_stretch_coupling": g})
 
     def twist_stretch_coupling_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
         """Compute twist-stretch coupling loss."""
         s_eff, c, g = compute_moduli_from_traj(traj, weights)
         # Use absolute target since g can be negative
-        loss = (g - target_twist_stretch_coupling) ** 2
+        loss = jnp.sqrt((g - target_twist_stretch_coupling) ** 2)
         return loss, (("twist_stretch_coupling", g), {"stretch_modulus": s_eff, "torsional_modulus": c})
 
     # Collect required observables from all simulators
@@ -296,10 +284,15 @@ def create_stretch_torsion_objectives(
     return [stretch_objective, torsional_objective, coupling_objective]
 
 
+# Valid objective names for command-line selection
+VALID_OBJECTIVES = {"stretch_modulus", "torsional_modulus", "twist_stretch_coupling"}
+
+
 def run_optimization(
     input_dir: Path = SYSTEM_DIR,
     learning_rate: float = 5e-4,
     opt_steps: int = 100,
+    selected_objectives: list[str] | None = None,
 ) -> Params:
     """Run DiffTRe optimization targeting S_eff=1000pN, C=460pN·nm², g=-90pN·nm."""
     import ray
@@ -352,6 +345,12 @@ def run_optimization(
         kt=kt,
     )
 
+    # Filter objectives if a subset was specified
+    if selected_objectives:
+        objective_map = {obj.name: obj for obj in objectives}
+        objectives = [objective_map[name] for name in selected_objectives]
+        logging.info("Using selected objectives: %s", [obj.name for obj in objectives])
+
     # Setup Ray optimizer
     optimizer = jdna_optimization.RayOptimizer(
         objectives=objectives,
@@ -389,5 +388,52 @@ def run_optimization(
     return opt_params
 
 
+def parse_args() -> argparse.Namespace:
+    """Parse command-line arguments."""
+    parser = argparse.ArgumentParser(
+        description="Stretch-torsion optimization for DNA mechanical properties (S_eff, C, g)."
+    )
+    parser.add_argument(
+        "--objectives",
+        type=str,
+        default=None,
+        help=(
+            "Comma-separated list of objectives to optimize. "
+            f"Valid options: {', '.join(sorted(VALID_OBJECTIVES))}. "
+            "If not specified, all objectives are used."
+        ),
+    )
+    parser.add_argument(
+        "--learning-rate",
+        type=float,
+        default=5e-4,
+        help="Learning rate for optimization (default: 5e-4).",
+    )
+    parser.add_argument(
+        "--opt-steps",
+        type=int,
+        default=100,
+        help="Number of optimization steps (default: 100).",
+    )
+    return parser.parse_args()
+
+
 if __name__ == "__main__":
-    run_optimization()
+    args = parse_args()
+
+    # Parse and validate objectives
+    selected_objectives = None
+    if args.objectives:
+        selected_objectives = [obj.strip() for obj in args.objectives.split(",")]
+        invalid = set(selected_objectives) - VALID_OBJECTIVES
+        if invalid:
+            raise ValueError(
+                f"Invalid objective(s): {invalid}. "
+                f"Valid options are: {VALID_OBJECTIVES}"
+            )
+
+    run_optimization(
+        learning_rate=args.learning_rate,
+        opt_steps=args.opt_steps,
+        selected_objectives=selected_objectives,
+    )

@@ -19,6 +19,7 @@ import mythos.simulators.io as jd_sio
 import mythos.simulators.oxdna.utils as oxdna_utils
 from mythos.energy.base import EnergyFunction
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
+from mythos.utils.command import run_command
 from mythos.utils.types import Params, oxDNASimulatorType
 
 ERR_OXDNA_NOT_FOUND = "OXDNA binary not found at: {}"
@@ -134,22 +135,10 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
             if file := input_config.get(output, None):
                 input_dir.joinpath(file).unlink(missing_ok=True)
 
-        std_out_file = input_dir / "oxdna.out.log"
-        std_err_file = input_dir / "oxdna.err.log"
-        logger.info("Starting oxDNA simulation")
-        logger.debug(
-            "oxDNA std_out->%s, std_err->%s",
-            std_out_file,
-            std_err_file,
-        )
-        with std_out_file.open("w") as f_std, std_err_file.open("w") as f_err:
-            cmd = [binary_path, "input"]
-            logger.debug("running command: %s", cmd)
-            subprocess.check_call(cmd, stdout=f_std, stderr=f_err, cwd=input_dir)
+        run_command([binary_path, "input"], cwd=input_dir)
         logger.info("oxDNA simulation complete")
 
         return SimulatorOutput(observables=[self._read_trajectory(input_dir)])
-
 
     def _read_trajectory(self, input_dir: Path) -> jd_sio.SimulatorTrajectory:
         trajectory = oxdna_utils.read_output_trajectory(input_file=input_dir / "input")
