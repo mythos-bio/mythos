@@ -48,19 +48,16 @@ def mock_energy_fn():
 
 
 @pytest.mark.parametrize(
-    ("required_observables", "needed_observables", "logging_observables", "grad_or_loss_fn", "expected_missing"),
+    ("required_observables", "logging_observables", "grad_or_loss_fn", "expected_missing"),
     [
-        (None, ["a"], ["c"], lambda x: x, "required_observables"),
-        (["a"], None, ["c"], lambda x: x, "needed_observables"),
-        (["a"], ["a"], None, lambda x: x, "logging_observables"),
-        (["a"], ["a"], ["c"], None, "grad_or_loss_fn"),
+        (None, ("c",), lambda x: x, "required_observables"),
+        (("a",), ("c",), None, "grad_or_loss_fn"),
     ],
 )
 def test_objective_init_raises(
-    required_observables: list[str],
-    needed_observables: list[str],
-    logging_observables: list[str],
-    grad_or_loss_fn: typing.Callable[[tuple[str, ...]], jdna_types.Grads],
+    required_observables: tuple[str, ...] | None,
+    logging_observables: tuple[str, ...],
+    grad_or_loss_fn: typing.Callable[[tuple[str, ...]], jdna_types.Grads] | None,
     expected_missing: str,
 ) -> None:
     """Test the __init__ function for Objective raises for missing required arg."""
@@ -69,7 +66,6 @@ def test_objective_init_raises(
         o.Objective(
             name="test",
             required_observables=required_observables,
-            needed_observables=needed_observables,
             logging_observables=logging_observables,
             grad_or_loss_fn=grad_or_loss_fn,
         )
@@ -79,166 +75,100 @@ def test_objective_required_observables() -> None:
     """Test the required_observables property of Objective."""
     obj = o.Objective(
         name="test",
-        required_observables=["a"],
-        needed_observables=["a"],
-        logging_observables=["c"],
-        grad_or_loss_fn=lambda x: x,
+        required_observables=("a",),
+        logging_observables=("c",),
+        grad_or_loss_fn=lambda x: (x, []),
     )
 
-    assert obj.required_observables() == ["a"]
-
-
-def test_objective_needed_observables() -> None:
-    """Test the needed_observables property of Objective."""
-    obj = o.Objective(
-        name="test",
-        required_observables=["a", "b"],
-        needed_observables=["a"],
-        logging_observables=["c"],
-        grad_or_loss_fn=lambda x: x,
-    )
-
-    assert obj.needed_observables() == ["a"]
+    assert obj.required_observables == ("a",)
 
 
 def test_objective_logging_observables() -> None:
-    """Test the logging_observables property of Objective."""
+    """Test the get_logging_observables method of Objective."""
     obj = o.Objective(
         name="test",
-        required_observables=["a", "b", "c"],
-        needed_observables=[],
-        logging_observables=["a", "b"],
-        grad_or_loss_fn=lambda x: x,
+        required_observables=("a", "b", "c"),
+        logging_observables=("a", "b"),
+        grad_or_loss_fn=lambda x: (x, []),
     )
 
-    # simulate getting the observables
-    obj._obtained_observables = [
-        ("a", 1.0),
-        ("b", 2.0),
-        ("c", 3.0),
-    ]
+    observables = {
+        "a": 1.0,
+        "b": 2.0,
+        "c": 3.0,
+    }
 
     # we are only logging two so we should only get those
     expected = [
         ("a", 1.0),
         ("b", 2.0),
     ]
-    assert obj.logging_observables() == expected
+    assert obj.get_logging_observables(observables) == expected
 
 
 @pytest.mark.parametrize(
-    ("required_observables", "obtained_observables", "expected"),
+    ("required_observables", "observables", "expected"),
     [
-        (["a"], [("a", 1.0)], True),
-        (["a"], [("b", 1.0)], False),
-        (["a", "b"], [("a", 1.0), ("b", 2.0)], True),
-        (["a", "b"], [("a", 1.0)], False),
+        (("a",), {"a": 1.0}, True),
+        (("a",), {"b": 1.0}, False),
+        (("a", "b"), {"a": 1.0, "b": 2.0}, True),
+        (("a", "b"), {"a": 1.0}, False),
     ],
 )
-def test_objective_is_ready(
-    required_observables: list[str],
-    obtained_observables: list[tuple[str, float]],
+def test_objective_compute_is_ready(
+    required_observables: tuple[str, ...],
+    observables: dict[str, float],
     expected: bool,  # noqa: FBT001
 ) -> None:
-    """Test the is_ready method of Objective."""
+    """Test the compute method's is_ready output of Objective."""
     obj = o.Objective(
         name="test",
         required_observables=required_observables,
-        needed_observables=[],
-        logging_observables=[],
-        grad_or_loss_fn=lambda x: x,
+        logging_observables=(),
+        grad_or_loss_fn=lambda *args: (args, []),
     )
 
-    # simulate getting the observables
-    obj._obtained_observables = obtained_observables
-
-    assert obj.is_ready() == expected
+    output = obj.calculate(observables)
+    assert output.is_ready == expected
 
 
-@pytest.mark.parametrize(
-    ("required_observables", "needed_observables", "update_collection", "expected_obtained", "expected_needed"),
-    [
-        (["a", "b"], ["a", "b"], [("a", {"test": 1.0})], [("a", {"test": 1.0})], ["b"]),
-        (["a"], ["a"], [("a", {"test": 1.0})], [("a", {"test": 1.0})], []),
-    ],
-)
-def test_objective_update(
-    required_observables: list[str],
-    needed_observables: list[str],
-    update_collection: list[tuple[str, str]],
-    expected_obtained: list[tuple[str, float]],
-    expected_needed: list[str],
-) -> None:
-    """Test the update method of Objective."""
-
-    if not data_dir.exists():
-        data_dir.mkdir()
-
-    updates = []
-    for update in update_collection:
-        observable, data = update
-        updates.append(([observable], [data]))
-
+def test_objective_compute() -> None:
+    """Test the compute method of Objective."""
     obj = o.Objective(
         name="test",
-        required_observables=required_observables,
-        needed_observables=needed_observables,
-        logging_observables=[],
-        grad_or_loss_fn=lambda x: x,
-    )
-
-    obj.update(updates)
-
-    for fname in data_dir.iterdir():
-        fname.unlink()
-    data_dir.rmdir()
-
-    assert obj.obtained_observables() == expected_obtained
-    assert obj.needed_observables() == expected_needed
-
-
-def test_objective_calculate() -> None:
-    """Test the calculate method of Objective."""
-    obj = o.Objective(
-        name="test",
-        required_observables=["a", "b", "c"],
-        needed_observables=["a", "b"],
-        logging_observables=[],
+        required_observables=("a", "b", "c"),
+        logging_observables=(),
         grad_or_loss_fn=mock_return_function((1.0, [("test", 0.0)])),
     )
 
-    # simulate getting the observables
-    obj._obtained_observables = [
-        ("a", 1.0),
-        ("b", 2.0),
-        ("c", 3.0),
-    ]
+    observables = {
+        "a": 1.0,
+        "b": 2.0,
+        "c": 3.0,
+    }
 
-    # simulate the calculate
-    result = obj.calculate()
+    output = obj.calculate(observables)
 
-    assert result == 1.0
+    assert output.is_ready
+    assert output.grads == 1.0
+    assert output.needs_update == ()
 
 
-def test_objective_post_step() -> None:
+def test_objective_compute_returns_needs_update() -> None:
+    """Test that compute returns needs_update when observables are missing."""
     obj = o.Objective(
         name="test",
-        required_observables=["a", "b", "c"],
-        needed_observables=["a", "b"],
-        logging_observables=[],
-        grad_or_loss_fn=lambda x: x,
+        required_observables=("a", "b", "c"),
+        logging_observables=(),
+        grad_or_loss_fn=lambda x: (x, []),
     )
 
-    # simulate getting the observables
-    obj._obtained_observables = [
-        ("c", 3.0),
-    ]
+    observables = {"a": 1.0}
 
-    # simulate the post step
-    obj.post_step(opt_params={})
+    output = obj.calculate(observables)
 
-    assert obj._obtained_observables == []
-    assert obj.needed_observables() == ["a", "b", "c"]
+    assert not output.is_ready
+    assert set(output.needs_update) == {"b", "c"}
 
 
 @pytest.mark.parametrize(
@@ -321,100 +251,140 @@ def test_compute_loss(
 
 
 @pytest.mark.parametrize(
-    ("energy_fn", "opt_params", "beta", "n_equilibration_steps", "missing_arg"),
+    ("energy_fn", "beta", "n_equilibration_steps", "missing_arg"),
     [
-        (None, {}, 1.0, 1, "energy_fn"),
-        (lambda _: mock_return_function(np.array([1, 2, 3])), None, 1.0, 1, "opt_params"),
-        (lambda _: mock_return_function(np.array([1, 2, 3])), {"a": 1}, None, 1, "beta"),
-        (lambda _: mock_return_function(np.array([1, 2, 3])), {"a": 1}, 1.0, None, "n_equilibration_steps"),
+        (None, 1.0, 1, "energy_fn"),
+        (lambda _: mock_return_function(np.array([1, 2, 3])), None, 1, "beta"),
+        (lambda _: mock_return_function(np.array([1, 2, 3])), 1.0, None, "n_equilibration_steps"),
     ],
 )
 def test_difftreobjective_init_raises(
     energy_fn: Callable[[jdna_types.Params], Callable[[np.ndarray], np.ndarray]],
-    opt_params: jdna_types.Params,
     beta: float,
     n_equilibration_steps: int,
     missing_arg: str,
 ) -> None:
-    required_observables = ["a"]
-    needed_observables = ["b"]
-    logging_observables = ["c"]
+    required_observables = ("a",)
+    logging_observables = ("c",)
     grad_or_loss_fn = lambda x: x
 
     with pytest.raises(ValueError, match=o.ERR_MISSING_ARG.format(missing_arg=missing_arg)):
         o.DiffTReObjective(
             name="test",
             required_observables=required_observables,
-            needed_observables=needed_observables,
             logging_observables=logging_observables,
             grad_or_loss_fn=grad_or_loss_fn,
             energy_fn=energy_fn,
-            opt_params=opt_params,
             beta=beta,
             n_equilibration_steps=n_equilibration_steps,
         )
 
 
-def test_difftreobjective_calculate() -> None:
-    """Test the calculate method of DifftreObjective."""
+def test_difftreobjective_compute_raises_without_opt_params() -> None:
+    """Test that DiffTReObjective.compute raises when opt_params is not provided."""
     obj = o.DiffTReObjective(
         name="test",
-        required_observables=["test"],
-        needed_observables=["test"],
-        logging_observables=[],
+        required_observables=("test",),
+        logging_observables=(),
         grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
         energy_fn=make_mock_energy_fn(jnp.ones(100)),
-        opt_params={"test": 1.0},
         beta=1.0,
         n_equilibration_steps=10,
     )
 
-    # simulate getting the observables
-    obj._obtained_observables = [
-        (
-            "test",
-            jdna_sio.SimulatorTrajectory(
-                rigid_body=jax_md.rigid_body.RigidBody(
-                    center=np.arange(110),
-                    orientation=jax_md.rigid_body.Quaternion(
-                        vec=np.arange(440).reshape(110, 4),
-                    ),
-                )
-            ),
-        ),
-    ]
+    observables = {"test": 1.0}
+    state = {"opt_steps": 1}
 
-    # simulate the calculate
-    expected_grad = {"test": jnp.array(0.0)}
-    actual_grad = obj.calculate()
-
-    assert actual_grad == expected_grad
+    with pytest.raises(TypeError, match="opt_params"):
+        obj.calculate(observables, **state)  # opt_params not provided
 
 
-def test_difftreobjective_post_step(mock_energy_fn) -> None:
-    """test thge post_step method of DiffTReObjective."""
+def test_difftreobjective_compute() -> None:
+    """Test the compute method of DiffTReObjective."""
     obj = o.DiffTReObjective(
         name="test",
-        required_observables=["test"],
-        needed_observables=["test"],
-        logging_observables=[],
-        grad_or_loss_fn=mock_return_function((1.0, 0.0)),
-        energy_fn=mock_energy_fn,
-        opt_params={"test": 1.0},
+        required_observables=("test",),
+        logging_observables=(),
+        grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
+        energy_fn=make_mock_energy_fn(jnp.ones(100)),
         beta=1.0,
         n_equilibration_steps=10,
     )
 
-    mock_traj = ("test", "some array data")
-    # simulate getting the observables
-    obj._obtained_observables = [
-        ("test", "some array data"),
-        ("loss", 1.0),
-    ]
+    # Create a trajectory observable
+    trajectory = jdna_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=np.arange(110),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=np.arange(440).reshape(110, 4),
+            ),
+        )
+    )
 
-    # run the post step
-    new_params = {"test": 2.0}
-    obj.post_step(opt_params=new_params)
+    observables = {"test": trajectory}
+    state = {"opt_steps": 1}
+    opt_params = {"test": 1.0}
 
-    assert obj._obtained_observables == [mock_traj]
-    assert obj._opt_params == new_params
+    output = obj.calculate(observables, **state, opt_params=opt_params)
+
+    expected_grad = {"test": jnp.array(0.0)}
+    assert output.is_ready
+    assert output.grads == expected_grad
+    assert output.needs_update == ()
+
+
+def test_difftreobjective_compute_returns_needs_update_when_missing() -> None:
+    """Test that DiffTReObjective returns needs_update when observables are missing."""
+    obj = o.DiffTReObjective(
+        name="test",
+        required_observables=("test",),
+        logging_observables=(),
+        grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
+        energy_fn=make_mock_energy_fn(jnp.ones(100)),
+        beta=1.0,
+        n_equilibration_steps=10,
+    )
+
+    # Empty observables - needs trajectory
+    observables = {}
+    state = {"opt_steps": 1}
+    opt_params = {"test": 1.0}
+
+    output = obj.calculate(observables, **state, opt_params=opt_params)
+
+    assert not output.is_ready
+    assert "test" in output.needs_update
+
+
+def test_difftreobjective_state_preserved() -> None:
+    """Test that DiffTReObjective preserves reference states in state."""
+    obj = o.DiffTReObjective(
+        name="test",
+        required_observables=("test",),
+        logging_observables=(),
+        grad_or_loss_fn=mock_return_function((1.0, (("measured", 1.0), {}))),
+        energy_fn=make_mock_energy_fn(jnp.ones(100)),
+        beta=1.0,
+        n_equilibration_steps=10,
+    )
+
+    # Create a trajectory observable
+    trajectory = jdna_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=np.arange(110),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=np.arange(440).reshape(110, 4),
+            ),
+        )
+    )
+
+    observables = {"test": trajectory}
+    state = {"opt_steps": 1}
+    opt_params = {"test": 1.0}
+
+    output = obj.calculate(observables, **state, opt_params=opt_params)
+
+    # Output state should contain reference_states and reference_energies
+    assert output.is_ready
+    assert "reference_opt_params" in output.state
+    assert output.state["reference_opt_params"] is not None
