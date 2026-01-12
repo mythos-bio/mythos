@@ -1,7 +1,6 @@
 """LAMMPS-based OxDNA simulator for mythos."""
 
 import re
-import subprocess
 from dataclasses import field
 from pathlib import Path
 from typing import Any
@@ -14,6 +13,7 @@ from mythos.energy.base import EnergyFunction
 from mythos.input.trajectory import NucleotideState, Trajectory, validate_box_size
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.simulators.io import SimulatorTrajectory
+from mythos.utils.command import run_command
 from mythos.utils.types import Params
 
 
@@ -47,14 +47,7 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
     @override
     def run_simulation(self, input_dir: Path, params: Params, seed: int|None = None) -> SimulatorOutput:
         self._replace_parameters(input_dir, params, seed)
-        with input_dir.joinpath("lmp.out").open("a") as f:
-            subprocess.check_call(
-                ["lmp", "-in", self.input_file_name],
-                cwd=input_dir,
-                shell=False,
-                stdout=f,
-                stderr=f
-            )
+        run_command(["lmp", "-in", self.input_file_name], cwd=input_dir, prefix="lammps")
         traj = _read_lammps_output(input_dir.joinpath("trajectory.dat"))
 
         return SimulatorOutput(

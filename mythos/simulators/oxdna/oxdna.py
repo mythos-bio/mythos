@@ -6,7 +6,6 @@ Run an mythos simulation using an oxDNA sampler.
 import logging
 import os
 import shutil
-import subprocess
 import typing
 from dataclasses import field
 from pathlib import Path
@@ -19,6 +18,7 @@ import mythos.simulators.io as jd_sio
 import mythos.simulators.oxdna.utils as oxdna_utils
 from mythos.energy.base import EnergyFunction
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
+from mythos.utils.helpers import run_command
 from mythos.utils.types import Params, oxDNASimulatorType
 
 ERR_OXDNA_NOT_FOUND = "OXDNA binary not found at: {}"
@@ -134,18 +134,10 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
             if file := input_config.get(output, None):
                 input_dir.joinpath(file).unlink(missing_ok=True)
 
-        std_out_file = input_dir / "oxdna.out.log"
-        std_err_file = input_dir / "oxdna.err.log"
         logger.info("Starting oxDNA simulation")
-        logger.debug(
-            "oxDNA std_out->%s, std_err->%s",
-            std_out_file,
-            std_err_file,
-        )
-        with std_out_file.open("w") as f_std, std_err_file.open("w") as f_err:
-            cmd = [binary_path, "input"]
-            logger.debug("running command: %s", cmd)
-            subprocess.check_call(cmd, stdout=f_std, stderr=f_err, cwd=input_dir)
+        cmd = [binary_path, "input"]
+        logger.debug("running command: %s", cmd)
+        run_command(cmd, cwd=input_dir, log_prefix="oxdna")
         logger.info("oxDNA simulation complete")
 
         return SimulatorOutput(observables=[self._read_trajectory(input_dir)])
@@ -184,35 +176,19 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
 
         input_config = input_config or jd_oxdna.read(input_dir / "input")
 
-        std_out = build_dir / "mythos.cmake.std.log"
-        std_err = build_dir / "mythos.cmake.err.log"
-
         if not (build_dir / "CMakeLists.txt").exists():
-            with std_out.open("w") as f_std, std_err.open("w") as f_err:
-                cmd = [cmake_bin, self.source_path, f"-DCMAKE_CXX_FLAGS=--include {model_h}"]
-                if input_config["backend"] == "CUDA":
-                    cmd = [*cmd, "-DCUDA=ON", "-DCUDA_COMMON_ARCH=OFF"]
-                logger.debug("Attempting cmake using (std_out->%s, std_err->%s): %s", std_out, std_err, cmd)
-                subprocess.check_call(cmd, shell=False, cwd=build_dir, stdout=f_std, stderr=f_err)
-
+            cmd = [cmake_bin, self.source_path, f"-DCMAKE_CXX_FLAGS=--include {model_h}"]
+            if input_config["backend"] == "CUDA":
+                cmd = [*cmd, "-DCUDA=ON", "-DCUDA_COMMON_ARCH=OFF"]
+            logger.debug("Attempting cmake using: %s", cmd)
+            run_command(cmd, cwd=build_dir, log_prefix="oxdna.cmake")
             logger.debug("cmake completed")
 
         # rebuild the binary
-        std_out = build_dir / "mythos.make.std.log"
-        std_err = build_dir / "mythos.make.err.log"
-        logger.debug(
-            "running make with %d processes: std_out->%s, std_err->%s",
-            self.n_build_threads,
-            std_out,
-            std_err,
+        logger.debug("running make with %d processes", self.n_build_threads)
+        run_command(
+            [make_bin, f"-j{self.n_build_threads}", "clean", "oxDNA"],  # clean since model.h is not tracked
+            cwd=build_dir,
+            log_prefix="oxdna.make",
         )
-        with std_out.open("w") as f_std, std_err.open("w") as f_err:
-            subprocess.check_call(
-                [make_bin, f"-j{self.n_build_threads}", "clean", "oxDNA"],  # clean since model.h is not tracked
-                shell=False,
-                cwd=build_dir,
-                stdout=f_std,
-                stderr=f_err,
-            )
-
         logger.info("oxDNA binary rebuilt")
