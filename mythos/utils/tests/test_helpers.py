@@ -86,9 +86,16 @@ def test_tail_file(lines: list[str], n: int, expected: str, tmp_path: Path):
     assert result == expected
 
 
-def test_run_command_success(tmp_path: Path):
+def test_run_command_success(tmp_path: Path, monkeypatch):
     """Test that run_command succeeds for a valid command."""
-    jdh.run_command(["echo", "hello"], cwd=tmp_path, log_prefix="test")
+
+    def mock_check_call(cmd, cwd, shell, stdout, stderr):
+        stdout.write("hello\n")
+        stdout.flush()
+
+    monkeypatch.setattr(subprocess, "check_call", mock_check_call)
+
+    jdh.run_command(["fake_command"], cwd=tmp_path, log_prefix="test")
     out_file = tmp_path / "test.out.log"
     assert out_file.exists()
     assert out_file.read_text().strip() == "hello"
