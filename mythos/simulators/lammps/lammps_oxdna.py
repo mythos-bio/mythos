@@ -13,7 +13,7 @@ from mythos.energy.base import EnergyFunction
 from mythos.input.trajectory import NucleotideState, Trajectory, validate_box_size
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.simulators.io import SimulatorTrajectory
-from mythos.utils.command import run_command
+from mythos.utils.helpers import run_command
 from mythos.utils.types import Params
 
 
@@ -47,7 +47,7 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
     @override
     def run_simulation(self, input_dir: Path, params: Params, seed: int|None = None) -> SimulatorOutput:
         self._replace_parameters(input_dir, params, seed)
-        run_command(["lmp", "-in", self.input_file_name], cwd=input_dir, prefix="lammps")
+        run_command(["lmp", "-in", self.input_file_name], cwd=input_dir, log_prefix="lammps")
         traj = _read_lammps_output(input_dir.joinpath("trajectory.dat"))
 
         return SimulatorOutput(
