@@ -186,15 +186,33 @@ def create_stretch_torsion_objectives(
     # Conversion factor from simulation units to nm (oxDNA length unit is 0.8518 nm)
     length_conversion = 0.8518
 
+    # Precompute force/torque values and segment mappings (constants for differentiation)
+    stretch_forces = jnp.array(STRETCH_FORCES, dtype=jnp.float64)
+    twist_torques = jnp.array(TWIST_TORQUES, dtype=jnp.float64)
+    force_to_segment = {f: i for i, f in enumerate(STRETCH_FORCES)}
+    torque_to_segment = {t: i for i, t in enumerate(TWIST_TORQUES)}
+    n_force_segments = len(STRETCH_FORCES)
+    n_torque_segments = len(TWIST_TORQUES)
+
     def compute_moduli_from_traj(
         traj: Any, weights: jnp.ndarray
     ) -> tuple[float, float, float]:
         """Compute (s_eff, c, g) moduli from trajectory with force/torque metadata."""
-        # Pre-compute metadata arrays as constants (outside gradient)
-        forces_arr = jnp.array([md.get("force", 0.0) for md in traj.metadata])
-        torques_arr = jnp.array([md.get("torque", 0.0) for md in traj.metadata])
+        # Pre-compute metadata arrays as constants
+        forces_arr = jnp.array([md["force"] for md in traj.metadata])
+        torques_arr = jnp.array([md["torque"] for md in traj.metadata])
 
-        # Create boolean masks for filtering (these are constants, not differentiable)
+        # Precompute segment indices from the arrays (constants, not traced)
+        force_segment_ids = jnp.array(
+            [force_to_segment[f] for f in forces_arr],
+            dtype=jnp.int32,
+        )
+        torque_segment_ids = jnp.array(
+            [torque_to_segment[t] for t in torques_arr],
+            dtype=jnp.int32,
+        )
+
+        # Create boolean masks for filtering (constants, not differentiable)
         stretch_mask = torques_arr == stretch_torque  # held torque for stretch experiments
         twist_mask = forces_arr == twist_force  # held force for twist experiments
 
@@ -202,31 +220,26 @@ def create_stretch_torsion_objectives(
         all_extensions = extension_obs(traj) * length_conversion
         all_twists = twist_obs(traj)
 
-        # For stretch experiments: weighted average extension per force level
-        unique_forces = jnp.unique(forces_arr[stretch_mask])
-        force_extensions = []
-        for f in unique_forces:
-            mask = stretch_mask & (forces_arr == f)
-            w = jnp.where(mask, weights, 0.0)
-            w = w / (jnp.sum(w) + 1e-10)  # normalize within this group
-            force_extensions.append(jnp.sum(w * all_extensions))
-        force_extensions = jnp.array(force_extensions)
+        # For stretch experiments: weighted average extension per force level using segment_sum
+        # Zero out weights for non-stretch states, then aggregate by force segment
+        stretch_weights = jnp.where(stretch_mask, weights, 0.0)
+        weighted_stretch_ext = stretch_weights * all_extensions
+        force_ext_sum = jax.ops.segment_sum(weighted_stretch_ext, force_segment_ids, num_segments=n_force_segments)
+        force_weight_sum = jax.ops.segment_sum(stretch_weights, force_segment_ids, num_segments=n_force_segments)
+        force_extensions = force_ext_sum / (force_weight_sum + 1e-10)
 
         # For twist experiments: weighted average extension and twist per torque level
-        unique_torques = jnp.unique(torques_arr[twist_mask])
-        torque_extensions = []
-        torque_twists = []
-        for t in unique_torques:
-            mask = twist_mask & (torques_arr == t)
-            w = jnp.where(mask, weights, 0.0)
-            w = w / (jnp.sum(w) + 1e-10)
-            torque_extensions.append(jnp.sum(w * all_extensions))
-            torque_twists.append(jnp.sum(w * all_twists))
-        torque_extensions = jnp.array(torque_extensions)
-        torque_twists = jnp.array(torque_twists)
+        twist_weights = jnp.where(twist_mask, weights, 0.0)
+        weighted_twist_ext = twist_weights * all_extensions
+        weighted_twist_tw = twist_weights * all_twists
+        torque_ext_sum = jax.ops.segment_sum(weighted_twist_ext, torque_segment_ids, num_segments=n_torque_segments)
+        torque_twist_sum = jax.ops.segment_sum(weighted_twist_tw, torque_segment_ids, num_segments=n_torque_segments)
+        torque_weight_sum = jax.ops.segment_sum(twist_weights, torque_segment_ids, num_segments=n_torque_segments)
+        torque_extensions = torque_ext_sum / (torque_weight_sum + 1e-10)
+        torque_twists = torque_twist_sum / (torque_weight_sum + 1e-10)
 
         return stretch_torsion(
-            unique_forces, force_extensions, unique_torques, torque_extensions, torque_twists
+            stretch_forces, force_extensions, twist_torques, torque_extensions, torque_twists
         )
 
     def stretch_modulus_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
