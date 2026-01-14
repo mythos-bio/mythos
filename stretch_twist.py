@@ -186,11 +186,9 @@ def create_stretch_torsion_objectives(
     # Conversion factor from simulation units to nm (oxDNA length unit is 0.8518 nm)
     length_conversion = 0.8518
 
-    # Precompute force/torque values and segment mappings (constants for differentiation)
+    # Precompute force/torque values (constants for differentiation)
     stretch_forces = jnp.array(STRETCH_FORCES, dtype=jnp.float64)
     twist_torques = jnp.array(TWIST_TORQUES, dtype=jnp.float64)
-    force_to_segment = {f: i for i, f in enumerate(STRETCH_FORCES)}
-    torque_to_segment = {t: i for i, t in enumerate(TWIST_TORQUES)}
     n_force_segments = len(STRETCH_FORCES)
     n_torque_segments = len(TWIST_TORQUES)
 
@@ -202,15 +200,9 @@ def create_stretch_torsion_objectives(
         forces_arr = jnp.array([md["force"] for md in traj.metadata])
         torques_arr = jnp.array([md["torque"] for md in traj.metadata])
 
-        # Precompute segment indices from the arrays (constants, not traced)
-        force_segment_ids = jnp.array(
-            [force_to_segment[f] for f in forces_arr],
-            dtype=jnp.int32,
-        )
-        torque_segment_ids = jnp.array(
-            [torque_to_segment[t] for t in torques_arr],
-            dtype=jnp.int32,
-        )
+        # Compute segment indices using searchsorted (forces/torques are sorted)
+        force_segment_ids = jnp.searchsorted(stretch_forces, forces_arr).astype(jnp.int32)
+        torque_segment_ids = jnp.searchsorted(twist_torques, torques_arr).astype(jnp.int32)
 
         # Create boolean masks for filtering (constants, not differentiable)
         stretch_mask = torques_arr == stretch_torque  # held torque for stretch experiments
