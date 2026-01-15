@@ -19,7 +19,7 @@ import mythos.simulators.oxdna.utils as oxdna_utils
 from mythos.energy.base import EnergyFunction
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.utils.helpers import run_command
-from mythos.utils.types import Params, oxDNASimulatorType
+from mythos.utils.types import Params
 
 ERR_OXDNA_NOT_FOUND = "OXDNA binary not found at: {}"
 ERR_MISSING_REQUIRED_KEYS = "Missing required keys: {}"

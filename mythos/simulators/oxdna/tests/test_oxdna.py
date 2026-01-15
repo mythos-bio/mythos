@@ -10,7 +10,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from unittest.mock import MagicMock
 
-import mythos.utils.types as typ
 import pytest
 from mythos.input import oxdna_input
 from mythos.simulators import oxdna
@@ -205,7 +204,6 @@ def test_oxdna_run_and_build_from_source(monkeypatch, tmp_path, opt_params) -> N
 
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
-        sim_type=typ.oxDNASimulatorType.DNA1,
         energy_fn=MockEF(params={"eps_backbone": 0.5}),
         source_path=fake_src.parent,
     )
