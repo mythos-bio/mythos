@@ -22,6 +22,7 @@ dependencies = [
     "tqdm",
     "ipywidgets",
     "plotly",
+    "mdanalysis",
 ]
 
 [project.optional-dependencies]

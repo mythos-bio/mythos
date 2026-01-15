@@ -1,0 +1,48 @@
+; GROMACS test input file
+; This is a comment line
+
+integrator = md
+dt = 0.002
+nsteps = 50000
+
+; Temperature coupling
+tcoupl = v-rescale
+tc-grps = System
+tau-t = 0.1
+ref-t = 300
+
+; Pressure coupling
+pcoupl = no
+
+; Output control
+nstxout = 5000
+nstvout = 5000
+nstenergy = 500
+nstlog = 500
+
+; Neighbor searching
+cutoff-scheme = Verlet
+nstlist = 10
+ns-type = grid
+pbc = xyz
+rlist = 1.0
+
+; Electrostatics
+coulombtype = PME
+rcoulomb = 1.0
+
+; VdW
+vdwtype = Cut-off
+rvdw = 1.0
+
+; Constraints
+constraints = h-bonds
+
+; Booleans
+gen-vel = yes
+gen-temp = 300
+gen-seed = -1
+
+; More booleans
+continuation = no
+pcouple = false
