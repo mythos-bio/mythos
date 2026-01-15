@@ -19,7 +19,7 @@ import mythos.simulators.oxdna.utils as oxdna_utils
 from mythos.energy.base import EnergyFunction
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.utils.helpers import run_command
-from mythos.utils.types import Params, oxDNASimulatorType
+from mythos.utils.types import Params
 
 ERR_OXDNA_NOT_FOUND = "OXDNA binary not found at: {}"
 ERR_MISSING_REQUIRED_KEYS = "Missing required keys: {}"
@@ -55,7 +55,6 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
 
     Arguments:
         input_dir: Path to the directory containing the oxDNA input file.
-        sim_type: The type of oxDNA simulation to run.
         energy_fn: The energy function to use for default parameter updates.
         n_build_threads: Number of threads to use when building oxDNA from
             source.
@@ -81,7 +80,6 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
             performed on the provided key-value pairs.
     """
 
-    sim_type: oxDNASimulatorType
     energy_fn: EnergyFunction
     n_build_threads: int = 4
     logger_config: dict[str, typing.Any] | None = None
