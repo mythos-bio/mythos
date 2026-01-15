@@ -1,10 +1,12 @@
 """Tests for oxDNA simulator."""
 
+import dataclasses
 import importlib
 import os
 import shutil
 import subprocess
 import uuid
+from dataclasses import dataclass, field
 from pathlib import Path
 from unittest.mock import MagicMock
 
@@ -42,7 +44,7 @@ def setup_test_dir(test_dir: Path | None = None, add_input: bool = True):  # noq
         test_dir.mkdir(parents=True)
     if add_input:
         with (test_dir / "input").open("w") as f:
-            f.write("trajectory_file = test.conf\ntopology = test.top\nT=300K\n")
+            f.write("backend = CPU\ntrajectory_file = test.conf\ntopology = test.top\nT=300K\n")
 
         shutil.copyfile(
             "data/test-data/dna1/simple-helix/generated.top",
@@ -188,6 +190,36 @@ def test_oxdna_run(mock_energy_fn, monkeypatch):
     )
     sim.run()
     tear_down_test_dir(test_dir)
+
+
+@pytest.mark.parametrize("opt_params", [None, {"delta_backbone": 1.0}])
+def test_oxdna_run_and_build_from_source(monkeypatch, tmp_path, opt_params) -> None:
+    """Test for oxdna run from source with and without params."""
+    setup_test_dir(tmp_path, add_input=True)
+    # mock for the simulation function to "write" a trajectory file
+    monkeypatch.setattr(subprocess, "check_call", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
+    @dataclass
+    class MockEF:
+        params: dict = field(default_factory=dict)
+        def with_params(self, new_params):
+            new_params = {**self.params, **new_params}
+            return dataclasses.replace(self, params=new_params)
+        def params_dict(self, **_kwargs):
+            return self.params
+
+    fake_src = tmp_path.joinpath("_source/src")
+    fake_src.mkdir(parents=True, exist_ok=True)
+    fake_src.joinpath("model.h").write_text("#define FENE_EPS 1.0\n#define FENE_DELTA 3.0\n")
+
+    sim = oxdna.oxDNASimulator(
+        input_dir=tmp_path,
+        sim_type=typ.oxDNASimulatorType.DNA1,
+        energy_fn=MockEF(params={"eps_backbone": 0.5}),
+        source_path=fake_src.parent,
+    )
+    traj = sim.run(opt_params=opt_params)
+    assert isinstance(traj, SimulatorOutput)
 
 
 def test_oxdna_build(monkeypatch, tmp_path) -> None:
