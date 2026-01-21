@@ -1,6 +1,8 @@
-"""Full reparameterization of oxDNA1"""
+"""Full reparameterization of oxDNA1."""
 
 import argparse
+import copy
+import json
 import logging
 from collections.abc import Callable
 from dataclasses import InitVar
@@ -37,32 +39,65 @@ logging.basicConfig(level=logging.INFO)
 
 # Type alias for DiffTRe loss function return type
 LossOutput = tuple[float, tuple[tuple[str, float], dict]]
+NM_PER_OXDNA_LENGTH_UNIT = 0.8518  # 1 oxDNA length unit = 0.8518 nm
 
-STRETCH_FORCES = [0, 2, 4, 6, 8, 10, 15, 20, 25, 30, 35, 40]  # pN
-STRETCH_TORQUE = 0  # pN·nm
-TARGET_STRETCH_MODULUS = 1000.0  # pN
-TWIST_TORQUES = [5, 10, 15, 20, 25, 30]
-TWIST_FORCE = 2  # pN
-TARGET_TORSION_MODULUS = 460  # pN·nm^2
-TARGET_TWIST_STRETCH_COUPLING = -90  # pN·nm
+# Default configuration for all objectives and simulators
+DEFAULT_CONFIG: dict[str, Any] = {
+    "mechanical": {
+        "system_dir": "data/full_reparam_oxdna1/mechanical/lammps/40bp_duplex",
+        "stretch_forces": [0, 2, 4, 6, 8, 10, 15, 20, 25, 30, 35, 40],  # pN
+        "stretch_torque": 0,  # pN·nm
+        "twist_torques": [5, 10, 15, 20, 25, 30],
+        "twist_force": 2,  # pN
+        "n_replicas": 1,
+        "n_steps": 1_250_000,
+        "targets": {
+            "stretch_modulus": 1000.0,  # pN
+            "torsional_modulus": 460.0,  # pN·nm^2
+            "twist_stretch_coupling": -90.0,  # pN·nm
+        },
+    },
+    "structural": {
+        "system_dir": "data/full_reparam_oxdna1/structural/20bp_duplex",
+        "n_replicas": 1,
+        "n_steps": 1_000_000,
+        "snapshot_interval": 10_000,
+        "sigma_backbone": 0.70,  # oxDNA1 default excluded volume sigma
+        "targets": {
+            "helix_diameter": 20.0,  # Angstroms
+            "helical_pitch": 3.57,  # nm
+            "propeller_twist": -12.6,  # degrees
+            "rise": 0.34,  # nm
+        },
+    },
+    "persistence": {
+        "system_dir": "data/full_reparam_oxdna1/mechanical/60bp_duplex",
+        "n_replicas": 1,
+        "n_steps": 1_000_000,
+        "snapshot_interval": 10_000,
+        "n_equilibration_steps": 20,
+        "targets": {
+            "persistence_length": 50.0,  # nm
+        },
+    },
+}
 
-# Structural property targets (20bp duplex at 300K)
-TARGET_HELIX_DIAMETER = 20.0  # Angstroms (experimental: ~20 Å)
-TARGET_HELICAL_PITCH = 3.57  # nm (experimental: 3.4-3.6 nm)
-TARGET_PROPELLER_TWIST = -12.6  # degrees
-TARGET_RISE = 0.34  # nm (3.4 Å per base pair)
-SIGMA_BACKBONE = 0.70  # oxDNA1 default excluded volume sigma for backbone
 
-# Persistence length target (60bp duplex)
-TARGET_PERSISTENCE_LENGTH = 50.0  # nm
+def load_config(config_path: Path | None = None) -> dict[str, Any]:
+    def deep_merge(base: dict, overrides: dict) -> dict:
+        for key, value in overrides.items():
+            if isinstance(base.get(key), dict):
+                deep_merge(base[key], value)
+            elif key in base:
+                base[key] = value
+        return base
 
-# Data directory for full reparameterization systems
-DATA_ROOT = Path("data/full_reparam_oxdna1")
-MECHANICAL_DIR = DATA_ROOT / "mechanical"
-MECHANICAL_SYSTEM_DIR = MECHANICAL_DIR / "lammps" / "40bp_duplex"
-PERSISTENCE_SYSTEM_DIR = MECHANICAL_DIR / "60bp_duplex"
-STRUCTURAL_DIR = DATA_ROOT / "structural"
-STRUCTURAL_SYSTEM_DIR = STRUCTURAL_DIR / "20bp_duplex"
+    config = copy.deepcopy(DEFAULT_CONFIG)
+    if config_path is not None:
+        with config_path.open() as f:
+            overrides = json.load(f)
+        deep_merge(config, overrides)
+    return config
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -83,16 +118,16 @@ class LAMMPSStretchSimulator(LAMMPSoxDNASimulator):
 def create_stretch_twist_simulators(
     input_dir: Path,
     energy_fn: EnergyFunction,
-    stretch_forces: list[float] | None = None,
-    stretch_torque: float = STRETCH_TORQUE,
-    twist_torques: list[float] | None = None,
-    twist_force: float = TWIST_FORCE,
+    config: dict[str, Any],
     variables: dict[str, Any] | None = None,
-    n_replicas: int = 1,
     **kwargs: Any,
 ) -> list[LAMMPSStretchSimulator]:
-    stretch_forces = stretch_forces or STRETCH_FORCES
-    twist_torques = twist_torques or TWIST_TORQUES
+    mech_cfg = config["mechanical"]
+    stretch_forces = mech_cfg["stretch_forces"]
+    stretch_torque = mech_cfg["stretch_torque"]
+    twist_torques = mech_cfg["twist_torques"]
+    twist_force = mech_cfg["twist_force"]
+    n_replicas = mech_cfg["n_replicas"]
     variables = variables or {}
     config_pairs = [(stretch_torque, f) for f in stretch_forces] + [(t, twist_force) for t in twist_torques]
     return [
@@ -149,12 +184,17 @@ def create_stretch_torsion_objectives(
     top: jdna_top.Topology,
     displacement_fn: Callable,
     kt: float,
-    stretch_torque: float = STRETCH_TORQUE,
-    twist_force: float = TWIST_FORCE,
-    target_stretch_modulus: float = TARGET_STRETCH_MODULUS,
-    target_torsion_modulus: float = TARGET_TORSION_MODULUS,
-    target_twist_stretch_coupling: float = TARGET_TWIST_STRETCH_COUPLING,
+    config: dict[str, Any],
 ) -> list[jdna_objective.DiffTReObjective]:
+    mech_cfg = config["mechanical"]
+    stretch_torque = mech_cfg["stretch_torque"]
+    twist_force = mech_cfg["twist_force"]
+    stretch_forces_list = mech_cfg["stretch_forces"]
+    twist_torques_list = mech_cfg["twist_torques"]
+    target_stretch_modulus = mech_cfg["targets"]["stretch_modulus"]
+    target_torsion_modulus = mech_cfg["targets"]["torsional_modulus"]
+    target_twist_stretch_coupling = mech_cfg["targets"]["twist_stretch_coupling"]
+
     transform_fn = energy_fn.energy_fns[0].transform_fn
     n_nucs_per_strand = top.n_nucleotides // 2
 
@@ -170,14 +210,11 @@ def create_stretch_torsion_objectives(
     twist_obs = TwistXY(rigid_body_transform_fn=transform_fn, quartets=quartets, displacement_fn=displacement_fn)
     beta = jnp.array(1 / kt, dtype=jnp.float64)
 
-    # Conversion factor from simulation units to nm (oxDNA length unit is 0.8518 nm)
-    length_conversion = 0.8518
-
     # Precompute force/torque values (constants for differentiation)
-    stretch_forces = jnp.array(STRETCH_FORCES, dtype=jnp.float64)
-    twist_torques = jnp.array(TWIST_TORQUES, dtype=jnp.float64)
-    n_force_segments = len(STRETCH_FORCES)
-    n_torque_segments = len(TWIST_TORQUES)
+    stretch_forces = jnp.array(stretch_forces_list, dtype=jnp.float64)
+    twist_torques = jnp.array(twist_torques_list, dtype=jnp.float64)
+    n_force_segments = len(stretch_forces_list)
+    n_torque_segments = len(twist_torques_list)
 
     def compute_moduli_from_traj(
         traj: Any, weights: jnp.ndarray
@@ -194,7 +231,7 @@ def create_stretch_torsion_objectives(
         twist_mask = forces_arr == twist_force  # held force for twist experiments
 
         # Compute observables for all states once
-        all_extensions = extension_obs(traj) * length_conversion
+        all_extensions = extension_obs(traj) * NM_PER_OXDNA_LENGTH_UNIT
         all_twists = twist_obs(traj)
 
         # For stretch experiments: weighted average extension per force level using segment_sum
@@ -272,11 +309,13 @@ def create_stretch_torsion_objectives(
 def create_structural_simulators(
     input_dir: Path,
     energy_fn: EnergyFunction,
-    n_steps: int = 1_000_000,
-    snapshot_interval: int = 10_000,
-    n_replicas: int = 1,
+    config: dict[str, Any],
     **kwargs: Any,
 ) -> list[oxDNASimulator]:
+    struct_cfg = config["structural"]
+    n_steps = struct_cfg["n_steps"]
+    snapshot_interval = struct_cfg["snapshot_interval"]
+    n_replicas = struct_cfg["n_replicas"]
     overrides = {"steps": n_steps, "print_conf_interval": snapshot_interval, "print_energy_interval": snapshot_interval}
     return [
         oxDNASimulator(
@@ -303,12 +342,15 @@ def create_structural_objectives(
     top: jdna_top.Topology,
     displacement_fn: Callable,
     kt: float,
-    target_helix_diameter: float = TARGET_HELIX_DIAMETER,
-    target_helical_pitch: float = TARGET_HELICAL_PITCH,
-    target_propeller_twist: float = TARGET_PROPELLER_TWIST,
-    target_rise: float = TARGET_RISE,
-    sigma_backbone: float = SIGMA_BACKBONE,
+    config: dict[str, Any],
 ) -> list[jdna_objective.DiffTReObjective]:
+    struct_cfg = config["structural"]
+    target_helix_diameter = struct_cfg["targets"]["helix_diameter"]
+    target_helical_pitch = struct_cfg["targets"]["helical_pitch"]
+    target_propeller_twist = struct_cfg["targets"]["propeller_twist"]
+    target_rise = struct_cfg["targets"]["rise"]
+    sigma_backbone = struct_cfg["sigma_backbone"]
+
     transform_fn = energy_fn.energy_fns[0].transform_fn
     n_nucs_per_strand = top.n_nucleotides // 2
 
@@ -416,11 +458,13 @@ def create_structural_objectives(
 def create_persistence_simulators(
     input_dir: Path,
     energy_fn: EnergyFunction,
-    n_steps: int = 1_000_000,
-    snapshot_interval: int = 10_000,
-    n_replicas: int = 1,
+    config: dict[str, Any],
     **kwargs: Any,
 ) -> list[oxDNASimulator]:
+    persist_cfg = config["persistence"]
+    n_steps = persist_cfg["n_steps"]
+    snapshot_interval = persist_cfg["snapshot_interval"]
+    n_replicas = persist_cfg["n_replicas"]
     overrides = {"steps": n_steps, "print_conf_interval": snapshot_interval, "print_energy_interval": snapshot_interval}
     return [
         oxDNASimulator(
@@ -440,9 +484,12 @@ def create_persistence_objective(
     top: jdna_top.Topology,
     displacement_fn: Callable,
     kt: float,
-    target_persistence_length: float = TARGET_PERSISTENCE_LENGTH,
-    n_equilibration_steps: int = 20,
+    config: dict[str, Any],
 ) -> jdna_objective.DiffTReObjective:
+    persist_cfg = config["persistence"]
+    target_persistence_length = persist_cfg["targets"]["persistence_length"]
+    n_equilibration_steps = persist_cfg["n_equilibration_steps"]
+
     transform_fn = energy_fn.energy_fns[0].transform_fn
     n_nucs_per_strand = top.n_nucleotides // 2
     quartets = obs_base.get_duplex_quartets(n_nucs_per_strand)
@@ -456,8 +503,8 @@ def create_persistence_objective(
     beta = jnp.array(1 / kt, dtype=jnp.float64)
 
     def persistence_length_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
-        lp = persistence_obs(traj, weights)  # Returns nm
-        loss = jnp.sqrt((lp - target_persistence_length) ** 2)
+        lp = persistence_obs(traj, weights) * NM_PER_OXDNA_LENGTH_UNIT
+        loss = (lp - target_persistence_length) ** 2
         return loss, (("persistence_length", lp), {})
 
     return jdna_objective.DiffTReObjective(
@@ -479,9 +526,7 @@ VALID_OBJECTIVES = MECHANICAL_OBJECTIVES | PERSISTENCE_OBJECTIVES | STRUCTURAL_O
 
 
 def run_optimization(
-    mechanical_input_dir: Path = MECHANICAL_SYSTEM_DIR,
-    structural_input_dir: Path = STRUCTURAL_SYSTEM_DIR,
-    persistence_input_dir: Path = PERSISTENCE_SYSTEM_DIR,
+    config: dict[str, Any],
     learning_rate: float = 5e-4,
     opt_steps: int = 100,
     selected_objectives: set[str] = VALID_OBJECTIVES,
@@ -494,6 +539,11 @@ def run_optimization(
     from tqdm import tqdm
 
     kt = get_kt_from_string("300K")
+
+    # Get system directories from config
+    mechanical_input_dir = Path(config["mechanical"]["system_dir"])
+    structural_input_dir = Path(config["structural"]["system_dir"])
+    persistence_input_dir = Path(config["persistence"]["system_dir"])
 
     # Determine which objective categories are needed
     need_mechanical = bool(selected_objectives & MECHANICAL_OBJECTIVES)
@@ -524,8 +574,9 @@ def run_optimization(
         stretch_twist_simulators = create_stretch_twist_simulators(
             input_dir=mechanical_input_dir,
             energy_fn=mech_energy_fn,
+            config=config,
             input_file_name="in",
-            variables={"T": kt, "nsteps": 1_250_000},
+            variables={"T": kt, "nsteps": config["mechanical"]["n_steps"]},
         )
 
         mechanical_objectives = create_stretch_torsion_objectives(
@@ -534,6 +585,7 @@ def run_optimization(
             top=mech_top,
             displacement_fn=mech_displacement_fn,
             kt=kt,
+            config=config,
         )
 
         all_simulators.extend(stretch_twist_simulators)
@@ -558,9 +610,8 @@ def run_optimization(
         structural_simulators = create_structural_simulators(
             input_dir=structural_input_dir,
             energy_fn=struct_energy_fn,
+            config=config,
             source_path=oxdna_source_path,
-            n_steps=1_000_000,
-            n_replicas=1,
         )
 
         structural_objectives = create_structural_objectives(
@@ -569,6 +620,7 @@ def run_optimization(
             top=struct_top,
             displacement_fn=struct_displacement_fn,
             kt=kt,
+            config=config,
         )
 
         all_simulators.extend(structural_simulators)
@@ -593,9 +645,8 @@ def run_optimization(
         persistence_simulators = create_persistence_simulators(
             input_dir=persistence_input_dir,
             energy_fn=persist_energy_fn,
+            config=config,
             source_path=oxdna_source_path,
-            n_steps=1_000_000,
-            n_replicas=1,
         )
 
         persistence_objective = create_persistence_objective(
@@ -604,6 +655,7 @@ def run_optimization(
             top=persist_top,
             displacement_fn=persist_displacement_fn,
             kt=kt,
+            config=config,
         )
 
         all_simulators.extend(persistence_simulators)
@@ -625,22 +677,25 @@ def run_optimization(
     # Run optimization loop
     logging.info("Starting oxDNA1 reparameterization with %d objectives", len(all_objectives))
     if need_mechanical:
+        mech_targets = config["mechanical"]["targets"]
         logging.info(
             "  Mechanical targets: S_eff=%.1f pN, C=%.1f pN·nm², g=%.1f pN·nm",
-            TARGET_STRETCH_MODULUS,
-            TARGET_TORSION_MODULUS,
-            TARGET_TWIST_STRETCH_COUPLING,
+            mech_targets["stretch_modulus"],
+            mech_targets["torsional_modulus"],
+            mech_targets["twist_stretch_coupling"],
         )
     if need_structural:
+        struct_targets = config["structural"]["targets"]
         logging.info(
             "  Structural targets: diameter=%.1f Å, pitch=%.2f nm, propeller=%.1f°, rise=%.2f nm",
-            TARGET_HELIX_DIAMETER,
-            TARGET_HELICAL_PITCH,
-            TARGET_PROPELLER_TWIST,
-            TARGET_RISE,
+            struct_targets["helix_diameter"],
+            struct_targets["helical_pitch"],
+            struct_targets["propeller_twist"],
+            struct_targets["rise"],
         )
     if need_persistence:
-        logging.info("  Persistence length target: Lp=%.1f nm", TARGET_PERSISTENCE_LENGTH)
+        persist_targets = config["persistence"]["targets"]
+        logging.info("  Persistence length target: Lp=%.1f nm", persist_targets["persistence_length"])
 
     loggers = [ConsoleLogger()]
     if use_aim:
@@ -720,11 +775,33 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Path to file for logging metrics. If not specified, no file logging.",
     )
+    parser.add_argument(
+        "--config",
+        type=str,
+        default=None,
+        help="Path to JSON config file to override default targets and simulator settings.",
+    )
+    parser.add_argument(
+        "--dump-config",
+        type=str,
+        default=None,
+        help="Path to dump the default config JSON and exit.",
+    )
     return parser.parse_args()
 
 
 if __name__ == "__main__":
     args = parse_args()
+
+    # Load config (with optional overrides from file)
+    config = load_config(Path(args.config) if args.config else None)
+    if args.dump_config:
+        if args.dump_config == "-":
+            print(json.dumps(config, indent=2))
+        else:
+            with Path(args.dump_config).open("w") as f:
+                json.dump(config, f, indent=2)
+        raise SystemExit
 
     # Parse and validate objectives
     if args.objectives:
@@ -745,6 +822,7 @@ if __name__ == "__main__":
         raise ValueError("--oxdna-source is required when using oxDNA based objectives")
 
     run_optimization(
+        config=config,
         learning_rate=args.learning_rate,
         opt_steps=args.opt_steps,
         selected_objectives=selected_objectives,
