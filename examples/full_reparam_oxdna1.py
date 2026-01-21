@@ -18,9 +18,14 @@ import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
 import optax
 from mythos.energy.base import EnergyFunction
+from mythos.observables.diameter import Diameter
+from mythos.observables.pitch import PitchAngle, compute_pitch
+from mythos.observables.propeller import PropellerTwist
+from mythos.observables.rise import Rise
 from mythos.observables.stretch_torsion import ExtensionZ, TwistXY, stretch_torsion
 from mythos.simulators.base import SimulatorOutput
 from mythos.simulators.lammps.lammps_oxdna import LAMMPSoxDNASimulator
+from mythos.simulators.oxdna import oxDNASimulator
 from mythos.ui.loggers.console import ConsoleLogger
 from mythos.ui.loggers.multilogger import MultiLogger
 from mythos.utils.types import Params
@@ -39,26 +44,31 @@ TWIST_FORCE = 2  # pN
 TARGET_TORSION_MODULUS = 460  # pN·nm^2
 TARGET_TWIST_STRETCH_COUPLING = -90  # pN·nm
 
+# Structural property targets (20bp duplex at 300K)
+TARGET_HELIX_DIAMETER = 20.0  # Angstroms (experimental: ~20 Å)
+TARGET_HELICAL_PITCH = 3.57  # nm (experimental: 3.4-3.6 nm)
+TARGET_PROPELLER_TWIST = -12.6  # degrees
+TARGET_RISE = 0.34  # nm (3.4 Å per base pair)
+SIGMA_BACKBONE = 0.70  # oxDNA1 default excluded volume sigma for backbone
+
 # Data directory for full reparameterization systems
 DATA_ROOT = Path("data/full_reparam_oxdna1")
 MECHANICAL_DIR = DATA_ROOT / "mechanical"
-SYSTEM_DIR = MECHANICAL_DIR / "lammps" / "40bp_duplex"
+MECHANICAL_SYSTEM_DIR = MECHANICAL_DIR / "lammps" / "40bp_duplex"
+STRUCTURAL_DIR = DATA_ROOT / "structural"
+STRUCTURAL_SYSTEM_DIR = STRUCTURAL_DIR / "20bp_duplex"
 
 
 @chex.dataclass(frozen=True, kw_only=True)
 class LAMMPSStretchSimulator(LAMMPSoxDNASimulator):
-    """LAMMPS simulator that tags trajectory states with force/torque metadata."""
-
     force: InitVar[float] = None
     torque: InitVar[float] = None
 
     def __post_init__(self, force: float, torque: float) -> None:
-        """Store force/torque in variables dict for metadata tagging."""
         LAMMPSoxDNASimulator.__post_init__(self)
         object.__setattr__(self, "variables", {**self.variables, "force": force, "torque": torque})
 
     def run_simulation(self, *args, opt_params: Params, **kwargs) -> SimulatorOutput:
-        """Run simulation and tag trajectory with force/torque metadata."""
         output = LAMMPSoxDNASimulator.run_simulation(self, *args, params=opt_params, **kwargs)
         tagged_traj = output.observables[0].with_state_metadata(self.variables.copy())
         return SimulatorOutput(observables=[tagged_traj], state=output.state)
@@ -74,7 +84,7 @@ def create_stretch_twist_simulators(
     variables: dict[str, Any] | None = None,
     n_replicas: int = 1,
     **kwargs: Any,
-) -> tuple[list[LAMMPSStretchSimulator], list[LAMMPSStretchSimulator]]:
+) -> list[LAMMPSStretchSimulator]:
     stretch_forces = stretch_forces or STRETCH_FORCES
     twist_torques = twist_torques or TWIST_TORQUES
     variables = variables or {}
@@ -95,7 +105,6 @@ def create_stretch_twist_simulators(
 
 
 def read_box_size_lammps(data_path: Path) -> jnp.ndarray:
-    """Parse box dimensions [x, y, z] from LAMMPS data file."""
     box = [-1.0, -1.0, -1.0]
     with data_path.open("r") as f:
         for line in f:
@@ -110,8 +119,19 @@ def read_box_size_lammps(data_path: Path) -> jnp.ndarray:
     return jnp.array(box)
 
 
+def read_box_size_oxdna(conf_path: Path) -> jnp.ndarray:
+    """Box size is on line 2: b = x y z"""
+    with conf_path.open("r") as f:
+        # Skip first line (time)
+        f.readline()
+        # Read box size line
+        box_line = f.readline().strip()
+        # Parse "b = x y z" format
+        parts = box_line.split("=")[1].strip().split()
+        return jnp.array([float(x) for x in parts])
+
+
 def tree_mean(trees: list) -> Any:
-    """Compute element-wise mean of a list of pytrees."""
     if len(trees) == 1:
         return trees[0]
     return jax.tree.map(lambda *x: jnp.mean(jnp.stack(x)), *trees)
@@ -129,7 +149,6 @@ def create_stretch_torsion_objectives(
     target_torsion_modulus: float = TARGET_TORSION_MODULUS,
     target_twist_stretch_coupling: float = TARGET_TWIST_STRETCH_COUPLING,
 ) -> list[jdna_objective.DiffTReObjective]:
-    """Create 3 DiffTRe objectives for S_eff (stretch), C (torsion), and g (coupling)."""
     transform_fn = energy_fn.energy_fns[0].transform_fn
     n_nucs_per_strand = top.n_nucleotides // 2
 
@@ -157,8 +176,6 @@ def create_stretch_torsion_objectives(
     def compute_moduli_from_traj(
         traj: Any, weights: jnp.ndarray
     ) -> tuple[float, float, float]:
-        """Compute (s_eff, c, g) moduli from trajectory with force/torque metadata."""
-        # Pre-compute metadata arrays as constants
         forces_arr = jnp.array([md["force"] for md in traj.metadata])
         torques_arr = jnp.array([md["torque"] for md in traj.metadata])
 
@@ -197,21 +214,17 @@ def create_stretch_torsion_objectives(
         )
 
     def stretch_modulus_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
-        """Compute stretch modulus loss."""
         s_eff, c, g = compute_moduli_from_traj(traj, weights)
         loss = jnp.sqrt((s_eff - target_stretch_modulus) ** 2)
         return loss, (("stretch_modulus", s_eff), {"torsional_modulus": c, "twist_stretch_coupling": g})
 
     def torsional_modulus_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
-        """Compute torsional modulus loss."""
         s_eff, c, g = compute_moduli_from_traj(traj, weights)
         loss = jnp.sqrt((c - target_torsion_modulus) ** 2)
         return loss, (("torsional_modulus", c), {"stretch_modulus": s_eff, "twist_stretch_coupling": g})
 
     def twist_stretch_coupling_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
-        """Compute twist-stretch coupling loss."""
         s_eff, c, g = compute_moduli_from_traj(traj, weights)
-        # Use absolute target since g can be negative
         loss = jnp.sqrt((g - target_twist_stretch_coupling) ** 2)
         return loss, (("twist_stretch_coupling", g), {"stretch_modulus": s_eff, "torsional_modulus": c})
 
@@ -250,93 +263,306 @@ def create_stretch_torsion_objectives(
     return [stretch_objective, torsional_objective, coupling_objective]
 
 
+def create_structural_simulators(
+    input_dir: Path,
+    energy_fn: EnergyFunction,
+    n_steps: int = 1_000_000,
+    snapshot_interval: int = 10_000,
+    n_replicas: int = 1,
+    **kwargs: Any,
+) -> list[oxDNASimulator]:
+    overrides = {"steps": n_steps, "print_conf_interval": snapshot_interval, "print_energy_interval": snapshot_interval}
+    return [
+        oxDNASimulator(
+            input_dir=str(input_dir),
+            energy_fn=energy_fn,
+            name=f"structural_20bp_r{r}",
+            input_overrides=overrides,
+            **kwargs,
+        )
+        for r in range(n_replicas)
+    ]
+
+
+def get_h_bonded_base_pairs(n_nucs_per_strand: int) -> jnp.ndarray:
+    s1_nucs = list(range(n_nucs_per_strand))
+    s2_nucs = list(range(n_nucs_per_strand, n_nucs_per_strand * 2))
+    s2_nucs.reverse()
+    return jnp.array(list(zip(s1_nucs, s2_nucs, strict=True)), dtype=jnp.int32)
+
+
+def create_structural_objectives(
+    simulators: list[oxDNASimulator],
+    energy_fn: EnergyFunction,
+    top: jdna_top.Topology,
+    displacement_fn: Callable,
+    kt: float,
+    target_helix_diameter: float = TARGET_HELIX_DIAMETER,
+    target_helical_pitch: float = TARGET_HELICAL_PITCH,
+    target_propeller_twist: float = TARGET_PROPELLER_TWIST,
+    target_rise: float = TARGET_RISE,
+    sigma_backbone: float = SIGMA_BACKBONE,
+) -> list[jdna_objective.DiffTReObjective]:
+    transform_fn = energy_fn.energy_fns[0].transform_fn
+    n_nucs_per_strand = top.n_nucleotides // 2
+
+    # Get base pairs and quartets for observables
+    h_bonded_bps = get_h_bonded_base_pairs(n_nucs_per_strand)
+    quartets = obs_base.get_duplex_quartets(n_nucs_per_strand)
+
+    # Create observables
+    diameter_obs = Diameter(
+        rigid_body_transform_fn=transform_fn,
+        h_bonded_base_pairs=h_bonded_bps,
+        displacement_fn=displacement_fn,
+    )
+    pitch_obs = PitchAngle(
+        rigid_body_transform_fn=transform_fn,
+        quartets=quartets,
+        displacement_fn=displacement_fn,
+    )
+    propeller_obs = PropellerTwist(
+        rigid_body_transform_fn=transform_fn,
+        h_bonded_base_pairs=h_bonded_bps,
+    )
+    rise_obs = Rise(
+        rigid_body_transform_fn=transform_fn,
+        quartets=quartets,
+        displacement_fn=displacement_fn,
+    )
+
+    beta = jnp.array(1 / kt, dtype=jnp.float64)
+
+    # Conversion: Angstroms to nm
+    angstrom_to_nm = 0.1
+
+    def helix_diameter_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
+        diameters = diameter_obs(traj, sigma_backbone)  # Returns Angstroms
+        expected_diameter = jnp.dot(weights, diameters)
+        loss = jnp.sqrt((expected_diameter - target_helix_diameter) ** 2)
+        return loss, (("helix_diameter", expected_diameter), {})
+
+    def helical_pitch_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
+        pitch_angles = pitch_obs(traj)  # Returns radians
+        expected_pitch_angle = jnp.dot(weights, pitch_angles)
+        bp_per_turn = compute_pitch(expected_pitch_angle)
+        # Is this how we should do it??
+        # Helical pitch = bp/turn * rise (in nm);
+        rises = rise_obs(traj) * angstrom_to_nm  # Convert Å to nm
+        expected_rise = jnp.dot(weights, rises)
+        helical_pitch_nm = bp_per_turn * expected_rise
+        loss = jnp.sqrt((helical_pitch_nm - target_helical_pitch) ** 2)
+        return loss, (("helical_pitch", helical_pitch_nm), {})
+
+    def propeller_twist_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
+        obs = propeller_obs(traj)
+        expected_prop_twist = jnp.dot(weights, obs)
+        loss = (expected_prop_twist - target_propeller_twist) ** 2
+        loss = jnp.sqrt(loss)
+        return loss, (("prop_twist", expected_prop_twist), {})
+
+    def rise_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
+        rises = rise_obs(traj) * angstrom_to_nm  # Convert Å to nm
+        expected_rise = jnp.dot(weights, rises)
+        loss = jnp.sqrt((expected_rise - target_rise) ** 2)
+        return loss, (("rise", expected_rise), {})
+
+    # Collect required observables from all simulators
+    required_observables = [obs for sim in simulators for obs in sim.exposes()]
+
+    # Common arguments for all objectives
+    common_kwargs = {
+        "required_observables": required_observables,
+        "energy_fn": energy_fn,
+        "beta": beta,
+        "n_equilibration_steps": 20,
+        "min_n_eff_factor": 0.95,
+        "max_valid_opt_steps": 10,
+    }
+
+    # Create the four structural objectives
+    diameter_objective = jdna_objective.DiffTReObjective(
+        name="helix_diameter",
+        grad_or_loss_fn=helix_diameter_loss_fn,
+        **common_kwargs,
+    )
+
+    pitch_objective = jdna_objective.DiffTReObjective(
+        name="helical_pitch",
+        grad_or_loss_fn=helical_pitch_loss_fn,
+        **common_kwargs,
+    )
+
+    propeller_objective = jdna_objective.DiffTReObjective(
+        name="propeller_twist",
+        grad_or_loss_fn=propeller_twist_loss_fn,
+        **common_kwargs,
+    )
+
+    rise_objective = jdna_objective.DiffTReObjective(
+        name="rise",
+        grad_or_loss_fn=rise_loss_fn,
+        **common_kwargs,
+    )
+
+    return [diameter_objective, pitch_objective, propeller_objective, rise_objective]
+
+
 # Valid objective names for command-line selection
-VALID_OBJECTIVES = {"stretch_modulus", "torsional_modulus", "twist_stretch_coupling"}
+MECHANICAL_OBJECTIVES = {"stretch_modulus", "torsional_modulus", "twist_stretch_coupling"}
+STRUCTURAL_OBJECTIVES = {"helix_diameter", "helical_pitch", "propeller_twist", "rise"}
+VALID_OBJECTIVES = MECHANICAL_OBJECTIVES | STRUCTURAL_OBJECTIVES
 
 
 def run_optimization(
-    input_dir: Path = SYSTEM_DIR,
+    mechanical_input_dir: Path = MECHANICAL_SYSTEM_DIR,
+    structural_input_dir: Path = STRUCTURAL_SYSTEM_DIR,
     learning_rate: float = 5e-4,
     opt_steps: int = 100,
     selected_objectives: list[str] | None = None,
     use_aim: bool = False,
+    oxdna_source_path: Path | None = None,
 ) -> Params:
-    """Run DiffTRe optimization targeting S_eff=1000pN, C=460pN·nm², g=-90pN·nm."""
     import ray
     from mythos.utils.units import get_kt_from_string
     from tqdm import tqdm
 
-    # Load topology and create energy function
-    top = jdna_top.from_oxdna_file(input_dir / "data.top")
-    box = read_box_size_lammps(input_dir / "data")
     kt = get_kt_from_string("300K")
-    displacement_fn = jax_md.space.periodic(box)[0]
 
-    # Create base energy function
-    base_energy_fn = dna1_energy.create_default_energy_fn(
-        topology=top,
-        displacement_fn=displacement_fn,
-    ).with_noopt(
-        "ss_stack_weights", "ss_hb_weights"
-    ).without_terms(
-        "BondedExcludedVolume"  # LAMMPS doesn't implement this term
-    ).with_params(kt=kt)
+    # Determine which objective categories are needed
+    if selected_objectives is None:
+        need_mechanical = True
+        need_structural = True
+    else:
+        selected_set = set(selected_objectives)
+        need_mechanical = bool(selected_set & MECHANICAL_OBJECTIVES)
+        need_structural = bool(selected_set & STRUCTURAL_OBJECTIVES)
 
-    opt_params = base_energy_fn.opt_params()
+    all_simulators = []
+    all_objectives = []
+    opt_params = None
 
-    # Create simulators for stretch and twist experiments
-    stretch_twist_simulators = create_stretch_twist_simulators(
-        input_dir=input_dir,
-        energy_fn=base_energy_fn,
-        input_file_name="in",
-        variables={"T": kt, "nsteps": 1_250_000},
-    )
+    # Setup mechanical objectives (LAMMPS simulators, 40bp duplex)
+    if need_mechanical:
+        mech_top = jdna_top.from_oxdna_file(mechanical_input_dir / "data.top")
+        mech_box = read_box_size_lammps(mechanical_input_dir / "data")
+        mech_displacement_fn = jax_md.space.periodic(mech_box)[0]
 
-    all_simulators = stretch_twist_simulators
+        mech_energy_fn = dna1_energy.create_default_energy_fn(
+            topology=mech_top,
+            displacement_fn=mech_displacement_fn,
+        ).with_noopt(
+            "ss_stack_weights", "ss_hb_weights"
+        ).without_terms(
+            "BondedExcludedVolume"  # LAMMPS doesn't implement this term
+        ).with_params(kt=kt)
 
-    # Create the stretch-torsion objectives (S_eff, C, g)
-    objectives = create_stretch_torsion_objectives(
-        simulators=stretch_twist_simulators,
-        energy_fn=base_energy_fn,
-        top=top,
-        displacement_fn=displacement_fn,
-        kt=kt,
-    )
+        opt_params = mech_energy_fn.opt_params()
+
+        stretch_twist_simulators = create_stretch_twist_simulators(
+            input_dir=mechanical_input_dir,
+            energy_fn=mech_energy_fn,
+            input_file_name="in",
+            variables={"T": kt, "nsteps": 1_250_000},
+        )
+
+        mechanical_objectives = create_stretch_torsion_objectives(
+            simulators=stretch_twist_simulators,
+            energy_fn=mech_energy_fn,
+            top=mech_top,
+            displacement_fn=mech_displacement_fn,
+            kt=kt,
+        )
+
+        all_simulators.extend(stretch_twist_simulators)
+        all_objectives.extend(mechanical_objectives)
+
+    # Setup structural objectives (oxDNA MD simulator, 20bp duplex)
+    if need_structural:
+        struct_top = jdna_top.from_oxdna_file(structural_input_dir / "sys.top")
+        struct_box = read_box_size_oxdna(structural_input_dir / "sys.conf")
+        struct_displacement_fn = jax_md.space.periodic(struct_box)[0]
+
+        struct_energy_fn = dna1_energy.create_default_energy_fn(
+            topology=struct_top,
+            displacement_fn=struct_displacement_fn,
+        ).with_noopt(
+            "ss_stack_weights", "ss_hb_weights"
+        ).with_params(kt=kt)
+
+        if opt_params is None:
+            opt_params = struct_energy_fn.opt_params()
+
+        if oxdna_source_path is None:
+            raise ValueError(
+                "oxdna_source_path is required for structural objectives. "
+                "Provide the path to the oxDNA source directory."
+            )
+        oxdna_source_path = Path(oxdna_source_path).resolve()
+
+        structural_simulators = create_structural_simulators(
+            input_dir=structural_input_dir,
+            energy_fn=struct_energy_fn,
+            source_path=oxdna_source_path,
+            n_steps=1_000_000,
+            n_replicas=1,
+        )
+
+        structural_objectives = create_structural_objectives(
+            simulators=structural_simulators,
+            energy_fn=struct_energy_fn,
+            top=struct_top,
+            displacement_fn=struct_displacement_fn,
+            kt=kt,
+        )
+
+        all_simulators.extend(structural_simulators)
+        all_objectives.extend(structural_objectives)
 
     # Filter objectives if a subset was specified
     if selected_objectives:
-        objective_map = {obj.name: obj for obj in objectives}
-        objectives = [objective_map[name] for name in selected_objectives]
-        logging.info("Using selected objectives: %s", [obj.name for obj in objectives])
+        objective_map = {obj.name: obj for obj in all_objectives}
+        all_objectives = [objective_map[name] for name in selected_objectives]
+        logging.info("Using selected objectives: %s", [obj.name for obj in all_objectives])
 
     # Setup Ray optimizer
     optimizer = jdna_optimization.RayOptimizer(
-        objectives=objectives,
+        objectives=all_objectives,
         simulators=all_simulators,
         aggregate_grad_fn=tree_mean,
         optimizer=optax.adam(learning_rate=learning_rate),
     )
 
     # Run optimization loop
-    logging.info(
-        "Starting stretch-torsion optimization: targets S_eff=%.1f pN, C=%.1f pN·nm², g=%.1f pN·nm",
-        TARGET_STRETCH_MODULUS,
-        TARGET_TORSION_MODULUS,
-        TARGET_TWIST_STRETCH_COUPLING,
-    )
+    logging.info("Starting oxDNA1 reparameterization with %d objectives", len(all_objectives))
+    if need_mechanical:
+        logging.info(
+            "  Mechanical targets: S_eff=%.1f pN, C=%.1f pN·nm², g=%.1f pN·nm",
+            TARGET_STRETCH_MODULUS,
+            TARGET_TORSION_MODULUS,
+            TARGET_TWIST_STRETCH_COUPLING,
+        )
+    if need_structural:
+        logging.info(
+            "  Structural targets: diameter=%.1f Å, pitch=%.2f nm, propeller=%.1f°, rise=%.2f nm",
+            TARGET_HELIX_DIAMETER,
+            TARGET_HELICAL_PITCH,
+            TARGET_PROPELLER_TWIST,
+            TARGET_RISE,
+        )
 
     loggers = [ConsoleLogger()]
     if use_aim:
-        import AimLogger
-        name = f"full_reparam_oxdna1-{len(objectives)}obj"
-        if len(objectives) == 1:
-            name = f"oxdna1-{objectives[0].name}"
+        from mythos.ui.loggers.aim import AimLogger
+        name = f"full_reparam_oxdna1-{len(all_objectives)}obj"
+        if len(all_objectives) == 1:
+            name = f"oxdna1-{all_objectives[0].name}"
         aim_logger = AimLogger(experiment=name)
         loggers.append(aim_logger)
     logger = MultiLogger(loggers)
 
     state = None
-    for step in tqdm(range(opt_steps), desc="Optimizing mechanical properties"):
+    for step in tqdm(range(opt_steps), desc="Optimizing oxDNA1 parameters"):
         output = optimizer.step(opt_params, state)
         opt_params = output.opt_params
         state = output.state
@@ -354,9 +580,11 @@ def run_optimization(
 
 
 def parse_args() -> argparse.Namespace:
-    """Parse command-line arguments."""
     parser = argparse.ArgumentParser(
-        description="Stretch-torsion optimization for DNA mechanical properties (S_eff, C, g)."
+        description=(
+            "Full oxDNA1 reparameterization: mechanical (S_eff, C, g) "
+            "and structural (diameter, pitch, propeller, rise) properties."
+        )
     )
     parser.add_argument(
         "--objectives",
@@ -364,7 +592,8 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help=(
             "Comma-separated list of objectives to optimize. "
-            f"Valid options: {', '.join(sorted(VALID_OBJECTIVES))}. "
+            f"Mechanical: {', '.join(sorted(MECHANICAL_OBJECTIVES))}. "
+            f"Structural: {', '.join(sorted(STRUCTURAL_OBJECTIVES))}. "
             "If not specified, all objectives are used."
         ),
     )
@@ -379,6 +608,17 @@ def parse_args() -> argparse.Namespace:
         type=int,
         default=100,
         help="Number of optimization steps (default: 100).",
+    )
+    parser.add_argument(
+        "--oxdna-source",
+        type=str,
+        default=None,
+        help="Path to oxDNA source directory (required for structural objectives).",
+    )
+    parser.add_argument(
+        "--use-aim",
+        action="store_true",
+        help="Enable Aim experiment tracking.",
     )
     return parser.parse_args()
 
@@ -397,8 +637,22 @@ if __name__ == "__main__":
                 f"Valid options are: {VALID_OBJECTIVES}"
             )
 
+    # Check if oxDNA source is needed
+    oxdna_source = Path(args.oxdna_source) if args.oxdna_source else None
+    need_structural = (
+        selected_objectives is None
+        or bool(set(selected_objectives) & STRUCTURAL_OBJECTIVES)
+    )
+    if need_structural and oxdna_source is None:
+        raise ValueError(
+            "The --oxdna-source argument is required when using structural objectives. "
+            "Provide the path to your oxDNA source directory."
+        )
+
     run_optimization(
         learning_rate=args.learning_rate,
         opt_steps=args.opt_steps,
         selected_objectives=selected_objectives,
+        use_aim=args.use_aim,
+        oxdna_source_path=oxdna_source,
     )
