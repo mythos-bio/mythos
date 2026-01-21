@@ -19,6 +19,7 @@ import mythos.optimization.optimization as jdna_optimization
 import optax
 from mythos.energy.base import EnergyFunction
 from mythos.observables.diameter import Diameter
+from mythos.observables.persistence_length import PersistenceLength
 from mythos.observables.pitch import PitchAngle, compute_pitch
 from mythos.observables.propeller import PropellerTwist
 from mythos.observables.rise import Rise
@@ -27,6 +28,7 @@ from mythos.simulators.base import SimulatorOutput
 from mythos.simulators.lammps.lammps_oxdna import LAMMPSoxDNASimulator
 from mythos.simulators.oxdna import oxDNASimulator
 from mythos.ui.loggers.console import ConsoleLogger
+from mythos.ui.loggers.disk import FileLogger
 from mythos.ui.loggers.multilogger import MultiLogger
 from mythos.utils.types import Params
 
@@ -51,10 +53,14 @@ TARGET_PROPELLER_TWIST = -12.6  # degrees
 TARGET_RISE = 0.34  # nm (3.4 Å per base pair)
 SIGMA_BACKBONE = 0.70  # oxDNA1 default excluded volume sigma for backbone
 
+# Persistence length target (60bp duplex)
+TARGET_PERSISTENCE_LENGTH = 50.0  # nm
+
 # Data directory for full reparameterization systems
 DATA_ROOT = Path("data/full_reparam_oxdna1")
 MECHANICAL_DIR = DATA_ROOT / "mechanical"
 MECHANICAL_SYSTEM_DIR = MECHANICAL_DIR / "lammps" / "40bp_duplex"
+PERSISTENCE_SYSTEM_DIR = MECHANICAL_DIR / "60bp_duplex"
 STRUCTURAL_DIR = DATA_ROOT / "structural"
 STRUCTURAL_SYSTEM_DIR = STRUCTURAL_DIR / "20bp_duplex"
 
@@ -357,8 +363,7 @@ def create_structural_objectives(
     def propeller_twist_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
         obs = propeller_obs(traj)
         expected_prop_twist = jnp.dot(weights, obs)
-        loss = (expected_prop_twist - target_propeller_twist) ** 2
-        loss = jnp.sqrt(loss)
+        loss = jnp.sqrt((expected_prop_twist - target_propeller_twist) ** 2)
         return loss, (("prop_twist", expected_prop_twist), {})
 
     def rise_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
@@ -408,20 +413,81 @@ def create_structural_objectives(
     return [diameter_objective, pitch_objective, propeller_objective, rise_objective]
 
 
+def create_persistence_simulators(
+    input_dir: Path,
+    energy_fn: EnergyFunction,
+    n_steps: int = 1_000_000,
+    snapshot_interval: int = 10_000,
+    n_replicas: int = 1,
+    **kwargs: Any,
+) -> list[oxDNASimulator]:
+    overrides = {"steps": n_steps, "print_conf_interval": snapshot_interval, "print_energy_interval": snapshot_interval}
+    return [
+        oxDNASimulator(
+            input_dir=str(input_dir),
+            energy_fn=energy_fn,
+            name=f"persistence_60bp_r{r}",
+            input_overrides=overrides,
+            **kwargs,
+        )
+        for r in range(n_replicas)
+    ]
+
+
+def create_persistence_objective(
+    simulators: list[oxDNASimulator],
+    energy_fn: EnergyFunction,
+    top: jdna_top.Topology,
+    displacement_fn: Callable,
+    kt: float,
+    target_persistence_length: float = TARGET_PERSISTENCE_LENGTH,
+    n_equilibration_steps: int = 20,
+) -> jdna_objective.DiffTReObjective:
+    transform_fn = energy_fn.energy_fns[0].transform_fn
+    n_nucs_per_strand = top.n_nucleotides // 2
+    quartets = obs_base.get_duplex_quartets(n_nucs_per_strand)
+
+    persistence_obs = PersistenceLength(
+        rigid_body_transform_fn=transform_fn,
+        quartets=quartets,
+        displacement_fn=displacement_fn,
+    )
+
+    beta = jnp.array(1 / kt, dtype=jnp.float64)
+
+    def persistence_length_loss_fn(traj: Any, weights: jnp.ndarray, *_, **__) -> LossOutput:
+        lp = persistence_obs(traj, weights)  # Returns nm
+        loss = jnp.sqrt((lp - target_persistence_length) ** 2)
+        return loss, (("persistence_length", lp), {})
+
+    return jdna_objective.DiffTReObjective(
+        name="persistence_length",
+        grad_or_loss_fn=persistence_length_loss_fn,
+        required_observables=[obs for sim in simulators for obs in sim.exposes()],
+        energy_fn=energy_fn,
+        beta=beta,
+        n_equilibration_steps=n_equilibration_steps,
+        max_valid_opt_steps=10,
+    )
+
+
 # Valid objective names for command-line selection
 MECHANICAL_OBJECTIVES = {"stretch_modulus", "torsional_modulus", "twist_stretch_coupling"}
+PERSISTENCE_OBJECTIVES = {"persistence_length"}
 STRUCTURAL_OBJECTIVES = {"helix_diameter", "helical_pitch", "propeller_twist", "rise"}
-VALID_OBJECTIVES = MECHANICAL_OBJECTIVES | STRUCTURAL_OBJECTIVES
+VALID_OBJECTIVES = MECHANICAL_OBJECTIVES | PERSISTENCE_OBJECTIVES | STRUCTURAL_OBJECTIVES
 
 
 def run_optimization(
     mechanical_input_dir: Path = MECHANICAL_SYSTEM_DIR,
     structural_input_dir: Path = STRUCTURAL_SYSTEM_DIR,
+    persistence_input_dir: Path = PERSISTENCE_SYSTEM_DIR,
     learning_rate: float = 5e-4,
     opt_steps: int = 100,
-    selected_objectives: list[str] | None = None,
+    selected_objectives: set[str] = VALID_OBJECTIVES,
     use_aim: bool = False,
     oxdna_source_path: Path | None = None,
+    metrics_file: Path | None = None,
 ) -> Params:
     import ray
     from mythos.utils.units import get_kt_from_string
@@ -430,13 +496,9 @@ def run_optimization(
     kt = get_kt_from_string("300K")
 
     # Determine which objective categories are needed
-    if selected_objectives is None:
-        need_mechanical = True
-        need_structural = True
-    else:
-        selected_set = set(selected_objectives)
-        need_mechanical = bool(selected_set & MECHANICAL_OBJECTIVES)
-        need_structural = bool(selected_set & STRUCTURAL_OBJECTIVES)
+    need_mechanical = bool(selected_objectives & MECHANICAL_OBJECTIVES)
+    need_persistence = bool(selected_objectives & PERSISTENCE_OBJECTIVES)
+    need_structural = bool(selected_objectives & STRUCTURAL_OBJECTIVES)
 
     all_simulators = []
     all_objectives = []
@@ -493,13 +555,6 @@ def run_optimization(
         if opt_params is None:
             opt_params = struct_energy_fn.opt_params()
 
-        if oxdna_source_path is None:
-            raise ValueError(
-                "oxdna_source_path is required for structural objectives. "
-                "Provide the path to the oxDNA source directory."
-            )
-        oxdna_source_path = Path(oxdna_source_path).resolve()
-
         structural_simulators = create_structural_simulators(
             input_dir=structural_input_dir,
             energy_fn=struct_energy_fn,
@@ -519,11 +574,45 @@ def run_optimization(
         all_simulators.extend(structural_simulators)
         all_objectives.extend(structural_objectives)
 
-    # Filter objectives if a subset was specified
-    if selected_objectives:
-        objective_map = {obj.name: obj for obj in all_objectives}
-        all_objectives = [objective_map[name] for name in selected_objectives]
-        logging.info("Using selected objectives: %s", [obj.name for obj in all_objectives])
+    # Setup persistence length objective (oxDNA MD simulator, 60bp duplex)
+    if need_persistence:
+        persist_top = jdna_top.from_oxdna_file(persistence_input_dir / "sys.top")
+        persist_box = read_box_size_oxdna(persistence_input_dir / "sys.conf")
+        persist_displacement_fn = jax_md.space.periodic(persist_box)[0]
+
+        persist_energy_fn = dna1_energy.create_default_energy_fn(
+            topology=persist_top,
+            displacement_fn=persist_displacement_fn,
+        ).with_noopt(
+            "ss_stack_weights", "ss_hb_weights"
+        ).with_params(kt=kt)
+
+        if opt_params is None:
+            opt_params = persist_energy_fn.opt_params()
+
+        persistence_simulators = create_persistence_simulators(
+            input_dir=persistence_input_dir,
+            energy_fn=persist_energy_fn,
+            source_path=oxdna_source_path,
+            n_steps=1_000_000,
+            n_replicas=1,
+        )
+
+        persistence_objective = create_persistence_objective(
+            simulators=persistence_simulators,
+            energy_fn=persist_energy_fn,
+            top=persist_top,
+            displacement_fn=persist_displacement_fn,
+            kt=kt,
+        )
+
+        all_simulators.extend(persistence_simulators)
+        all_objectives.append(persistence_objective)
+
+    # Filter objectives to only those selected
+    objective_map = {obj.name: obj for obj in all_objectives}
+    all_objectives = [objective_map[name] for name in selected_objectives if name in objective_map]
+    logging.info("Using objectives: %s", [obj.name for obj in all_objectives])
 
     # Setup Ray optimizer
     optimizer = jdna_optimization.RayOptimizer(
@@ -550,6 +639,8 @@ def run_optimization(
             TARGET_PROPELLER_TWIST,
             TARGET_RISE,
         )
+    if need_persistence:
+        logging.info("  Persistence length target: Lp=%.1f nm", TARGET_PERSISTENCE_LENGTH)
 
     loggers = [ConsoleLogger()]
     if use_aim:
@@ -559,6 +650,8 @@ def run_optimization(
             name = f"oxdna1-{all_objectives[0].name}"
         aim_logger = AimLogger(experiment=name)
         loggers.append(aim_logger)
+    if metrics_file:
+        loggers.append(FileLogger(metrics_file))
     logger = MultiLogger(loggers)
 
     state = None
@@ -582,8 +675,8 @@ def run_optimization(
 def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
-            "Full oxDNA1 reparameterization: mechanical (S_eff, C, g) "
-            "and structural (diameter, pitch, propeller, rise) properties."
+            "Full oxDNA1 reparameterization: mechanical (S_eff, C, g), "
+            "structural (diameter, pitch, propeller, rise), and persistence length properties."
         )
     )
     parser.add_argument(
@@ -593,6 +686,7 @@ def parse_args() -> argparse.Namespace:
         help=(
             "Comma-separated list of objectives to optimize. "
             f"Mechanical: {', '.join(sorted(MECHANICAL_OBJECTIVES))}. "
+            f"Persistence: {', '.join(sorted(PERSISTENCE_OBJECTIVES))}. "
             f"Structural: {', '.join(sorted(STRUCTURAL_OBJECTIVES))}. "
             "If not specified, all objectives are used."
         ),
@@ -613,12 +707,18 @@ def parse_args() -> argparse.Namespace:
         "--oxdna-source",
         type=str,
         default=None,
-        help="Path to oxDNA source directory (required for structural objectives).",
+        help="Path to oxDNA source directory (required for oxDNA based simulators).",
     )
     parser.add_argument(
         "--use-aim",
         action="store_true",
         help="Enable Aim experiment tracking.",
+    )
+    parser.add_argument(
+        "--metrics-file",
+        type=str,
+        default=None,
+        help="Path to file for logging metrics. If not specified, no file logging.",
     )
     return parser.parse_args()
 
@@ -627,27 +727,22 @@ if __name__ == "__main__":
     args = parse_args()
 
     # Parse and validate objectives
-    selected_objectives = None
     if args.objectives:
-        selected_objectives = [obj.strip() for obj in args.objectives.split(",")]
-        invalid = set(selected_objectives) - VALID_OBJECTIVES
+        selected_objectives = {obj.strip() for obj in args.objectives.split(",")}
+        invalid = selected_objectives - VALID_OBJECTIVES
         if invalid:
             raise ValueError(
                 f"Invalid objective(s): {invalid}. "
                 f"Valid options are: {VALID_OBJECTIVES}"
             )
+    else:
+        selected_objectives = VALID_OBJECTIVES
 
     # Check if oxDNA source is needed
-    oxdna_source = Path(args.oxdna_source) if args.oxdna_source else None
-    need_structural = (
-        selected_objectives is None
-        or bool(set(selected_objectives) & STRUCTURAL_OBJECTIVES)
-    )
-    if need_structural and oxdna_source is None:
-        raise ValueError(
-            "The --oxdna-source argument is required when using structural objectives. "
-            "Provide the path to your oxDNA source directory."
-        )
+    oxdna_source = Path(args.oxdna_source).resolve() if args.oxdna_source else None
+    need_oxdna = bool(selected_objectives & (STRUCTURAL_OBJECTIVES | PERSISTENCE_OBJECTIVES))
+    if need_oxdna and oxdna_source is None:
+        raise ValueError("--oxdna-source is required when using oxDNA based objectives")
 
     run_optimization(
         learning_rate=args.learning_rate,
@@ -655,4 +750,5 @@ if __name__ == "__main__":
         selected_objectives=selected_objectives,
         use_aim=args.use_aim,
         oxdna_source_path=oxdna_source,
+        metrics_file=Path(args.metrics_file) if args.metrics_file else None,
     )
