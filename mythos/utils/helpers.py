@@ -82,7 +82,7 @@ def run_command(cmd: list[str], cwd: Path, log_prefix: str = "command-output", e
         err_lines = tail_file(err_file, n=err_tail_lines)
         out_lines = tail_file(out_file, n=err_tail_lines)
         raise RuntimeError(
-            f"Command {' '.join(cmd)} failed with exit code {e.returncode}.\n"
+            f"Command {cmd} failed with exit code {e.returncode}.\n"
             f"  Last {err_tail_lines} lines of stdout:\n{out_lines}\n"
             f"  Last {err_tail_lines} lines of stderr:\n{err_lines}\n"
         ) from e
