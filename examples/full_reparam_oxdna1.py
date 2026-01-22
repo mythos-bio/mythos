@@ -95,7 +95,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "temperature": "300K",
             "n_replicas": 10,
             "n_steps": 1_000_000,
-            "temperature_range": [280, 350],  # K, for extrapolation
+            "snapshot_interval": 10_000,
+            "temperature_range": [260, 340],  # K, for extrapolation
             "temperature_range_points": 20,
             "targets": {
                 "melting_temperature": 294.2,  # K
@@ -107,7 +108,8 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "temperature": "300K",
             "n_replicas": 10,
             "n_steps": 1_000_000,
-            "temperature_range": [280, 350],  # K, for extrapolation
+            "snapshot_interval": 10_000,
+            "temperature_range": [290, 360],  # K, for extrapolation
             "temperature_range_points": 20,
             "targets": {
                 "melting_temperature": 324.6,  # K
@@ -609,7 +611,13 @@ def create_thermo_simulators(
 ) -> list[UmbrellaSamplingSimulator]:
     n_steps = thermo_cfg["n_steps"]
     n_replicas = thermo_cfg["n_replicas"]
-    overrides = {"steps": n_steps, "equilibration_steps": int(0.5 * n_steps)}
+    snapshot_interval = thermo_cfg["snapshot_interval"]
+    overrides = {
+        "steps": n_steps,
+        "equilibration_steps": int(0.5 * n_steps),
+        "print_energy_interval": snapshot_interval,
+        "print_conf_interval": snapshot_interval,
+    }
     return [
         UmbrellaSamplingSimulator(
             input_dir=str(input_dir),
@@ -828,9 +836,6 @@ def run_optimization(
             all_objectives.append(thermo_objective)
             thermo_simulator_groups.append([s.name for s in thermo_simulators])
 
-    # Filter objectives to only those selected
-    objective_map = {obj.name: obj for obj in all_objectives}
-    all_objectives = [objective_map[name] for name in selected_objectives if name in objective_map]
     logging.info("Using objectives: %s", [obj.name for obj in all_objectives])
 
     # Setup Ray optimizer
