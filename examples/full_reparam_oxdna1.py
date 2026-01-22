@@ -8,6 +8,7 @@ from collections.abc import Callable
 from dataclasses import InitVar
 from pathlib import Path
 from typing import Any
+from unittest.mock import MagicMock
 
 import chex
 import jax
@@ -45,6 +46,7 @@ NM_PER_OXDNA_LENGTH_UNIT = 0.8518  # 1 oxDNA length unit = 0.8518 nm
 DEFAULT_CONFIG: dict[str, Any] = {
     "mechanical": {
         "system_dir": "data/full_reparam_oxdna1/mechanical/lammps/40bp_duplex",
+        "temperature": "300K",
         "stretch_forces": [0, 2, 4, 6, 8, 10, 15, 20, 25, 30, 35, 40],  # pN
         "stretch_torque": 0,  # pN·nm
         "twist_torques": [5, 10, 15, 20, 25, 30],
@@ -59,6 +61,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "structural": {
         "system_dir": "data/full_reparam_oxdna1/structural/20bp_duplex",
+        "temperature": "300K",
         "n_replicas": 1,
         "n_steps": 1_000_000,
         "snapshot_interval": 10_000,
@@ -72,6 +75,7 @@ DEFAULT_CONFIG: dict[str, Any] = {
     },
     "persistence": {
         "system_dir": "data/full_reparam_oxdna1/mechanical/60bp_duplex",
+        "temperature": "300K",
         "n_replicas": 1,
         "n_steps": 1_000_000,
         "snapshot_interval": 10_000,
@@ -178,6 +182,34 @@ def tree_mean(trees: list) -> Any:
     return jax.tree.map(lambda *x: jnp.mean(jnp.stack(x)), *trees)
 
 
+def setup_oxdna_system(system_dir: Path, kt: float) -> tuple[jdna_top.Topology, Callable, EnergyFunction]:
+    topology = jdna_top.from_oxdna_file(system_dir / "sys.top")
+    box = read_box_size_oxdna(system_dir / "sys.conf")
+    displacement_fn = jax_md.space.periodic(box)[0]
+
+    energy_fn = dna1_energy.create_default_energy_fn(
+        topology=topology,
+        displacement_fn=displacement_fn,
+    ).with_params(kt=kt)
+
+    return topology, displacement_fn, energy_fn
+
+
+def setup_lammps_system(system_dir: Path, kt: float) -> tuple[jdna_top.Topology, Callable, EnergyFunction]:
+    topology = jdna_top.from_oxdna_file(system_dir / "data.top")
+    box = read_box_size_lammps(system_dir / "data")
+    displacement_fn = jax_md.space.periodic(box)[0]
+
+    energy_fn = dna1_energy.create_default_energy_fn(
+        topology=topology,
+        displacement_fn=displacement_fn,
+    ).without_terms(
+        "BondedExcludedVolume"  # LAMMPS doesn't implement this term
+    ).with_params(kt=kt)
+
+    return topology, displacement_fn, energy_fn
+
+
 def create_stretch_torsion_objectives(
     simulators: list[LAMMPSStretchSimulator],
     energy_fn: EnergyFunction,
@@ -221,12 +253,8 @@ def create_stretch_torsion_objectives(
     ) -> tuple[float, float, float]:
         forces_arr = jnp.array([md["force"] for md in traj.metadata])
         torques_arr = jnp.array([md["torque"] for md in traj.metadata])
-
-        # Compute segment indices using searchsorted (forces/torques are sorted)
         force_segment_ids = jnp.searchsorted(stretch_forces, forces_arr).astype(jnp.int32)
         torque_segment_ids = jnp.searchsorted(twist_torques, torques_arr).astype(jnp.int32)
-
-        # Create boolean masks for filtering (constants, not differentiable)
         stretch_mask = torques_arr == stretch_torque  # held torque for stretch experiments
         twist_mask = forces_arr == twist_force  # held force for twist experiments
 
@@ -538,7 +566,10 @@ def run_optimization(
     from mythos.utils.units import get_kt_from_string
     from tqdm import tqdm
 
-    kt = get_kt_from_string("300K")
+    # Get per-system kt values from config
+    mech_kt = get_kt_from_string(config["mechanical"]["temperature"])
+    struct_kt = get_kt_from_string(config["structural"]["temperature"])
+    persist_kt = get_kt_from_string(config["persistence"]["temperature"])
 
     # Get system directories from config
     mechanical_input_dir = Path(config["mechanical"]["system_dir"])
@@ -552,31 +583,21 @@ def run_optimization(
 
     all_simulators = []
     all_objectives = []
-    opt_params = None
+    # create a default energy function to get opt_params for all cases. Since
+    # the EF is throw away (but topo and disp fn are needed), we can use mocks
+    # here (they do not affect the opt_params structure).
+    opt_params = dna1_energy.create_default_energy_fn(topology=MagicMock(), displacement_fn=MagicMock()).opt_params()
 
     # Setup mechanical objectives (LAMMPS simulators, 40bp duplex)
     if need_mechanical:
-        mech_top = jdna_top.from_oxdna_file(mechanical_input_dir / "data.top")
-        mech_box = read_box_size_lammps(mechanical_input_dir / "data")
-        mech_displacement_fn = jax_md.space.periodic(mech_box)[0]
-
-        mech_energy_fn = dna1_energy.create_default_energy_fn(
-            topology=mech_top,
-            displacement_fn=mech_displacement_fn,
-        ).with_noopt(
-            "ss_stack_weights", "ss_hb_weights"
-        ).without_terms(
-            "BondedExcludedVolume"  # LAMMPS doesn't implement this term
-        ).with_params(kt=kt)
-
-        opt_params = mech_energy_fn.opt_params()
+        mech_top, mech_displacement_fn, mech_energy_fn = setup_lammps_system(mechanical_input_dir, mech_kt)
 
         stretch_twist_simulators = create_stretch_twist_simulators(
             input_dir=mechanical_input_dir,
             energy_fn=mech_energy_fn,
             config=config,
             input_file_name="in",
-            variables={"T": kt, "nsteps": config["mechanical"]["n_steps"]},
+            variables={"T": mech_kt, "nsteps": config["mechanical"]["n_steps"]},
         )
 
         mechanical_objectives = create_stretch_torsion_objectives(
@@ -584,7 +605,7 @@ def run_optimization(
             energy_fn=mech_energy_fn,
             top=mech_top,
             displacement_fn=mech_displacement_fn,
-            kt=kt,
+            kt=mech_kt,
             config=config,
         )
 
@@ -593,19 +614,9 @@ def run_optimization(
 
     # Setup structural objectives (oxDNA MD simulator, 20bp duplex)
     if need_structural:
-        struct_top = jdna_top.from_oxdna_file(structural_input_dir / "sys.top")
-        struct_box = read_box_size_oxdna(structural_input_dir / "sys.conf")
-        struct_displacement_fn = jax_md.space.periodic(struct_box)[0]
-
-        struct_energy_fn = dna1_energy.create_default_energy_fn(
-            topology=struct_top,
-            displacement_fn=struct_displacement_fn,
-        ).with_noopt(
-            "ss_stack_weights", "ss_hb_weights"
-        ).with_params(kt=kt)
-
-        if opt_params is None:
-            opt_params = struct_energy_fn.opt_params()
+        struct_top, struct_displacement_fn, struct_energy_fn = setup_oxdna_system(
+            structural_input_dir, struct_kt
+        )
 
         structural_simulators = create_structural_simulators(
             input_dir=structural_input_dir,
@@ -619,7 +630,7 @@ def run_optimization(
             energy_fn=struct_energy_fn,
             top=struct_top,
             displacement_fn=struct_displacement_fn,
-            kt=kt,
+            kt=struct_kt,
             config=config,
         )
 
@@ -628,19 +639,9 @@ def run_optimization(
 
     # Setup persistence length objective (oxDNA MD simulator, 60bp duplex)
     if need_persistence:
-        persist_top = jdna_top.from_oxdna_file(persistence_input_dir / "sys.top")
-        persist_box = read_box_size_oxdna(persistence_input_dir / "sys.conf")
-        persist_displacement_fn = jax_md.space.periodic(persist_box)[0]
-
-        persist_energy_fn = dna1_energy.create_default_energy_fn(
-            topology=persist_top,
-            displacement_fn=persist_displacement_fn,
-        ).with_noopt(
-            "ss_stack_weights", "ss_hb_weights"
-        ).with_params(kt=kt)
-
-        if opt_params is None:
-            opt_params = persist_energy_fn.opt_params()
+        persist_top, persist_displacement_fn, persist_energy_fn = setup_oxdna_system(
+            persistence_input_dir, persist_kt
+        )
 
         persistence_simulators = create_persistence_simulators(
             input_dir=persistence_input_dir,
@@ -654,7 +655,7 @@ def run_optimization(
             energy_fn=persist_energy_fn,
             top=persist_top,
             displacement_fn=persist_displacement_fn,
-            kt=kt,
+            kt=persist_kt,
             config=config,
         )
 
@@ -706,7 +707,7 @@ def run_optimization(
         aim_logger = AimLogger(experiment=name)
         loggers.append(aim_logger)
     if metrics_file:
-        loggers.append(FileLogger(metrics_file))
+        loggers.append(FileLogger(metrics_file, mode="w"))
     logger = MultiLogger(loggers)
 
     state = None
