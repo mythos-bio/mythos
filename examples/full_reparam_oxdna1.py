@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import InitVar
 from pathlib import Path
-from typing import Any
+from typing import Any, ClassVar
 from unittest.mock import MagicMock
 
 import chex
@@ -20,8 +20,11 @@ import mythos.observables.base as obs_base
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
 import optax
+import pandas as pd
 from mythos.energy.base import EnergyFunction
+from mythos.input import oxdna_input
 from mythos.observables.diameter import Diameter
+from mythos.observables.melting_temp import MeltingTemp
 from mythos.observables.persistence_length import PersistenceLength
 from mythos.observables.pitch import PitchAngle, compute_pitch
 from mythos.observables.propeller import PropellerTwist
@@ -30,10 +33,12 @@ from mythos.observables.stretch_torsion import ExtensionZ, TwistXY, stretch_tors
 from mythos.simulators.base import SimulatorOutput
 from mythos.simulators.lammps.lammps_oxdna import LAMMPSoxDNASimulator
 from mythos.simulators.oxdna import oxDNASimulator
+from mythos.simulators.oxdna.utils import read_energy, read_last_hist
 from mythos.ui.loggers.console import ConsoleLogger
 from mythos.ui.loggers.disk import FileLogger
 from mythos.ui.loggers.multilogger import MultiLogger
 from mythos.utils.types import Params
+from ray import state
 
 jax.config.update("jax_enable_x64", val=True)
 logging.basicConfig(level=logging.INFO)
@@ -84,6 +89,17 @@ DEFAULT_CONFIG: dict[str, Any] = {
             "persistence_length": 50.0,  # nm
         },
     },
+    "thermo": {
+        "system_dir": "data/full_reparam_oxdna1/thermodynamic/5bp_duplex",
+        "temperature": "300K",
+        "n_replicas": 10,
+        "n_steps": 1_000_000,
+        "temperature_range": [280, 350],  # K, for extrapolation
+        "temperature_range_points": 20,
+        "targets": {
+            "melting_temperature": 294.2,  # K
+        },
+    },
 }
 
 
@@ -119,14 +135,41 @@ class LAMMPSStretchSimulator(LAMMPSoxDNASimulator):
         return SimulatorOutput(observables=[tagged_traj], state=output.state)
 
 
+class EnergyInfo(pd.DataFrame):
+    pass
+
+@chex.dataclass(frozen=True, kw_only=True)
+class UmbrellaSamplingSimulator(oxDNASimulator):
+    exposed_observables: ClassVar[list[str]] = ["trajectory", "energy_info"]
+
+    def run_simulation(
+            self, input_dir: Path, opt_params: Params | None = None, weights: pd.DataFrame | None = None, **kwargs
+    ) -> SimulatorOutput:
+        # rewrite out weights file if provided
+        if weights is not None:
+            wfile = oxdna_input.read(input_dir / "input")["weights_file"]
+            weights.to_csv(input_dir / wfile, sep=" ", header=False)
+        # run underlying oxDNA simulator and read energy data
+        output = oxDNASimulator.run_simulation(self, input_dir, opt_params=opt_params, **kwargs)
+        trajectory = output.observables[0]
+        energy_df = EnergyInfo(read_energy(input_dir))
+        # recompute weights from last histogram
+        hist = read_last_hist(input_dir)
+        op_cols = hist.columns[:hist.columns.index("count")]
+        weights = hist.set_index(op_cols).query("unbiased_normed > 0").eval("weights = 1 / unbiased_normed")
+        weights["weights"] /= weights["weights"].min()  # for numerical stability
+        weights = weights[["weights"]].reindex(hist.index, fill_value=0)
+        output.state["weights"] = weights
+        return SimulatorOutput(observables=[trajectory, energy_df], state=output.state)
+
+
 def create_stretch_twist_simulators(
     input_dir: Path,
     energy_fn: EnergyFunction,
-    config: dict[str, Any],
+    mech_cfg: dict[str, Any],
     variables: dict[str, Any] | None = None,
     **kwargs: Any,
 ) -> list[LAMMPSStretchSimulator]:
-    mech_cfg = config["mechanical"]
     stretch_forces = mech_cfg["stretch_forces"]
     stretch_torque = mech_cfg["stretch_torque"]
     twist_torques = mech_cfg["twist_torques"]
@@ -216,9 +259,8 @@ def create_stretch_torsion_objectives(
     top: jdna_top.Topology,
     displacement_fn: Callable,
     kt: float,
-    config: dict[str, Any],
+    mech_cfg: dict[str, Any],
 ) -> list[jdna_objective.DiffTReObjective]:
-    mech_cfg = config["mechanical"]
     stretch_torque = mech_cfg["stretch_torque"]
     twist_force = mech_cfg["twist_force"]
     stretch_forces_list = mech_cfg["stretch_forces"]
@@ -337,10 +379,9 @@ def create_stretch_torsion_objectives(
 def create_structural_simulators(
     input_dir: Path,
     energy_fn: EnergyFunction,
-    config: dict[str, Any],
+    struct_cfg: dict[str, Any],
     **kwargs: Any,
 ) -> list[oxDNASimulator]:
-    struct_cfg = config["structural"]
     n_steps = struct_cfg["n_steps"]
     snapshot_interval = struct_cfg["snapshot_interval"]
     n_replicas = struct_cfg["n_replicas"]
@@ -370,9 +411,8 @@ def create_structural_objectives(
     top: jdna_top.Topology,
     displacement_fn: Callable,
     kt: float,
-    config: dict[str, Any],
+    struct_cfg: dict[str, Any],
 ) -> list[jdna_objective.DiffTReObjective]:
-    struct_cfg = config["structural"]
     target_helix_diameter = struct_cfg["targets"]["helix_diameter"]
     target_helical_pitch = struct_cfg["targets"]["helical_pitch"]
     target_propeller_twist = struct_cfg["targets"]["propeller_twist"]
@@ -486,10 +526,9 @@ def create_structural_objectives(
 def create_persistence_simulators(
     input_dir: Path,
     energy_fn: EnergyFunction,
-    config: dict[str, Any],
+    persist_cfg: dict[str, Any],
     **kwargs: Any,
 ) -> list[oxDNASimulator]:
-    persist_cfg = config["persistence"]
     n_steps = persist_cfg["n_steps"]
     snapshot_interval = persist_cfg["snapshot_interval"]
     n_replicas = persist_cfg["n_replicas"]
@@ -512,9 +551,8 @@ def create_persistence_objective(
     top: jdna_top.Topology,
     displacement_fn: Callable,
     kt: float,
-    config: dict[str, Any],
+    persist_cfg: dict[str, Any],
 ) -> jdna_objective.DiffTReObjective:
-    persist_cfg = config["persistence"]
     target_persistence_length = persist_cfg["targets"]["persistence_length"]
     n_equilibration_steps = persist_cfg["n_equilibration_steps"]
 
@@ -546,11 +584,83 @@ def create_persistence_objective(
     )
 
 
+def create_thermo_simulators(
+    input_dir: Path,
+    energy_fn: EnergyFunction,
+    thermo_cfg: dict[str, Any],
+    **kwargs: Any,
+) -> list[UmbrellaSamplingSimulator]:
+    n_steps = thermo_cfg["n_steps"]
+    n_replicas = thermo_cfg["n_replicas"]
+    overrides = {"steps": n_steps, "equilibration_steps": int(0.5 * n_steps)}
+    return [
+        UmbrellaSamplingSimulator(
+            input_dir=str(input_dir),
+            energy_fn=energy_fn,
+            name=f"thermo_5bp_r{r}",
+            input_overrides=overrides,
+            **kwargs,
+        )
+        for r in range(n_replicas)
+    ]
+
+
+def create_thermo_objective(
+    simulators: list[UmbrellaSamplingSimulator],
+    energy_fn: EnergyFunction,
+    kt: float,
+    thermo_cfg: dict[str, Any],
+) -> jdna_objective.DiffTReObjective:
+    from mythos.utils.units import get_kt
+
+    target_melting_temp = thermo_cfg["targets"]["melting_temperature"]
+    temp_range = thermo_cfg["temperature_range"]
+    temp_range_points = thermo_cfg["temperature_range_points"]
+
+    # Get kt values for temperature range (for extrapolation)
+    kt_range = get_kt(jnp.linspace(temp_range[0], temp_range[1], temp_range_points))
+
+    melting_temp_fn = MeltingTemp(
+        rigid_body_transform_fn=1,  # not used
+        sim_temperature=kt,
+        temperature_range=kt_range,
+        energy_fn=energy_fn,
+    )
+    # Target in sim units (kt)
+    target_kt = get_kt(target_melting_temp)
+    beta = jnp.array(1 / kt, dtype=jnp.float64)
+
+    def melting_temp_loss_fn(
+        traj: Any, weights: jnp.ndarray, _energy_model: Any, opt_params: Params, observables: list
+    ) -> LossOutput:
+        # Filter energy info from observables
+        e_info = pd.concat([i for i in observables if isinstance(i, EnergyInfo)])
+        melting_temp = melting_temp_fn(traj, e_info["bond"].to_numpy(), e_info["weight"].to_numpy(), opt_params)
+        expected_melting_temp = jnp.dot(weights, melting_temp).sum()
+        loss = jnp.sqrt((expected_melting_temp - target_kt) ** 2)
+        return loss, (("melting_temperature", expected_melting_temp), {})
+
+    return jdna_objective.DiffTReObjective(
+        name="melting_temperature",
+        grad_or_loss_fn=melting_temp_loss_fn,
+        required_observables=[obs for sim in simulators for obs in sim.exposes()],
+        energy_fn=energy_fn,
+        beta=beta,
+        n_equilibration_steps=0,  # Equilibration handled in simulation run
+        min_n_eff_factor=0.95,
+    )
+
+def thermo_reweight_simulators(group: list[str], component_states: dict[str, Any]):
+    all_weights = pd.concat([state[i]["weights"] for i in group])
+    for name in group:
+        component_states[name]["weights"] = all_weights
+
 # Valid objective names for command-line selection
 MECHANICAL_OBJECTIVES = {"stretch_modulus", "torsional_modulus", "twist_stretch_coupling"}
 PERSISTENCE_OBJECTIVES = {"persistence_length"}
 STRUCTURAL_OBJECTIVES = {"helix_diameter", "helical_pitch", "propeller_twist", "rise"}
-VALID_OBJECTIVES = MECHANICAL_OBJECTIVES | PERSISTENCE_OBJECTIVES | STRUCTURAL_OBJECTIVES
+THERMO_OBJECTIVES = {"melting_temperature"}
+VALID_OBJECTIVES = MECHANICAL_OBJECTIVES | PERSISTENCE_OBJECTIVES | STRUCTURAL_OBJECTIVES | THERMO_OBJECTIVES
 
 
 def run_optimization(
@@ -570,16 +680,19 @@ def run_optimization(
     mech_kt = get_kt_from_string(config["mechanical"]["temperature"])
     struct_kt = get_kt_from_string(config["structural"]["temperature"])
     persist_kt = get_kt_from_string(config["persistence"]["temperature"])
+    thermo_kt = get_kt_from_string(config["thermo"]["temperature"])
 
     # Get system directories from config
     mechanical_input_dir = Path(config["mechanical"]["system_dir"])
     structural_input_dir = Path(config["structural"]["system_dir"])
     persistence_input_dir = Path(config["persistence"]["system_dir"])
+    thermo_input_dir = Path(config["thermo"]["system_dir"])
 
     # Determine which objective categories are needed
     need_mechanical = bool(selected_objectives & MECHANICAL_OBJECTIVES)
     need_persistence = bool(selected_objectives & PERSISTENCE_OBJECTIVES)
     need_structural = bool(selected_objectives & STRUCTURAL_OBJECTIVES)
+    need_thermo = bool(selected_objectives & THERMO_OBJECTIVES)
 
     all_simulators = []
     all_objectives = []
@@ -595,7 +708,7 @@ def run_optimization(
         stretch_twist_simulators = create_stretch_twist_simulators(
             input_dir=mechanical_input_dir,
             energy_fn=mech_energy_fn,
-            config=config,
+            mech_cfg=config["mechanical"],
             input_file_name="in",
             variables={"T": mech_kt, "nsteps": config["mechanical"]["n_steps"]},
         )
@@ -606,7 +719,7 @@ def run_optimization(
             top=mech_top,
             displacement_fn=mech_displacement_fn,
             kt=mech_kt,
-            config=config,
+            mech_cfg=config["mechanical"],
         )
 
         all_simulators.extend(stretch_twist_simulators)
@@ -621,7 +734,7 @@ def run_optimization(
         structural_simulators = create_structural_simulators(
             input_dir=structural_input_dir,
             energy_fn=struct_energy_fn,
-            config=config,
+            struct_cfg=config["structural"],
             source_path=oxdna_source_path,
         )
 
@@ -631,7 +744,7 @@ def run_optimization(
             top=struct_top,
             displacement_fn=struct_displacement_fn,
             kt=struct_kt,
-            config=config,
+            struct_cfg=config["structural"],
         )
 
         all_simulators.extend(structural_simulators)
@@ -646,7 +759,7 @@ def run_optimization(
         persistence_simulators = create_persistence_simulators(
             input_dir=persistence_input_dir,
             energy_fn=persist_energy_fn,
-            config=config,
+            persist_cfg=config["persistence"],
             source_path=oxdna_source_path,
         )
 
@@ -656,11 +769,34 @@ def run_optimization(
             top=persist_top,
             displacement_fn=persist_displacement_fn,
             kt=persist_kt,
-            config=config,
+            persist_cfg=config["persistence"],
         )
 
         all_simulators.extend(persistence_simulators)
         all_objectives.append(persistence_objective)
+
+    # Setup thermo objectives (oxDNA umbrella sampling, 5bp duplex)
+    if need_thermo:
+        thermo_top, thermo_displacement_fn, thermo_energy_fn = setup_oxdna_system(
+            thermo_input_dir, thermo_kt
+        )
+
+        thermo_simulators = create_thermo_simulators(
+            input_dir=thermo_input_dir,
+            energy_fn=thermo_energy_fn,
+            thermo_cfg=config["thermo"],
+            source_path=oxdna_source_path,
+        )
+
+        thermo_objective = create_thermo_objective(
+            simulators=thermo_simulators,
+            energy_fn=thermo_energy_fn,
+            kt=thermo_kt,
+            thermo_cfg=config["thermo"],
+        )
+
+        all_simulators.extend(thermo_simulators)
+        all_objectives.append(thermo_objective)
 
     # Filter objectives to only those selected
     objective_map = {obj.name: obj for obj in all_objectives}
@@ -697,6 +833,9 @@ def run_optimization(
     if need_persistence:
         persist_targets = config["persistence"]["targets"]
         logging.info("  Persistence length target: Lp=%.1f nm", persist_targets["persistence_length"])
+    if need_thermo:
+        thermo_targets = config["thermo"]["targets"]
+        logging.info("  Melting temperature target: Tm=%.1f K", thermo_targets["melting_temperature"])
 
     loggers = [ConsoleLogger()]
     if use_aim:
@@ -715,7 +854,8 @@ def run_optimization(
         output = optimizer.step(opt_params, state)
         opt_params = output.opt_params
         state = output.state
-
+        thermo_reweight_simulators([s.name for s in thermo_simulators], output.component_states)
+        print("opt_state:", output.state)
         # Log metrics
         for ctx, obs in output.observables.items():
             for name in obs:
@@ -732,7 +872,8 @@ def parse_args() -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description=(
             "Full oxDNA1 reparameterization: mechanical (S_eff, C, g), "
-            "structural (diameter, pitch, propeller, rise), and persistence length properties."
+            "structural (diameter, pitch, propeller, rise), persistence length, "
+            "and melting temperature properties."
         )
     )
     parser.add_argument(
@@ -744,6 +885,7 @@ def parse_args() -> argparse.Namespace:
             f"Mechanical: {', '.join(sorted(MECHANICAL_OBJECTIVES))}. "
             f"Persistence: {', '.join(sorted(PERSISTENCE_OBJECTIVES))}. "
             f"Structural: {', '.join(sorted(STRUCTURAL_OBJECTIVES))}. "
+            f"Thermo: {', '.join(sorted(THERMO_OBJECTIVES))}. "
             "If not specified, all objectives are used."
         ),
     )
@@ -818,7 +960,7 @@ if __name__ == "__main__":
 
     # Check if oxDNA source is needed
     oxdna_source = Path(args.oxdna_source).resolve() if args.oxdna_source else None
-    need_oxdna = bool(selected_objectives & (STRUCTURAL_OBJECTIVES | PERSISTENCE_OBJECTIVES))
+    need_oxdna = bool(selected_objectives & (STRUCTURAL_OBJECTIVES | PERSISTENCE_OBJECTIVES | THERMO_OBJECTIVES))
     if need_oxdna and oxdna_source is None:
         raise ValueError("--oxdna-source is required when using oxDNA based objectives")
 
