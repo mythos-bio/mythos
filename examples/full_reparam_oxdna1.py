@@ -90,15 +90,30 @@ DEFAULT_CONFIG: dict[str, Any] = {
         },
     },
     "thermo": {
-        "system_dir": "data/full_reparam_oxdna1/thermodynamic/5bp_duplex",
-        "temperature": "300K",
-        "n_replicas": 10,
-        "n_steps": 1_000_000,
-        "temperature_range": [280, 350],  # K, for extrapolation
-        "temperature_range_points": 20,
-        "targets": {
-            "melting_temperature": 294.2,  # K
+        "1": {
+            "system_dir": "data/full_reparam_oxdna1/thermodynamic/5bp_duplex",
+            "temperature": "300K",
+            "n_replicas": 10,
+            "n_steps": 1_000_000,
+            "temperature_range": [280, 350],  # K, for extrapolation
+            "temperature_range_points": 20,
+            "targets": {
+                "melting_temperature": 294.2,  # K
+            },
+            "enable": True,
         },
+        "2": {
+            "system_dir": "data/full_reparam_oxdna1/thermodynamic/8bp_duplex",
+            "temperature": "300K",
+            "n_replicas": 10,
+            "n_steps": 1_000_000,
+            "temperature_range": [280, 350],  # K, for extrapolation
+            "temperature_range_points": 20,
+            "targets": {
+                "melting_temperature": 324.6,  # K
+            },
+            "enable": True,
+        }
     },
 }
 
@@ -155,11 +170,12 @@ class UmbrellaSamplingSimulator(oxDNASimulator):
         energy_df = EnergyInfo(read_energy(input_dir))
         # recompute weights from last histogram
         hist = read_last_hist(input_dir)
-        op_cols = hist.columns[:hist.columns.index("count")]
-        weights = hist.set_index(op_cols).query("unbiased_normed > 0").eval("weights = 1 / unbiased_normed")
-        weights["weights"] /= weights["weights"].min()  # for numerical stability
-        weights = weights[["weights"]].reindex(hist.index, fill_value=0)
-        output.state["weights"] = weights
+        op_cols = list(hist.columns[:hist.columns.get_loc("counts")]) # columns before counts are the order parameters
+        hist = hist.set_index(op_cols)
+        weights = hist.query("unbiased_count > 0").eval("weights = 1 / unbiased_count")[["weights"]]
+        weights /= weights.min()  # for numerical stability
+        # Store in state to pass back in on next run (or combined post-opt-step)
+        output.state["weights"] = weights.reindex(hist.index, fill_value=0)
         return SimulatorOutput(observables=[trajectory, energy_df], state=output.state)
 
 
@@ -588,6 +604,7 @@ def create_thermo_simulators(
     input_dir: Path,
     energy_fn: EnergyFunction,
     thermo_cfg: dict[str, Any],
+    thermo_name: str = "default",
     **kwargs: Any,
 ) -> list[UmbrellaSamplingSimulator]:
     n_steps = thermo_cfg["n_steps"]
@@ -597,7 +614,7 @@ def create_thermo_simulators(
         UmbrellaSamplingSimulator(
             input_dir=str(input_dir),
             energy_fn=energy_fn,
-            name=f"thermo_5bp_r{r}",
+            name=f"thermo_{thermo_name}_r{r}",
             input_overrides=overrides,
             **kwargs,
         )
@@ -610,6 +627,7 @@ def create_thermo_objective(
     energy_fn: EnergyFunction,
     kt: float,
     thermo_cfg: dict[str, Any],
+    thermo_name: str = "default",
 ) -> jdna_objective.DiffTReObjective:
     from mythos.utils.units import get_kt
 
@@ -641,7 +659,7 @@ def create_thermo_objective(
         return loss, (("melting_temperature", expected_melting_temp), {})
 
     return jdna_objective.DiffTReObjective(
-        name="melting_temperature",
+        name=f"melting_temperature_{thermo_name}",
         grad_or_loss_fn=melting_temp_loss_fn,
         required_observables=[obs for sim in simulators for obs in sim.exposes()],
         energy_fn=energy_fn,
@@ -650,8 +668,10 @@ def create_thermo_objective(
         min_n_eff_factor=0.95,
     )
 
-def thermo_reweight_simulators(group: list[str], component_states: dict[str, Any]):
-    all_weights = pd.concat([state[i]["weights"] for i in group])
+def thermo_reweight_simulators(group: list[str], component_states: dict[str, Any]) -> None:
+    all_weights = pd.concat([component_states[i]["weights"] for i in group])
+    all_weights = all_weights.groupby(all_weights.index.names).mean()
+    all_weights /= all_weights.min()
     for name in group:
         component_states[name]["weights"] = all_weights
 
@@ -680,19 +700,17 @@ def run_optimization(
     mech_kt = get_kt_from_string(config["mechanical"]["temperature"])
     struct_kt = get_kt_from_string(config["structural"]["temperature"])
     persist_kt = get_kt_from_string(config["persistence"]["temperature"])
-    thermo_kt = get_kt_from_string(config["thermo"]["temperature"])
 
     # Get system directories from config
     mechanical_input_dir = Path(config["mechanical"]["system_dir"])
     structural_input_dir = Path(config["structural"]["system_dir"])
     persistence_input_dir = Path(config["persistence"]["system_dir"])
-    thermo_input_dir = Path(config["thermo"]["system_dir"])
 
     # Determine which objective categories are needed
     need_mechanical = bool(selected_objectives & MECHANICAL_OBJECTIVES)
     need_persistence = bool(selected_objectives & PERSISTENCE_OBJECTIVES)
     need_structural = bool(selected_objectives & STRUCTURAL_OBJECTIVES)
-    need_thermo = bool(selected_objectives & THERMO_OBJECTIVES)
+    need_thermo = any(obj.startswith("melting_temperature") for obj in selected_objectives)
 
     all_simulators = []
     all_objectives = []
@@ -775,28 +793,40 @@ def run_optimization(
         all_simulators.extend(persistence_simulators)
         all_objectives.append(persistence_objective)
 
-    # Setup thermo objectives (oxDNA umbrella sampling, 5bp duplex)
+    # Setup thermo objectives (oxDNA umbrella sampling)
+    # Iterate over enabled thermo sub-configs
+    thermo_simulator_groups = []  # Groups of simulator names for reweighting
     if need_thermo:
-        thermo_top, thermo_displacement_fn, thermo_energy_fn = setup_oxdna_system(
-            thermo_input_dir, thermo_kt
-        )
+        for thermo_name, thermo_cfg in config["thermo"].items():
+            if not thermo_cfg.get("enable", False):
+                continue
 
-        thermo_simulators = create_thermo_simulators(
-            input_dir=thermo_input_dir,
-            energy_fn=thermo_energy_fn,
-            thermo_cfg=config["thermo"],
-            source_path=oxdna_source_path,
-        )
+            thermo_input_dir = Path(thermo_cfg["system_dir"])
+            thermo_kt = get_kt_from_string(thermo_cfg["temperature"])
 
-        thermo_objective = create_thermo_objective(
-            simulators=thermo_simulators,
-            energy_fn=thermo_energy_fn,
-            kt=thermo_kt,
-            thermo_cfg=config["thermo"],
-        )
+            thermo_top, thermo_displacement_fn, thermo_energy_fn = setup_oxdna_system(
+                thermo_input_dir, thermo_kt
+            )
 
-        all_simulators.extend(thermo_simulators)
-        all_objectives.append(thermo_objective)
+            thermo_simulators = create_thermo_simulators(
+                input_dir=thermo_input_dir,
+                energy_fn=thermo_energy_fn,
+                thermo_cfg=thermo_cfg,
+                thermo_name=thermo_name,
+                source_path=oxdna_source_path,
+            )
+
+            thermo_objective = create_thermo_objective(
+                simulators=thermo_simulators,
+                energy_fn=thermo_energy_fn,
+                kt=thermo_kt,
+                thermo_cfg=thermo_cfg,
+                thermo_name=thermo_name,
+            )
+
+            all_simulators.extend(thermo_simulators)
+            all_objectives.append(thermo_objective)
+            thermo_simulator_groups.append([s.name for s in thermo_simulators])
 
     # Filter objectives to only those selected
     objective_map = {obj.name: obj for obj in all_objectives}
@@ -834,8 +864,13 @@ def run_optimization(
         persist_targets = config["persistence"]["targets"]
         logging.info("  Persistence length target: Lp=%.1f nm", persist_targets["persistence_length"])
     if need_thermo:
-        thermo_targets = config["thermo"]["targets"]
-        logging.info("  Melting temperature target: Tm=%.1f K", thermo_targets["melting_temperature"])
+        for thermo_name, thermo_cfg in config["thermo"].items():
+            if thermo_cfg.get("enable", False):
+                logging.info(
+                    "  Melting temperature target (%s): Tm=%.1f K",
+                    thermo_name,
+                    thermo_cfg["targets"]["melting_temperature"],
+                )
 
     loggers = [ConsoleLogger()]
     if use_aim:
@@ -854,8 +889,12 @@ def run_optimization(
         output = optimizer.step(opt_params, state)
         opt_params = output.opt_params
         state = output.state
-        thermo_reweight_simulators([s.name for s in thermo_simulators], output.component_states)
-        print("opt_state:", output.state)
+
+        # For umbrella sampling, combine weights across all thermo simulators in
+        # each group, this modifies component states in place
+        for group in thermo_simulator_groups:
+            thermo_reweight_simulators(group, state.component_state)
+
         # Log metrics
         for ctx, obs in output.observables.items():
             for name in obs:
