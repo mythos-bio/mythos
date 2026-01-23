@@ -211,14 +211,14 @@ def _reweight_from_histogram(hist: pd.DataFrame) -> pd.DataFrame:
 
 @chex.dataclass(frozen=True, kw_only=True)
 class oxDNAUmbrellaSampler(oxDNASimulator):  # noqa: N801 oxDNA is a special word
-    """An oxDNA sampler that for umbrella sampling simulations.
+    """An oxDNA sampler for umbrella sampling simulations.
 
     This simulator extends the oxDNASimulator to handle extra data related to
     umbrella sampling. The input directory must be setup for umbrella sampling
     with the appropriate configurations, including order parameters and weights
     file, among other relevant settings.
 
-    Based on the last historgram written by oxDNA, the simulator will compute a
+    Based on the last histogram written by oxDNA, the simulator will compute a
     reweighted set of weights in the "weight" key of the output state, which can
     be passed back in on subsequent runs.
 
