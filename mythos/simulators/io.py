@@ -7,53 +7,55 @@ from typing import Any
 import chex
 import jax.numpy as jnp
 import jax_md
-from typing_extensions import override
+from jax import tree_map
 
 from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state
-from mythos.utils.types import Vector3D
+from mythos.utils.types import ARR_OR_SCALAR, Vector3D
 
 
 @chex.dataclass()
 class SimulatorTrajectory:
-    """A trajectory of a simulation run."""
+    """A trajectory of a simulation run.
 
+    Parameters:
+        rigid_body: The jax_md RigidBody representation of the trajectory.
+        metadata: Optional metadata associated with each state in the
+          trajectory. This must be a dictionary where each value is a numerical
+          array of length equal to the number of states in the trajectory.
+    """
     rigid_body: jax_md.rigid_body.RigidBody
-    metadata: jnp.ndarray | None = None
+    metadata: dict[str, jnp.ndarray]|None = None
 
-    @override
-    def __post_init__(self) -> None:
-        if self.metadata is None:
-            self.metadata = [None] * self.rigid_body.center.shape[0]
-        if len(self.metadata) != self.rigid_body.center.shape[0]:
-            raise ValueError(
-                f"Metadata length {len(self.metadata)} does not match "
-                f"trajectory length {self.rigid_body.center.shape[0]}"
-            )
-
-    def with_state_metadata(self, metadata: Any) -> "SimulatorTrajectory":
+    def with_state_metadata(self, **metadata: dict[str, ARR_OR_SCALAR]) -> "SimulatorTrajectory":
         """Set the same metadata for all states in the trajectory."""
-        return self.replace(metadata=[metadata] * self.length())
+        new_metadata = self.metadata.copy() if self.metadata is not None else {}
+        for key, value in metadata.items():
+            new_metadata[key] = jnp.stack([jnp.asarray(value)] * self.length())
+        return self.replace(metadata=new_metadata)
 
     def filter(self, filter_fn: Callable[[Any], bool]) -> "SimulatorTrajectory":
         """Filter the trajectory based on metadata.
 
         Args:
-            filter_fn: A function that takes in metadata and returns a boolean
-                indicating whether to keep the state.
+            filter_fn: A function that takes in metadata tree and returns a
+                boolean array of length equal to the number of states,
+                indicating which states to keep.
 
         Returns:
             A new SimulatorTrajectory with only the states that pass the filter.
         """
-        indices = [i for i, md in enumerate(self.metadata) if filter_fn(md)]
+        indices = jnp.where(filter_fn(self.metadata))[0]
         return self.slice(indices)
 
     def slice(self, key: int | slice | jnp.ndarray | list) -> "SimulatorTrajectory":
         """Slice the trajectory."""
         if isinstance(key, int):
             key = slice(key, key + 1)
+        if not isinstance(key, slice):
+            key = jnp.asarray(key)
 
-        metadata = self.metadata[key] if isinstance(key, slice) else [self.metadata[i] for i in key]
+        metadata = None if self.metadata is None else tree_map(lambda x: x[key], self.metadata)
 
         return self.replace(
             rigid_body=jax_md.rigid_body.RigidBody(
@@ -79,6 +81,17 @@ class SimulatorTrajectory:
 
     def __add__(self, other: "SimulatorTrajectory") -> "SimulatorTrajectory":
         """Concatenate two trajectories."""
+        left_metadata = self.metadata or {}
+        right_metadata = other.metadata or {}
+        keys = left_metadata.keys() | right_metadata.keys()
+        if keys:
+            for key in keys:
+                left_metadata.setdefault(key, jnp.array([jnp.nan] * self.length()))
+                right_metadata.setdefault(key, jnp.array([jnp.nan] * other.length()))
+            metadata = tree_map(lambda ll, rl: jnp.concatenate([ll, rl], axis=0), left_metadata, right_metadata)
+        else:
+            metadata = None
+
         return self.replace(
             rigid_body=jax_md.rigid_body.RigidBody(
                 center=jnp.concat(
@@ -89,7 +102,7 @@ class SimulatorTrajectory:
                     vec=jnp.concatenate([self.rigid_body.orientation.vec, other.rigid_body.orientation.vec], axis=0)
                 ),
             ),
-            metadata=self.metadata + other.metadata,
+            metadata=metadata,
         )
 
     def to_file(self, filepath: Path, box_size: Vector3D = (0, 0, 0)) -> None:

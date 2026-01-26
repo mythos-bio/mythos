@@ -1,3 +1,4 @@
+import jax
 import jax.numpy as jnp
 import jax_md
 import pytest
@@ -93,14 +94,12 @@ def test_simulatortrajectory_with_state_metadata() -> None:
         )
     )
 
-    metadata = {"force": 10.0, "torque": 5.0}
-    traj_with_metadata = traj.with_state_metadata(metadata)
+    traj_with_metadata = traj.with_state_metadata(force = 10.0, torque = 5.0)
 
-    assert len(traj_with_metadata.metadata) == n
-    for md in traj_with_metadata.metadata:
-        assert md == metadata
-        assert md["force"] == 10.0
-        assert md["torque"] == 5.0
+    assert jax.tree_util.tree_all(jax.tree_map(lambda x: x.shape[0] == n, traj_with_metadata.metadata))
+    for i in range(traj_with_metadata.length()):
+        assert traj_with_metadata.metadata["force"][i] == 10.0
+        assert traj_with_metadata.metadata["torque"][i] == 5.0
 
 
 def test_simulatortrajectory_filter_basic() -> None:
@@ -113,7 +112,7 @@ def test_simulatortrajectory_filter_basic() -> None:
                 vec=jnp.zeros((n, 4)),
             ),
         ),
-        metadata=[{"value": i} for i in range(n)],
+        metadata={"value": jnp.arange(n)}
     )
 
     # Filter for even values only
@@ -121,8 +120,8 @@ def test_simulatortrajectory_filter_basic() -> None:
 
     assert filtered_traj.length() == 5
     # Check that metadata is correctly filtered
-    for md in filtered_traj.metadata:
-        assert md["value"] % 2 == 0
+    for i in range(filtered_traj.length()):
+        assert filtered_traj.metadata["value"][i] % 2 == 0
 
 
 def test_simulatortrajectory_filter_by_force_torque() -> None:
@@ -135,12 +134,12 @@ def test_simulatortrajectory_filter_by_force_torque() -> None:
         {"force": 2, "torque": 10},
         {"force": 2, "torque": 20},
     ]
+    metadata = {
+        "force": jnp.concatenate([jnp.array([c["force"]] * n_per_condition) for c in conditions]),
+        "torque": jnp.concatenate([jnp.array([c["torque"]] * n_per_condition) for c in conditions]),
+    }
 
-    metadata = []
-    for cond in conditions:
-        metadata.extend([cond] * n_per_condition)
-
-    total_n = len(metadata)
+    total_n = n_per_condition * len(conditions)
     traj = jd_sio.SimulatorTrajectory(
         rigid_body=jax_md.rigid_body.RigidBody(
             center=jnp.arange(total_n * 3).reshape((total_n, 3)),
@@ -156,11 +155,11 @@ def test_simulatortrajectory_filter_by_force_torque() -> None:
     assert stretch_traj.length() == 6  # 2 conditions * 3 states
 
     # Filter torsion experiments (force == 2 and torque > 0)
-    torsion_traj = traj.filter(lambda md: md["force"] == 2 and md["torque"] > 0)
+    torsion_traj = traj.filter(lambda md: (md["force"] == 2) & (md["torque"] > 0))
     assert torsion_traj.length() == 6  # 2 conditions * 3 states
 
     # Filter specific condition
-    specific_traj = traj.filter(lambda md: md["force"] == 2 and md["torque"] == 10)
+    specific_traj = traj.filter(lambda md: (md["force"] == 2) & (md["torque"] == 10))
     assert specific_traj.length() == 3
 
 
@@ -174,7 +173,7 @@ def test_simulatortrajectory_filter_empty_result() -> None:
                 vec=jnp.zeros((n, 4)),
             ),
         ),
-        metadata=[{"value": i} for i in range(n)],
+        metadata={"value": jnp.arange(n)},
     )
 
     # Filter that matches nothing
@@ -194,7 +193,7 @@ def test_simulatortrajectory_filter_preserves_data() -> None:
                 vec=jnp.zeros((n, 4)),
             ),
         ),
-        metadata=[{"keep": True}, {"keep": False}, {"keep": True}, {"keep": False}],
+        metadata={"keep": jnp.array([True, False, True, False])},
     )
 
     filtered_traj = traj.filter(lambda md: md["keep"])
@@ -205,21 +204,55 @@ def test_simulatortrajectory_filter_preserves_data() -> None:
     assert jnp.allclose(filtered_traj.rigid_body.center[1], jnp.array([7, 8, 9]))
 
 
-@pytest.mark.parametrize(
-    ("n_states", "n_md"),
-    [
-        (5, 3),
-        (8, 1),
-    ],
-)
-def test_simulatortrajectory_errors_on_wrong_metadata_shape(n_states, n_md) -> None:
-    with pytest.raises(ValueError, match="does not match trajectory length"):
-        jd_sio.SimulatorTrajectory(
-            rigid_body=jax_md.rigid_body.RigidBody(
-                center=jnp.zeros((n_states, 3)),
-                orientation=jax_md.rigid_body.Quaternion(
-                    vec=jnp.zeros((n_states, 4)),
-                ),
+def test_simulatortrajectory_addition() -> None:
+    n1 = 3
+    n2 = 2
+    traj1 = jd_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=jnp.ones((n1, 3)),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.ones((n1, 4)),
             ),
-            metadata=[{"value": i} for i in range(n_md)],
-        )
+        ),
+        metadata={"value": jnp.array([1, 1, 1]), "value2": jnp.array([2, 2, 2])}
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=jnp.zeros((n2, 3)),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.zeros((n2, 4)),
+            ),
+        ),
+        metadata={"value": jnp.array([0, 0])}
+    )
+
+    combined_traj = traj1 + traj2
+
+    assert combined_traj.length() == n1 + n2
+    for v in combined_traj.metadata.values():
+        assert v.shape[0] == n1 + n2
+    assert jnp.array_equal(combined_traj.metadata["value"], jnp.array([1, 1, 1, 0, 0]))
+    assert jnp.array_equal(combined_traj.metadata["value2"][:3], jnp.array([2, 2, 2]))
+    assert jnp.all(jnp.isnan(combined_traj.metadata["value2"][3:]))
+
+
+def test_simulatortrajectory_vmappable() -> None:
+    traj = jd_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=jnp.arange(10 * 3).reshape((10, 3)),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.zeros((10, 4)),
+            ),
+        ),
+    )
+    def center_fn(t: jd_sio.SimulatorTrajectory):
+        return jnp.mean(t.rigid_body.center, axis=0)
+    center_result = jax.vmap(center_fn)(traj)
+    assert jnp.allclose(center_result, jnp.arange(10*3).reshape((10, 3)).mean(axis=1))
+
+    def with_md_fn(t: jd_sio.SimulatorTrajectory):
+        return jnp.mean(t.rigid_body.center, axis=0) + t.metadata["offset"]
+    traj_with_md = traj.with_state_metadata(offset=100)
+    with_md_result = jax.vmap(with_md_fn)(traj_with_md)
+    assert jnp.allclose(with_md_result, jnp.arange(10*3).reshape((10, 3)).mean(axis=1) + 100)
+
