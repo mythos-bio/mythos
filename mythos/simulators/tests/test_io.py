@@ -250,6 +250,28 @@ def test_simulatortrajectory_addition() -> None:
     assert jnp.array_equal(combined_traj.metadata["value4"][:3], jnp.array([[4, 4], [4, 4], [4, 4]]))
     assert jnp.all(jnp.isnan(combined_traj.metadata["value4"][3:]))
 
+def test_simulatortrajectory_addition_no_metadata() -> None:
+    n1 = 2
+    n2 = 3
+    traj1 = jd_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=jnp.ones((n1, 3)),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.ones((n1, 4)),
+            ),
+        ),
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=jnp.zeros((n2, 3)),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.zeros((n2, 4)),
+            ),
+        ),
+    )
+    combined_traj = traj1 + traj2
+    assert combined_traj.length() == n1 + n2
+    assert combined_traj.metadata is None
 
 def test_simulatortrajectory_addition_raises_on_incompatible_md() -> None:
     n1 = 2
