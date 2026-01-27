@@ -204,16 +204,12 @@ def test_compute_weights_and_neff(
             {},
             1.0,
             jdna_sio.SimulatorTrajectory(
-                rigid_body=jax_md.rigid_body.RigidBody(
-                    center=np.array([1, 2, 3]),
-                    orientation=np.array([1, 0, 0, 0]),
-                ),
+                center=np.array([1, 2, 3]),
+                orientation=np.array([1, 0, 0, 0]),
             ),
             jdna_sio.SimulatorTrajectory(
-                rigid_body=jax_md.rigid_body.RigidBody(
-                    center=np.array([1, 2, 3]),
-                    orientation=np.array([1, 0, 0, 0]),
-                ),
+                center=np.array([1, 2, 3]),
+                orientation=np.array([1, 0, 0, 0]),
             ),
             0.0,
             ("test", 1.0),
@@ -232,7 +228,7 @@ def test_compute_loss(
     """Test the loss calculation in for a Difftre Objective."""
     expected_aux = (np.array(1.0), expected_measured_value, np.array([1, 2, 3]))
     loss_fn = mock_return_function((expected_loss, (expected_measured_value, {})))
-    ref_energies = mock_energy_fn.map(ref_energies.rigid_body)
+    ref_energies = mock_energy_fn.map(ref_energies)
 
     loss, aux = o.compute_loss(opt_params, mock_energy_fn, beta, loss_fn, ref_states, ref_energies, observables=[])
 
@@ -313,12 +309,10 @@ def test_difftreobjective_compute() -> None:
 
     # Create a trajectory observable
     trajectory = jdna_sio.SimulatorTrajectory(
-        rigid_body=jax_md.rigid_body.RigidBody(
-            center=np.arange(110),
-            orientation=jax_md.rigid_body.Quaternion(
-                vec=np.arange(440).reshape(110, 4),
-            ),
-        )
+        center=np.arange(110),
+        orientation=jax_md.rigid_body.Quaternion(
+            vec=np.arange(440).reshape(110, 4),
+        ),
     )
 
     observables = {"test": trajectory}
@@ -370,12 +364,10 @@ def test_difftreobjective_state_preserved() -> None:
 
     # Create a trajectory observable
     trajectory = jdna_sio.SimulatorTrajectory(
-        rigid_body=jax_md.rigid_body.RigidBody(
-            center=np.arange(110),
-            orientation=jax_md.rigid_body.Quaternion(
-                vec=np.arange(440).reshape(110, 4),
-            ),
-        )
+        center=np.arange(110),
+        orientation=jax_md.rigid_body.Quaternion(
+            vec=np.arange(440).reshape(110, 4),
+        ),
     )
 
     observables = {"test": trajectory}
@@ -404,12 +396,10 @@ def test_difftreobjective_raises_when_equilibration_exceeds_trajectory() -> None
 
     # Create a trajectory with only 10 frames (less than n_equilibration_steps)
     trajectory = jdna_sio.SimulatorTrajectory(
-        rigid_body=jax_md.rigid_body.RigidBody(
-            center=np.arange(10),
-            orientation=jax_md.rigid_body.Quaternion(
-                vec=np.arange(40).reshape(10, 4),
-            ),
-        )
+        center=np.arange(10),
+        orientation=jax_md.rigid_body.Quaternion(
+            vec=np.arange(40).reshape(10, 4),
+        ),
     )
 
     observables = {"test": trajectory}

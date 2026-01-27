@@ -65,7 +65,7 @@ class TwistXY(jd_obs.BaseObservable):
             jd_types.ARR_OR_SCALAR: the total twist in radians for each state, so expect
             a size of (n_states,)
         """
-        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory.rigid_body)
+        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory)
 
         base_sites = nucleotides.base_sites
 
@@ -127,7 +127,7 @@ class ExtensionZ(jd_obs.BaseObservable):
             jd_types.ARR_OR_SCALAR: the total extension for each state, so expect a size
             of (n_states,)
         """
-        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory.rigid_body)
+        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory)
 
         center = nucleotides.center
 

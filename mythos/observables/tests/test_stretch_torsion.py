@@ -87,10 +87,8 @@ class TestTwistXY:
         ] * t)
         orientations = jnp.ones([t, 4, 4])
         trajectory = jd_sio.SimulatorTrajectory(
-            rigid_body=jax_md.rigid_body.RigidBody(
-                center=centers,
-                orientation=orientations,
-            )
+            center=centers,
+            orientation=orientations,
         )
 
         twist = st.TwistXY(
@@ -181,10 +179,8 @@ class TestExtensionZ:
         ] * t)
         orientations = jnp.ones([t, 4, 4])
         trajectory = jd_sio.SimulatorTrajectory(
-            rigid_body=jax_md.rigid_body.RigidBody(
-                center=centers,
-                orientation=orientations,
-            )
+            center=centers,
+            orientation=orientations,
         )
 
         extension = st.ExtensionZ(

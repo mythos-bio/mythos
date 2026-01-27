@@ -73,7 +73,7 @@ class Rise(jd_obs.BaseObservable):
             jd_types.ARR_OR_SCALAR: the average rise in Angstroms for each state, so expect a
             size of (n_states,)
         """
-        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory.rigid_body)
+        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory)
         base_sites = nucleotides.base_sites
 
         rises = jax.vmap(single_rise_mapped, (None, 0, None))(self.quartets, base_sites, self.displacement_fn)

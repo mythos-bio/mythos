@@ -82,7 +82,7 @@ class Diameter(jd_obs.BaseObservable):
             jd_types.ARR_OR_SCALAR: the average helical diameter in Angstroms for each state, so
             expect a size of (n_states,)
         """
-        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory.rigid_body)
+        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory)
         back_sites = nucleotides.back_sites
 
         diameters = jax.vmap(single_diameter_mapped, (None, 0, None, None))(

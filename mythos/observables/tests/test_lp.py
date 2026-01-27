@@ -27,7 +27,7 @@ def sim_traj():
         is_5p_3p=False,
     )
 
-    return SimulatorTrajectory(rigid_body=test_traj.state_rigid_body)
+    return SimulatorTrajectory.from_rigid_body(test_traj.state_rigid_body)
 
 
 @pytest.fixture

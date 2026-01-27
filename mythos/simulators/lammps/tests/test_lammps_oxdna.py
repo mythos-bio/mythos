@@ -472,7 +472,7 @@ def test_lammps_energy():
     indir = importlib.resources.files("mythos") / "../data/templates/simple-helix-60bp-oxdna1-lammps"
     topology = from_oxdna_file(indir / "sys.top")
     traj = _read_lammps_output(indir / "trajectory.dat")
-    sim_traj = SimulatorTrajectory(rigid_body=traj.state_rigid_body)
+    sim_traj = SimulatorTrajectory.from_rigid_body(traj.state_rigid_body)
 
     # box and kT match the box from lammps init conf, and temp for lammps input
     energy_fn = create_default_energy_fn(
@@ -480,7 +480,7 @@ def test_lammps_energy():
         displacement_fn=jax_md.space.periodic(200)[0]
     ).without_terms("BondedExcludedVolume"  # lammps doesn't do this term
     ).with_params(kt = 0.1)
-    energy = energy_fn.map(sim_traj.rigid_body)
+    energy = energy_fn.map(sim_traj)
 
     # lammps will report per-nucleotide energy
     energy_per_nucleotide = energy / topology.n_nucleotides
@@ -493,7 +493,7 @@ def test_lammps_energy_dna2():
     indir = importlib.resources.files("mythos") / "../data/templates/simple-helix-60bp-oxdna2-lammps"
     topology = from_oxdna_file(indir / "sys.top")
     traj = _read_lammps_output(indir / "trajectory.dat")
-    sim_traj = SimulatorTrajectory(rigid_body=traj.state_rigid_body)
+    sim_traj = SimulatorTrajectory.from_rigid_body(traj.state_rigid_body)
 
     # box and kT match the box from lammps init conf, and temp for lammps input
     energy_fn = dna2.create_default_energy_fn(
@@ -505,7 +505,7 @@ def test_lammps_energy_dna2():
         # is configurable there.
         kt = 0.1, salt_conc=0.5, q_eff=0.815, half_charged_ends=False
     )
-    energy = energy_fn.map(sim_traj.rigid_body)
+    energy = energy_fn.map(sim_traj)
 
     # lammps will report per-nucleotide energy
     energy_per_nucleotide = energy / topology.n_nucleotides
