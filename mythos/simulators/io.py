@@ -45,6 +45,7 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
             rigid_body: The RigidBody instance to create the SimulatorTrajectory from.
             **kwargs: Additional keyword arguments to pass to the
             SimulatorTrajectory constructor.
+
         Returns:
             A SimulatorTrajectory instance.
         """
