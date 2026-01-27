@@ -5,7 +5,6 @@ import importlib
 
 import jax
 import jax.numpy as jnp
-import jax_md
 import numpy as np
 from jax import vmap
 from jaxtyping import PyTree
@@ -13,27 +12,6 @@ from jaxtyping import PyTree
 import mythos.utils.constants as jd_const
 import mythos.utils.types as typ
 from mythos.input import toml
-
-
-@vmap
-def q_to_back_base(q: jax_md.rigid_body.Quaternion) -> jnp.ndarray:
-    """Get the vector from the center to the base of the nucleotide."""
-    q0, q1, q2, q3 = q.vec
-    return jnp.array([q0**2 + q1**2 - q2**2 - q3**2, 2 * (q1 * q2 + q0 * q3), 2 * (q1 * q3 - q0 * q2)])
-
-
-@vmap
-def q_to_base_normal(q: jax_md.rigid_body.Quaternion) -> jnp.ndarray:
-    """Get the normal vector to the base of the nucleotide."""
-    q0, q1, q2, q3 = q.vec
-    return jnp.array([2 * (q1 * q3 + q0 * q2), 2 * (q2 * q3 - q0 * q1), q0**2 - q1**2 - q2**2 + q3**2])
-
-
-@vmap
-def q_to_cross_prod(q: jax_md.rigid_body.Quaternion) -> jnp.ndarray:
-    """Get the cross product vector of the nucleotide."""
-    q0, q1, q2, q3 = q.vec
-    return jnp.array([2 * (q1 * q2 - q0 * q3), q0**2 - q1**2 + q2**2 - q3**2, 2 * (q2 * q3 + q0 * q1)])
 
 
 @functools.partial(vmap, in_axes=(None, 0, 0), out_axes=0)

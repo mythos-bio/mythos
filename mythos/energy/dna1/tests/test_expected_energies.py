@@ -12,6 +12,7 @@ import mythos.input.sequence_constraints as jd_sc
 import mythos.input.toml as jd_toml
 import mythos.input.topology as jd_top
 import mythos.input.trajectory as jd_traj
+import mythos.simulators.io as jd_sio
 import mythos.utils.constants as jd_const
 import mythos.utils.types as typ
 
@@ -133,7 +134,7 @@ def test_hydrogen_bonding_discrete(base_dir: str):
     ).with_params(pseq=pseq, pseq_constraints=sc)
 
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-3)
 
@@ -200,12 +201,12 @@ def test_hydrogen_bonding_brute_force():
 
     states = trajectory.state_rigid_body
 
-    energy = energy_fn.with_params(pseq=pseq, pseq_constraints=sc).map(states)
+    energy = energy_fn.with_params(pseq=pseq, pseq_constraints=sc).map(jd_sio.SimulatorTrajectory(rigid_body=states))
 
     @jax.jit
     def compute_base_vals(dseq):
         """Compute the per-state energies given a discrete sequence."""
-        return energy_fn.with_props(seq=dseq).map(states)
+        return energy_fn.with_props(seq=dseq).map(jd_sio.SimulatorTrajectory(rigid_body=states))
 
     # Brute force calculation
     assert len(jd_const.BP_TYPES) == len(jd_const.DNA_ALPHA)
@@ -293,12 +294,12 @@ def test_stacking_brute_force():
 
     states = trajectory.state_rigid_body
 
-    energy = energy_fn.with_params(pseq=pseq, pseq_constraints=sc).map(states)
+    energy = energy_fn.with_params(pseq=pseq, pseq_constraints=sc).map(jd_sio.SimulatorTrajectory(rigid_body=states))
 
     @jax.jit
     def compute_base_vals(dseq):
         """Compute the per-state energies given a discrete sequence."""
-        return energy_fn.with_props(seq=dseq).map(states)
+        return energy_fn.with_props(seq=dseq).map(jd_sio.SimulatorTrajectory(rigid_body=states))
 
     # Brute force calculation
     assert len(jd_const.BP_TYPES) == len(jd_const.DNA_ALPHA)

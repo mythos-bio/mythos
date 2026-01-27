@@ -11,6 +11,7 @@ import mythos.energy.na1 as jd_energy
 import mythos.input.toml as jd_toml
 import mythos.input.topology as jd_top
 import mythos.input.trajectory as jd_traj
+import mythos.simulators.io as jd_sio
 
 jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - ignore boolean positional value
 # this is a common jax practice
@@ -182,7 +183,7 @@ def test_fene(base_dir: str):
 
     states = trajectory.state_rigid_body
 
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
 
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
@@ -223,7 +224,7 @@ def test_bonded_excluded_volume(base_dir: str):
 
     states = trajectory.state_rigid_body
 
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
 
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
@@ -269,7 +270,7 @@ def test_stacking(base_dir: str, t_kelvin: float, weights: jnp.ndarray):
 
     states = trajectory.state_rigid_body
 
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
 
     energy = np.around(energy / topology.n_nucleotides, 6)
 
@@ -313,7 +314,7 @@ def test_unbonded_excluded_volume(base_dir: str):
         params=energy_config.init_params(),
     )
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
@@ -352,7 +353,7 @@ def test_cross_stacking(base_dir: str):
         params=energy_config.init_params(),
     )
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-4)  # using a higher tolerance here
 
@@ -391,7 +392,7 @@ def test_hydrogen_bonding(base_dir: str):
         params=energy_config.init_params(),
     )
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-4)  # using a higher tolerance here
 
@@ -431,7 +432,7 @@ def test_coaxial_stacking(base_dir: str):
         params=energy_config.init_params(),
     )
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
@@ -484,7 +485,7 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
         params=energy_config.init_params(),
     )
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-5)
 

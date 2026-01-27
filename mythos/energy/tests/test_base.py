@@ -13,6 +13,7 @@ import pytest
 
 from mythos.energy import base
 from mythos.energy.configuration import BaseConfiguration
+from mythos.simulators.io import SimulatorTrajectory
 
 NOT_IMPLEMENTED_ERR = re.compile("unsupported operand type\(s\) for")  # noqa: W605 - Ignore the regex warning
 
@@ -245,7 +246,7 @@ class MockEnergyFunction(base.BaseEnergyFunction):
 @pytest.mark.parametrize(
     ("rigid_body_transform_fn", "expected"),
     [
-        (None, 4.0),
+        (lambda x: x, 4.0),
         (lambda x: jax_md.rigid_body.RigidBody(center=x.center * 2, orientation=x.orientation), 8.0),
     ],
 )
@@ -264,7 +265,7 @@ def test_ComposedEnergyFunction_call(
         orientation=jnp.array([[1.0, 1.0], [1.0, 1.0]]),
     )
 
-    assert cef(body) == expected
+    assert cef(SimulatorTrajectory(rigid_body=body)) == expected
 
 
 @pytest.fixture

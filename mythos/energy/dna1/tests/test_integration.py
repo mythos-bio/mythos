@@ -12,6 +12,7 @@ import mythos.energy.dna1 as jd_energy
 import mythos.input.toml as jd_toml
 import mythos.input.topology as jd_top
 import mythos.input.trajectory as jd_traj
+import mythos.simulators.io as jd_sio
 from mythos.input.sequence_constraints import dseq_to_pseq, from_bps
 from mythos.input.sequence_dependence import read_ss_weights
 
@@ -99,7 +100,7 @@ def test_bonded_excluded_volume(base_dir: str):
     )
 
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
@@ -131,7 +132,7 @@ def test_coaxial_stacking(base_dir: str):
     )
 
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
@@ -158,7 +159,7 @@ def test_cross_stacking(base_dir: str):
     )
 
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-3)
 
@@ -184,7 +185,7 @@ def test_fene(base_dir: str):
     )
 
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
@@ -235,7 +236,7 @@ def test_hydrogen_bonding(base_dir: str, weights_file: str, *, use_pseq: bool, t
         energy_fn = energy_fn.with_params(pseq=pseq, pseq_constraints=sc)
 
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-3)
 
@@ -288,7 +289,7 @@ def test_stacking(base_dir: str, weights_file: str, *, use_pseq: bool):
         energy_fn = energy_fn.with_params(pseq=pseq, pseq_constraints=sc)
 
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
 
     np.testing.assert_allclose(energy, terms, atol=1e-6)
@@ -315,7 +316,7 @@ def test_unbonded_excluded_volume(base_dir: str):
     )
 
     states = trajectory.state_rigid_body
-    energy = energy_fn.map(states)
+    energy = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
     energy = np.around(energy / topology.n_nucleotides, 6)
     np.testing.assert_allclose(energy, terms, atol=1e-6)
 
@@ -383,7 +384,7 @@ def test_total_energy(base_dir: str, t_kelvin: float, *, use_neighbors: bool):
 
     energy_fn = jd_energy_base.ComposedEnergyFunction(energy_fns=transformed_fns)
 
-    energies = energy_fn.map(states)
+    energies = energy_fn.map(jd_sio.SimulatorTrajectory(rigid_body=states))
 
     energies = np.around(energies / topology.n_nucleotides, 6)
 

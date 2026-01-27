@@ -1,9 +1,32 @@
 """Math utilities for DNA sequence analysis."""
 
 import jax.numpy as jnp
+import jax_md
 import numpy as np
+from jax import vmap
 
 import mythos.utils.types as typ
+
+
+@vmap
+def q_to_back_base(q: jax_md.rigid_body.Quaternion) -> jnp.ndarray:
+    """Get the vector from the center to the base of the nucleotide."""
+    q0, q1, q2, q3 = q.vec
+    return jnp.array([q0**2 + q1**2 - q2**2 - q3**2, 2 * (q1 * q2 + q0 * q3), 2 * (q1 * q3 - q0 * q2)])
+
+
+@vmap
+def q_to_base_normal(q: jax_md.rigid_body.Quaternion) -> jnp.ndarray:
+    """Get the normal vector to the base of the nucleotide."""
+    q0, q1, q2, q3 = q.vec
+    return jnp.array([2 * (q1 * q3 + q0 * q2), 2 * (q2 * q3 - q0 * q1), q0**2 - q1**2 - q2**2 + q3**2])
+
+
+@vmap
+def q_to_cross_prod(q: jax_md.rigid_body.Quaternion) -> jnp.ndarray:
+    """Get the cross product vector of the nucleotide."""
+    q0, q1, q2, q3 = q.vec
+    return jnp.array([2 * (q1 * q2 - q0 * q3), q0**2 - q1**2 + q2**2 - q3**2, 2 * (q2 * q3 + q0 * q1)])
 
 
 def principal_axes_to_euler_angles(

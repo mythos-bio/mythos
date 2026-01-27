@@ -480,7 +480,7 @@ def test_lammps_energy():
         displacement_fn=jax_md.space.periodic(200)[0]
     ).without_terms("BondedExcludedVolume"  # lammps doesn't do this term
     ).with_params(kt = 0.1)
-    energy = energy_fn.map(sim_traj.rigid_body)
+    energy = energy_fn.map(sim_traj)
 
     # lammps will report per-nucleotide energy
     energy_per_nucleotide = energy / topology.n_nucleotides
@@ -505,7 +505,7 @@ def test_lammps_energy_dna2():
         # is configurable there.
         kt = 0.1, salt_conc=0.5, q_eff=0.815, half_charged_ends=False
     )
-    energy = energy_fn.map(sim_traj.rigid_body)
+    energy = energy_fn.map(sim_traj)
 
     # lammps will report per-nucleotide energy
     energy_per_nucleotide = energy / topology.n_nucleotides

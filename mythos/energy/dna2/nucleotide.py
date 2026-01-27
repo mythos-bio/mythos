@@ -4,7 +4,7 @@ import chex
 import jax_md
 
 import mythos.energy.base as je_base
-import mythos.energy.utils as je_utils
+import mythos.utils.math as ju_math
 import mythos.utils.types as typ
 
 
@@ -36,9 +36,9 @@ class Nucleotide(je_base.BaseNucleotide):
         com_to_stacking: typ.Scalar,
     ) -> "Nucleotide":
         """Class method to precompute nucleotide sites from a rigid body."""
-        back_base_vectors = je_utils.q_to_back_base(rigid_body.orientation)
-        base_normals = je_utils.q_to_base_normal(rigid_body.orientation)
-        cross_prods = je_utils.q_to_cross_prod(rigid_body.orientation)
+        back_base_vectors = ju_math.q_to_back_base(rigid_body.orientation)
+        base_normals = ju_math.q_to_base_normal(rigid_body.orientation)
+        cross_prods = ju_math.q_to_cross_prod(rigid_body.orientation)
 
         stack_sites = rigid_body.center + com_to_stacking * back_base_vectors
         back_sites = rigid_body.center + com_to_backbone_x * back_base_vectors + com_to_backbone_y * cross_prods

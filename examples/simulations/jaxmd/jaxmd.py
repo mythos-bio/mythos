@@ -6,13 +6,11 @@ repository. i.e. this file was invoked using:
 ``python -m examples.simulations.jaxmd.jaxmd``
 """
 
-import functools
 from pathlib import Path
 
 import jax
 import jax.numpy as jnp
 import jax_md
-
 import mythos.energy.dna1 as jdna_energy
 import mythos.input.topology as jdna_top
 import mythos.input.trajectory as jdna_traj
@@ -40,7 +38,7 @@ def main():
         .to_rigid_body()
     )
 
-    experiment_config, energy_config = jdna_energy.default_configs()
+    experiment_config, _ = jdna_energy.default_configs()
 
     dt = experiment_config["dt"]
     kT = experiment_config["kT"]
@@ -57,25 +55,14 @@ def main():
         orientation=jnp.array([experiment_config["moment_of_inertia"]], dtype=jnp.float64),
     )
 
-    geometry = energy_config["geometry"]
-    transform_fn = functools.partial(
-        jdna_energy.Nucleotide.from_rigid_body,
-        com_to_backbone=geometry["com_to_backbone"],
-        com_to_hb=geometry["com_to_hb"],
-        com_to_stacking=geometry["com_to_stacking"],
-    )
-
     # The jax_md simulator needs an energy function. We can use the default
     # energy functions and configurations for dna1 simulations. For more
     # information on energy functions and configurations, see the documentation.
-    energy_fn_configs = jdna_energy.default_energy_configs()
-    params = [{} for _ in range(len(energy_fn_configs))]
-    energy_fns = jdna_energy.default_energy_fns()
+    energy_fn = jdna_energy.create_default_energy_fn(topology=topology)
+    params = energy_fn.opt_params()
 
     simulator = jdna_jaxmd.JaxMDSimulator(
-        energy_configs=energy_fn_configs,
-        energy_fns=energy_fns,
-        topology=topology,
+        energy_fn=energy_fn,
         simulator_params=jdna_jaxmd.StaticSimulatorParams(
             seq=jnp.array(topology.seq),
             mass=mass,
@@ -87,7 +74,6 @@ def main():
             gamma=gamma,
         ),
         space=jax_md.space.free(),
-        transform_fn=transform_fn,
         simulator_init=jax_md.simulate.nvt_langevin,
         neighbors=jdna_jaxmd.NoNeighborList(unbonded_nbrs=topology.unbonded_neighbors),
     )

@@ -35,7 +35,7 @@ def make_mock_energy_fn(return_value = None) -> EnergyFunction:
         def map(self, n):
             if return_value is not None:
                 return return_value
-            return jnp.array(n.center)
+            return jnp.array(n.rigid_body.center)
 
         def with_params(self, *_args, **_kwargs):
             return self
@@ -232,7 +232,7 @@ def test_compute_loss(
     """Test the loss calculation in for a Difftre Objective."""
     expected_aux = (np.array(1.0), expected_measured_value, np.array([1, 2, 3]))
     loss_fn = mock_return_function((expected_loss, (expected_measured_value, {})))
-    ref_energies = mock_energy_fn.map(ref_energies.rigid_body)
+    ref_energies = mock_energy_fn.map(ref_energies)
 
     loss, aux = o.compute_loss(opt_params, mock_energy_fn, beta, loss_fn, ref_states, ref_energies, observables=[])
 

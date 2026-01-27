@@ -9,8 +9,8 @@ import jax.numpy as jnp
 import jax_md
 from typing_extensions import override
 
-from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state
+from mythos.utils.math import q_to_back_base, q_to_base_normal
 from mythos.utils.types import Vector3D
 
 
@@ -25,11 +25,6 @@ class SimulatorTrajectory:
     def __post_init__(self) -> None:
         if self.metadata is None:
             self.metadata = [None] * self.rigid_body.center.shape[0]
-        if len(self.metadata) != self.rigid_body.center.shape[0]:
-            raise ValueError(
-                f"Metadata length {len(self.metadata)} does not match "
-                f"trajectory length {self.rigid_body.center.shape[0]}"
-            )
 
     def with_state_metadata(self, metadata: Any) -> "SimulatorTrajectory":
         """Set the same metadata for all states in the trajectory."""

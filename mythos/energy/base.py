@@ -14,6 +14,7 @@ from typing_extensions import override
 import mythos.utils.types as typ
 from mythos.energy.configuration import BaseConfiguration
 from mythos.input.topology import Topology
+from mythos.simulators.io import SimulatorTrajectory
 
 ERR_PARAM_NOT_FOUND = "Parameter '{key}' not found in {class_name}"
 ERR_CALL_NOT_IMPLEMENTED = "Subclasses must implement this method"
@@ -24,13 +25,21 @@ ERR_COMPOSED_ENERGY_FN_TYPE_ENERGY_FNS = "energy_fns must be a list of energy fu
 class EnergyFunction(ABC):
     """Abstract base class for energy functions.
 
-    These are a class of callable-classes that take in a RigidBody and return
+    These are a class of callable-classes that take in a SimulatorTrajectory and return
     the energy of the system as a scalar float.
     """
 
     @abstractmethod
-    def __call__(self, body: jax_md.rigid_body.RigidBody) -> float:
-        """Calculate the energy of the system."""
+    def __call__(self, trajectory_state: SimulatorTrajectory) -> float:
+        """Calculate the energy of the system.
+
+        Args:
+            trajectory_state (SimulatorTrajectory): This is a single state of
+                the trajectory within a SimulatorTrajectory object. Note that a
+                SimulatorTrajectory in general may contain multiple states, this
+                method typically operates via the map() call.
+
+        """
 
     @abstractmethod
     def with_params(self, *repl_dicts: dict, **repl_kwargs: Any) -> "EnergyFunction":
@@ -71,9 +80,13 @@ class EnergyFunction(ABC):
     def opt_params(self) -> dict[str, typ.Scalar]:
         """Get the configured optimizable parameters."""
 
-    def map(self, body_sequence: jnp.ndarray) -> jnp.ndarray:
-        """Map the energy function over a sequence of rigid bodies."""
-        return jax.vmap(self.__call__)(body_sequence)
+    def map(self, trajectory: SimulatorTrajectory) -> jnp.ndarray:
+        """Map the energy function over a SimulatorTrajectory containing multiple states.
+
+        Args:
+            trajectory (SimulatorTrajectory): the trajectory to map over.
+        """
+        return jax.vmap(self.__call__)(trajectory)
 
 
 @chex.dataclass(frozen=True)
@@ -185,9 +198,8 @@ class BaseEnergyFunction(EnergyFunction):
         )
 
     @override
-    def __call__(self, body: jax_md.rigid_body.RigidBody) -> float:
-        if self.transform_fn:
-            body = self.transform_fn(body)
+    def __call__(self, trajectory_state: SimulatorTrajectory) -> float:
+        body = self.transform_fn(trajectory_state.rigid_body)
         return self.compute_energy(body)
 
     @abstractmethod
@@ -285,13 +297,13 @@ class ComposedEnergyFunction(EnergyFunction):
             params.update({self._rename_param_from_fn(k, fn): v for k, v in fn_params.items()})
         return params
 
-    def compute_terms(self, body: jax_md.rigid_body.RigidBody) -> jnp.ndarray:
+    def compute_terms(self, trajectory_state: SimulatorTrajectory) -> jnp.ndarray:
         """Compute each of the energy terms in the energy function."""
-        return jnp.array([fn(body) for fn in self.energy_fns])
+        return jnp.array([fn(trajectory_state) for fn in self.energy_fns])
 
     @override
-    def __call__(self, body: jax_md.rigid_body.RigidBody) -> float:
-        energy_vals = self.compute_terms(body)
+    def __call__(self, trajectory_state: SimulatorTrajectory) -> float:
+        energy_vals = self.compute_terms(trajectory_state)
         return jnp.sum(energy_vals) if self.weights is None else jnp.dot(self.weights, energy_vals)
 
     def without_terms(self, *terms: list[str|type]) -> "ComposedEnergyFunction":

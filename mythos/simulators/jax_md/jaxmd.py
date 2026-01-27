@@ -30,13 +30,14 @@ class JaxMDSimulator(jd_sim_base.Simulator):
 
     def __post_init__(self) -> None:
         """Builds the run function using the provided parameters."""
-        self.run = build_run_fn(
+        run_fn = build_run_fn(
             self.energy_fn,
             self.simulator_params,
             self.space,
             self.simulator_init,
             self.neighbors,
         )
+        object.__setattr__(self, "run", run_fn)
 
 
 def build_run_fn(
@@ -64,7 +65,8 @@ def build_run_fn(
         # so that if the gradient is calculated for this run it will be tracked
         updated_energy_fn = energy_fn.with_params(opt_params)
         def _energy_fn(body: jax_md.rigid_body.RigidBody, unbonded_neighbors: jnp.ndarray) -> float:
-            return updated_energy_fn.with_props(unbonded_neighbors=unbonded_neighbors)(body)
+            trajectory_state = jd_sio.SimulatorTrajectory(rigid_body=body)  # wrap to match our more general interface
+            return updated_energy_fn.with_props(unbonded_neighbors=unbonded_neighbors)(trajectory_state)
 
         init_fn, step_fn = simulator_init(_energy_fn, shift_fn, **simulator_params.sim_init_fn)
 
