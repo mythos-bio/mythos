@@ -11,6 +11,7 @@ from jax import tree_map
 
 from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state
+from mythos.utils.helpers import tree_concatenate
 from mythos.utils.types import ARR_OR_SCALAR, Vector3D
 
 
@@ -22,7 +23,7 @@ class SimulatorTrajectory:
         rigid_body: The jax_md RigidBody representation of the trajectory.
         metadata: Optional metadata associated with each state in the
           trajectory. This must be a dictionary where each value is a numerical
-          array of length equal to the number of states in the trajectory.
+          array whose first axis has length corresponding to number of states.
     """
     rigid_body: jax_md.rigid_body.RigidBody
     metadata: dict[str, jnp.ndarray]|None = None
@@ -55,7 +56,7 @@ class SimulatorTrajectory:
         if not isinstance(key, slice):
             key = jnp.asarray(key)
 
-        metadata = None if self.metadata is None else tree_map(lambda x: x[key], self.metadata)
+        metadata = None if self.metadata is None else tree_map(lambda x: x[key, ...], self.metadata)
 
         return self.replace(
             rigid_body=jax_md.rigid_body.RigidBody(
@@ -81,17 +82,6 @@ class SimulatorTrajectory:
 
     def __add__(self, other: "SimulatorTrajectory") -> "SimulatorTrajectory":
         """Concatenate two trajectories."""
-        left_metadata = self.metadata or {}
-        right_metadata = other.metadata or {}
-        keys = left_metadata.keys() | right_metadata.keys()
-        if keys:
-            for key in keys:
-                left_metadata.setdefault(key, jnp.array([jnp.nan] * self.length()))
-                right_metadata.setdefault(key, jnp.array([jnp.nan] * other.length()))
-            metadata = tree_map(lambda ll, rl: jnp.concatenate([ll, rl], axis=0), left_metadata, right_metadata)
-        else:
-            metadata = None
-
         return self.replace(
             rigid_body=jax_md.rigid_body.RigidBody(
                 center=jnp.concat(
@@ -102,7 +92,7 @@ class SimulatorTrajectory:
                     vec=jnp.concatenate([self.rigid_body.orientation.vec, other.rigid_body.orientation.vec], axis=0)
                 ),
             ),
-            metadata=metadata,
+            metadata=_merge_metadata(self.metadata, self.length(), other.metadata, other.length()),
         )
 
     def to_file(self, filepath: Path, box_size: Vector3D = (0, 0, 0)) -> None:
@@ -128,3 +118,29 @@ class SimulatorTrajectory:
                 dummy_vels_angmom = jnp.zeros((coms.shape[0], 6))  # vels and angular momenta are not available
                 state = jnp.hstack([coms, bb_vecs, base_norms, dummy_vels_angmom])
                 _write_state(f, time=float(i), energies=jnp.zeros(3), state=state, box_size=box_size)
+
+
+def _merge_metadata(
+        left: dict[str, jnp.ndarray]|None,
+        len_left: int,
+        right: dict[str, jnp.ndarray]|None,
+        len_right: int,
+    ) -> dict[str, jnp.ndarray]|None:
+    """Merge two metadata dictionaries for SimulatorTrajectory concatenation.
+
+    If a key is missing in one of the dictionaries, it is filled with NaNs of
+    the same shape (excluding leading axis which is num_states) as the
+    corresponding array in the other dictionary. If a key is present in both
+    dictionaries the shapes must be consistent beyond the leading axis.
+    """
+    if not left and not right:
+        return None
+    left, right = (left or {}, right or {})
+    for key in left.keys() | right.keys():
+        if key in left and key in right and left[key].shape[1:] != right[key].shape[1:]:
+            raise ValueError(f"Metadata key '{key}' has mismatched shapes when adding trajectories.")
+        shape = left.get(key, right.get(key)).shape[1:]
+        # fill with NaNs of the appropriate shape where missing.
+        left.setdefault(key, jnp.full((len_left, *shape), jnp.nan))
+        right.setdefault(key, jnp.full((len_right, *shape), jnp.nan))
+    return tree_concatenate([left, right])

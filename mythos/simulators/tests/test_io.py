@@ -214,7 +214,12 @@ def test_simulatortrajectory_addition() -> None:
                 vec=jnp.ones((n1, 4)),
             ),
         ),
-        metadata={"value": jnp.array([1, 1, 1]), "value2": jnp.array([2, 2, 2])}
+        metadata={
+            "value": jnp.array([1, 1, 1]),  # one dimensional concat
+            "value2": jnp.array([2, 2, 2]),  # one dimensional NaN fill
+            "value3": jnp.array([[3, 3], [3, 3], [3, 3]]),  # multi-dimensional concat
+            "value4": jnp.array([[4, 4], [4, 4], [4, 4]]),  # multi-dimensional NaN fill
+        }
     )
     traj2 = jd_sio.SimulatorTrajectory(
         rigid_body=jax_md.rigid_body.RigidBody(
@@ -223,7 +228,10 @@ def test_simulatortrajectory_addition() -> None:
                 vec=jnp.zeros((n2, 4)),
             ),
         ),
-        metadata={"value": jnp.array([0, 0])}
+        metadata={
+            "value": jnp.array([0, 0]),
+            "value3": jnp.array([[0, 0], [0, 0]]),
+        }
     )
 
     combined_traj = traj1 + traj2
@@ -234,7 +242,43 @@ def test_simulatortrajectory_addition() -> None:
     assert jnp.array_equal(combined_traj.metadata["value"], jnp.array([1, 1, 1, 0, 0]))
     assert jnp.array_equal(combined_traj.metadata["value2"][:3], jnp.array([2, 2, 2]))
     assert jnp.all(jnp.isnan(combined_traj.metadata["value2"][3:]))
+    assert jnp.array_equal(
+        combined_traj.metadata["value3"],
+        jnp.array([[3, 3], [3, 3], [3, 3], [0, 0], [0, 0]])
+    )
+    assert combined_traj.metadata["value3"].shape == (5, 2)
+    assert jnp.array_equal(combined_traj.metadata["value4"][:3], jnp.array([[4, 4], [4, 4], [4, 4]]))
+    assert jnp.all(jnp.isnan(combined_traj.metadata["value4"][3:]))
 
+
+def test_simulatortrajectory_addition_raises_on_incompatible_md() -> None:
+    n1 = 2
+    n2 = 2
+    traj1 = jd_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=jnp.ones((n1, 3)),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.ones((n1, 4)),
+            ),
+        ),
+        metadata={
+            "value": jnp.array([[1, 1], [1, 1]]),  # shape (2,2)
+        }
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        rigid_body=jax_md.rigid_body.RigidBody(
+            center=jnp.zeros((n2, 3)),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.zeros((n2, 4)),
+            ),
+        ),
+        metadata={
+            "value": jnp.array([[0, 0, 0], [0, 0, 0]]),  # shape (2,3) incompatible
+        }
+    )
+
+    with pytest.raises(ValueError, match="Metadata key 'value' has mismatched shapes"):
+        _ = traj1 + traj2
 
 def test_simulatortrajectory_vmappable() -> None:
     traj = jd_sio.SimulatorTrajectory(
