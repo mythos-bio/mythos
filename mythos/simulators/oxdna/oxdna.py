@@ -6,12 +6,14 @@ Run an mythos simulation using an oxDNA sampler.
 import logging
 import os
 import shutil
-import typing
 from dataclasses import field
 from pathlib import Path
+from typing import Any, ClassVar
 
 import chex
 import numpy as np
+import pandas as pd
+from typing_extensions import override
 
 import mythos.input.oxdna_input as jd_oxdna
 import mythos.simulators.io as jd_sio
@@ -82,11 +84,11 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
 
     energy_fn: EnergyFunction
     n_build_threads: int = 4
-    logger_config: dict[str, typing.Any] | None = None
+    logger_config: dict[str, Any] | None = None
     binary_path: Path | None = None
     source_path: Path | None = None
     ignore_params: bool = False
-    input_overrides: dict[str, typing.Any] = field(default_factory=dict)
+    input_overrides: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self, *args, **kwds) -> None:
         """Check the validity of the configuration."""
@@ -108,10 +110,10 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
         """
         return self.replace(binary_path=binary_path, source_path=None, ignore_params=True)
 
+    @override
     def run_simulation(
         self, input_dir: Path, opt_params: Params|None = None, seed: float|None = None, **_
     ) -> SimulatorOutput:
-        """Run an oxDNA simulation."""
         input_config = jd_oxdna.read(input_dir / "input")
         input_config.update(self.input_overrides)
         input_config["seed"] = seed or np.random.default_rng().integers(0, 2**32)
@@ -190,3 +192,71 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
             log_prefix="oxdna.make",
         )
         logger.info("oxDNA binary rebuilt")
+
+
+class UmbrellaEnergyInfo(pd.DataFrame):
+    """Wraps a DataFrame of energy values to enable filtering by type."""
+
+
+def _reweight_from_histogram(hist: pd.DataFrame) -> pd.DataFrame:
+    # columns before counts are the order parameters. We want to have them as
+    # index in order to facilitate joins and reindexing to recover 0 value
+    # entries typically needed by oxdna.
+    op_cols = list(hist.columns[:hist.columns.get_loc("count")])
+    hist = hist.set_index(op_cols)
+    weights = hist.query("unbiased_count > 0").eval("weights = 1 / unbiased_count")[["weights"]]
+    weights /= weights.min()  # for numerical stability
+    return weights.reindex(hist.index, fill_value=0)
+
+
+@chex.dataclass(frozen=True, kw_only=True)
+class oxDNAUmbrellaSampler(oxDNASimulator):  # noqa: N801 oxDNA is a special word
+    """An oxDNA sampler for umbrella sampling simulations.
+
+    This simulator extends the oxDNASimulator to handle extra data related to
+    umbrella sampling. The input directory must be setup for umbrella sampling
+    with the appropriate configurations, including order parameters and weights
+    file, among other relevant settings.
+
+    Based on the last histogram written by oxDNA, the simulator will compute a
+    reweighted set of weights in the "weight" key of the output state, which can
+    be passed back in on subsequent runs.
+
+    The run method takes optional weights DataFrame to use for reweighting. If
+    provided, this will overwrite the weights file in the input directory before
+    running the simulation. The dataframe will be written space-separated
+    without a header, but otherwise unmodified. Ensure it has the appropriate
+    fields and order.
+    """
+    exposed_observables: ClassVar[list[str]] = ["trajectory", "energy_info"]
+
+    @override
+    def __post_init__(self, *args, **kwds) -> None:
+        oxDNASimulator.__post_init__(self, *args, **kwds)
+        # verify that umbrella sampling is setup in the input file
+        input_config = jd_oxdna.read(Path(self.input_dir) / "input")
+        for key in ["umbrella_sampling", "order_parameters", "weights_file"]:
+            if key not in input_config:
+                raise ValueError("Missing required umbrella sampling config in input file: " + key)
+        if input_config["umbrella_sampling"] != 1:
+            raise ValueError("umbrella_sampling must be set to 1 in input file")
+
+    @override
+    def run_simulation(
+            self, input_dir: Path, opt_params: Params | None = None, weights: pd.DataFrame | None = None, **kwargs
+    ) -> SimulatorOutput:
+        # rewrite out weights file if provided
+        if weights is not None:
+            wfile = jd_oxdna.read(input_dir / "input")["weights_file"]
+            weights.to_csv(input_dir / wfile, sep=" ", header=False)
+
+        # run underlying oxDNA simulator and read energy data
+        output = oxDNASimulator.run_simulation(self, input_dir, opt_params=opt_params, **kwargs)
+        trajectory = output.observables[0]
+        energy_df = UmbrellaEnergyInfo(oxdna_utils.read_energy(input_dir))
+
+        # recompute weights from last histogram
+        hist = oxdna_utils.read_last_hist(input_dir)
+        output.state["weights"] = _reweight_from_histogram(hist)
+
+        return SimulatorOutput(observables=[trajectory, energy_df], state=output.state)
