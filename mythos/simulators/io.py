@@ -72,10 +72,6 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
         indices = jnp.where(filter_fn(self.metadata))[0]
         return self.slice(indices)
 
-    @override
-    def __getitem__(self, idx: int | slice | jnp.ndarray | list) -> "SimulatorTrajectory":
-        return self.slice(idx)
-
     def slice(self, key: int | slice | jnp.ndarray | list) -> "SimulatorTrajectory":
         """Slice the trajectory."""
         if isinstance(key, int):
