@@ -89,6 +89,6 @@ def build_run_fn(
 
         _, trajectory = scan_fn(jax.jit(apply_fn), (init_state, neighbors), jnp.arange(n_steps))
 
-        return jd_sio.SimulatorTrajectory(rigid_body=trajectory)
+        return jd_sio.SimulatorTrajectory.from_rigid_body(trajectory)
 
     return run_fn

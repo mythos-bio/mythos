@@ -123,11 +123,11 @@ class MeltingTemp(jd_obs.BaseObservable):
         opt_params: jd_types.PyTree,
     ) -> float:
         """Calculate the bound:unbound ratios at the extrapolated temperatures."""
-        energies_t0 = self.energy_fn.with_params(opt_params).map(trajectory.rigid_body)
+        energies_t0 = self.energy_fn.with_params(opt_params).map(trajectory)
 
         # find the unbiased ratio of bound:unbound across the temperature range
         def finf_at_t(extrapolated_temp: float) -> float:
-            energies_tx = self.energy_fn.with_params(opt_params, kt=extrapolated_temp).map(trajectory.rigid_body)
+            energies_tx = self.energy_fn.with_params(opt_params, kt=extrapolated_temp).map(trajectory)
 
             boltz_factor = jnp.exp((energies_t0/self.sim_temperature) - (energies_tx/extrapolated_temp))
             unbiased_counts = (1 / umbrella_weights) * boltz_factor

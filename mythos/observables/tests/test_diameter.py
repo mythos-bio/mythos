@@ -94,10 +94,8 @@ def test_diameter_call(
     centers = jnp.array([[[0, 0, 0], [1, 1, 1], [2, 2, 2]]] * t)
     orientations = jnp.ones([t, 4, 4])
     trajectory = jd_sio.SimulatorTrajectory(
-        rigid_body=jax_md.rigid_body.RigidBody(
-            center=centers,
-            orientation=orientations,
-        )
+        center=centers,
+        orientation=orientations,
     )
 
     actual = diameter(trajectory, sigma_backbone)

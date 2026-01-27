@@ -67,10 +67,8 @@ def test_pitch_call() -> None:
     centers = jnp.array([[[0, 0, 0], [1, 1, 1], [2, 2, 2], [3, 3, 3]]] * t)
     orientations = jnp.ones([t, 4, 4])
     trajectory = jd_sio.SimulatorTrajectory(
-        rigid_body=jax_md.rigid_body.RigidBody(
-            center=centers,
-            orientation=orientations,
-        )
+        center=centers,
+        orientation=orientations,
     )
 
     expected = [0.00034527, 0.00034527, 0.00034527, 0.00034527, 0.00034527]

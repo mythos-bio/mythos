@@ -175,7 +175,7 @@ class PersistenceLength(jd_obs.BaseObservable):
             state. The former will have shape (n_states, n_quartets-1) and the
             latter will have shape (n_states,).
         """
-        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory.rigid_body)
+        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory)
         base_sites = nucleotides.base_sites
         return jax.vmap(compute_metadata, (0, None, None, None))(
             base_sites, self.quartets, self.displacement_fn, self.skip_ends

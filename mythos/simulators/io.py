@@ -8,6 +8,7 @@ import chex
 import jax.numpy as jnp
 import jax_md
 from jax import tree_map
+from typing_extensions import override
 
 from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state
@@ -15,18 +16,39 @@ from mythos.utils.helpers import tree_concatenate
 from mythos.utils.types import ARR_OR_SCALAR, Vector3D
 
 
-@chex.dataclass()
-class SimulatorTrajectory:
+@chex.dataclass(frozen=True)
+class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
     """A trajectory of a simulation run.
 
+    This class extends jax_md.rigid_body.RigidBody to include optional
+    metadata associated with each state in the trajectory. This object can also
+    store data associated with a single state, but in such a case certain
+    methods do not make sense (e.g. filtering or slicing). Such single-state
+    usage is primarily intended for use within mapping functions.
+
     Parameters:
-        rigid_body: The jax_md RigidBody representation of the trajectory.
+        center: The center of mass positions for each rigid body at each
+            state in the trajectory.
+        orientation: The orientations (as quaternions) for each rigid body at
+            each state in the trajectory.
         metadata: Optional metadata associated with each state in the
           trajectory. This must be a dictionary where each value is a numerical
           array whose first axis has length corresponding to number of states.
     """
-    rigid_body: jax_md.rigid_body.RigidBody
     metadata: dict[str, jnp.ndarray]|None = None
+
+    @classmethod
+    def from_rigid_body(cls, rigid_body: jax_md.rigid_body.RigidBody, **kwargs: Any) -> "SimulatorTrajectory":
+        """Create a SimulatorTrajectory from a RigidBody instance.
+
+        Args:
+            rigid_body: The RigidBody instance to create the SimulatorTrajectory from.
+            **kwargs: Additional keyword arguments to pass to the
+            SimulatorTrajectory constructor.
+        Returns:
+            A SimulatorTrajectory instance.
+        """
+        return cls(center=rigid_body.center, orientation=rigid_body.orientation, **kwargs)
 
     def with_state_metadata(self, **metadata: dict[str, ARR_OR_SCALAR]) -> "SimulatorTrajectory":
         """Set the same metadata for all states in the trajectory."""
@@ -49,6 +71,10 @@ class SimulatorTrajectory:
         indices = jnp.where(filter_fn(self.metadata))[0]
         return self.slice(indices)
 
+    @override
+    def __getitem__(self, idx: int | slice | jnp.ndarray | list) -> "SimulatorTrajectory":
+        return self.slice(idx)
+
     def slice(self, key: int | slice | jnp.ndarray | list) -> "SimulatorTrajectory":
         """Slice the trajectory."""
         if isinstance(key, int):
@@ -59,11 +85,9 @@ class SimulatorTrajectory:
         metadata = None if self.metadata is None else tree_map(lambda x: x[key, ...], self.metadata)
 
         return self.replace(
-            rigid_body=jax_md.rigid_body.RigidBody(
-                center=self.rigid_body.center[key, ...],
-                orientation=jax_md.rigid_body.Quaternion(
-                    vec=self.rigid_body.orientation.vec[key, ...],
-                ),
+            center=self.center[key, ...],
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=self.orientation.vec[key, ...],
             ),
             metadata=metadata,
         )
@@ -78,19 +102,17 @@ class SimulatorTrajectory:
         See here:
         https://github.com/google-deepmind/chex/blob/8af2c9e8a19f3a57d9bd283c2a34148aef952f60/chex/_src/dataclass.py#L50
         """
-        return self.rigid_body.center.shape[0]
+        return self.center.shape[0]
 
     def __add__(self, other: "SimulatorTrajectory") -> "SimulatorTrajectory":
         """Concatenate two trajectories."""
         return self.replace(
-            rigid_body=jax_md.rigid_body.RigidBody(
-                center=jnp.concat(
-                    [self.rigid_body.center, other.rigid_body.center],
-                    axis=0,
-                ),
-                orientation=jax_md.rigid_body.Quaternion(
-                    vec=jnp.concatenate([self.rigid_body.orientation.vec, other.rigid_body.orientation.vec], axis=0)
-                ),
+            center=jnp.concat(
+                [self.center, other.center],
+                axis=0,
+            ),
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.concatenate([self.orientation.vec, other.orientation.vec], axis=0)
             ),
             metadata=_merge_metadata(self.metadata, self.length(), other.metadata, other.length()),
         )
@@ -112,9 +134,9 @@ class SimulatorTrajectory:
         """
         with Path(filepath).open("w") as f:
             for i in range(self.length()):
-                coms = self.rigid_body.center[i]
-                bb_vecs = q_to_back_base(self.rigid_body.orientation[i])
-                base_norms = q_to_base_normal(self.rigid_body.orientation[i])
+                coms = self.center[i]
+                bb_vecs = q_to_back_base(self.orientation[i])
+                base_norms = q_to_base_normal(self.orientation[i])
                 dummy_vels_angmom = jnp.zeros((coms.shape[0], 6))  # vels and angular momenta are not available
                 state = jnp.hstack([coms, bb_vecs, base_norms, dummy_vels_angmom])
                 _write_state(f, time=float(i), energies=jnp.zeros(3), state=state, box_size=box_size)

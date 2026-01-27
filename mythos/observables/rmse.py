@@ -105,7 +105,7 @@ class RMSE(jd_obs.BaseObservable):
             jd_types.ARR_OR_SCALAR: the RMSE in Angstroms for each state, so expect a
             size of (n_states,)
         """
-        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory.rigid_body)
+        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory)
 
         # Center the target state
         centered_target_state = self.target_state.set(
@@ -133,10 +133,10 @@ if __name__ == "__main__":
         strand_lengths=top.strand_counts,
     )
 
-    sim_traj = jd_sio.SimulatorTrajectory(
+    sim_traj = jd_sio.SimulatorTrajectory.from_rigid_body(
+        test_traj.state_rigid_body,
         seq=jnp.array(top.seq_idx),
         strand_lengths=top.strand_counts,
-        rigid_body=test_traj.state_rigid_body,
     )
 
     target_state = rigid_body.RigidBody(

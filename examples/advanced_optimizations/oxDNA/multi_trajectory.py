@@ -139,7 +139,7 @@ def main():
     def energy_fn_builder(params: jdna_types.Params) -> callable:
         return jax.vmap(
             lambda trajectory: energy_fn_builder_fn(params)(
-                trajectory.rigid_body,
+                trajectory,
                 seq=jnp.array(top.seq),
                 bonded_neighbors=top.bonded_neighbors,
                 unbonded_neighbors=top.unbonded_neighbors.T,
