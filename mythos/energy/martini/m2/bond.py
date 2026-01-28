@@ -8,7 +8,7 @@ from typing_extensions import override
 from mythos.energy.configuration import BaseConfiguration
 from mythos.energy.martini.base import MartiniEnergyFunction
 from mythos.simulators.io import SimulatorTrajectory
-from mythos.utils.types import Arr_Bonded_Neighbors, Arr_N, Arr_States_3, Vector2D
+from mythos.utils.types import Arr_N, Arr_States_3, Vector2D
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -21,6 +21,10 @@ class BondConfiguration(BaseConfiguration):
 
     required_params = ("k", "r0")
     non_optimizable_required_params = ("bond_names",)
+
+    def __post_init__(self):
+        if not (len(self.bond_names) == len(self.k) == len(self.r0)):
+            raise ValueError("bond_names, k, and r0 must have the same length")
 
 
 def pair_bond(
@@ -45,7 +49,7 @@ class Bond(MartiniEnergyFunction):
     params: BondConfiguration
 
     @override
-    def __post_init__(self) -> None:
+    def __post_init__(self, topology: None = None) -> None:
         # cache parameters mapped to bonds by indices
         bond_name_to_index = {name: idx for idx, name in enumerate(self.params.bond_names)}
         bond_index_map = jnp.array([bond_name_to_index[name] for name in self.bond_names])
@@ -56,10 +60,10 @@ class Bond(MartiniEnergyFunction):
 
     @override
     def compute_energy(self, trajectory: SimulatorTrajectory) -> float:
-        displacement_fn = self.displacement_fn(trajectory.box_size)
+        displacement_fn = self.displacement_fn(trajectory.box_size / 10.0)
         pair_vmap = jax.vmap(pair_bond, in_axes=(None, 0, 0, 0, None))
         return pair_vmap(
-            trajectory.center,
+            trajectory.center / 10.0,
             self.bonded_neighbors,
             self._bonds_k,
             self._bonds_r0,
