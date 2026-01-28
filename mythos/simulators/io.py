@@ -12,11 +12,7 @@ from jax import tree_map
 from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state
 from mythos.utils.helpers import tree_concatenate
-<<<<<<< HEAD
 from mythos.utils.types import ARR_OR_SCALAR, Arr_Box, Vector3D
-=======
-from mythos.utils.types import ARR_OR_SCALAR, Vector3D
->>>>>>> for-martini
 
 
 @chex.dataclass(frozen=True)
