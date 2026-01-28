@@ -43,8 +43,6 @@ def read_trajectory_mdanalysis(topology_file: Path, trajectory_file: Path) -> jd
     )
 
     return jd_sio.SimulatorTrajectory(
-        rigid_body=jax_md.rigid_body.RigidBody(
-            center=positions,
-            orientation=jax_md.rigid_body.Quaternion(vec=quaternions),
-        )
+        center=positions,
+        orientation=jax_md.rigid_body.Quaternion(vec=quaternions),
     )
