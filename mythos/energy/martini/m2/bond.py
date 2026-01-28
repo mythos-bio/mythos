@@ -22,7 +22,8 @@ class BondConfiguration(BaseConfiguration):
     required_params = ("k", "r0")
     non_optimizable_required_params = ("bond_names",)
 
-    def __post_init__(self):
+    @override
+    def __post_init__(self) -> None:
         if not (len(self.bond_names) == len(self.k) == len(self.r0)):
             raise ValueError("bond_names, k, and r0 must have the same length")
 
@@ -50,20 +51,21 @@ class Bond(MartiniEnergyFunction):
 
     @override
     def __post_init__(self, topology: None = None) -> None:
-        # cache parameters mapped to bonds by indices
+        # cache parameters mapped to bonds by indices. The result is arrays of
+        # len(bonded_neighbors) where each element corresponds to the k or r0 for that bond.
         bond_name_to_index = {name: idx for idx, name in enumerate(self.params.bond_names)}
         bond_index_map = jnp.array([bond_name_to_index[name] for name in self.bond_names])
-        bonds_k = self.params.k[bond_index_map]
-        bonds_r0 = self.params.r0[bond_index_map]
-        object.__setattr__(self, "_bonds_k", bonds_k)
-        object.__setattr__(self, "_bonds_r0", bonds_r0)
+        object.__setattr__(self, "_bonds_k", self.params.k[bond_index_map])
+        object.__setattr__(self, "_bonds_r0", self.params.r0[bond_index_map])
 
     @override
     def compute_energy(self, trajectory: SimulatorTrajectory) -> float:
-        displacement_fn = self.displacement_fn(trajectory.box_size / 10.0)
+        displacement_fn = self.displacement_fn(trajectory.box_size)
+        # Using our cached per-bond parameters, we map over the triplicate of
+        # bond pairs, k values, and r0 values.
         pair_vmap = jax.vmap(pair_bond, in_axes=(None, 0, 0, 0, None))
         return pair_vmap(
-            trajectory.center / 10.0,
+            trajectory.center,
             self.bonded_neighbors,
             self._bonds_k,
             self._bonds_r0,
