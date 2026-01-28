@@ -35,8 +35,10 @@ PathOrStr = Path | str
 # NOTE: jaxtyping has it's own scalar type but general to any numeric type
 #       we can switch to it here if we think that is ok.
 Scalar = jaxtyp.Float[jaxtyp.Array, ""]
+Vector2D = jaxtyp.Float[jaxtyp.Array, "2"]
 Vector3D = jaxtyp.Float[jaxtyp.Array, "3"]
 Vector4D = jaxtyp.Float[jaxtyp.Array, "4"]
+MatrixSq = jaxtyp.Float[jaxtyp.Array, "#n #n"]
 Arr_N = jaxtyp.Array  # jaxtyp.Float[jaxtyp.Array, "#n"]
 Arr_Nucleotide = jaxtyp.Float[jaxtyp.Array, "#n_nucleotides"]
 Arr_Nucleotide_Int = jaxtyp.Int[jaxtyp.Array, "#n_nucleotides"]
