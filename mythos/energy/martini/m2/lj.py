@@ -1,6 +1,5 @@
 """Lennard-Jones potential energy function for Martini 2."""
 
-from collections.abc import Callable
 
 import chex
 import jax
@@ -9,7 +8,7 @@ from jax_md import space
 from typing_extensions import override
 
 from mythos.energy.configuration import BaseConfiguration
-from mythos.energy.martini.base import MartiniEnergyFunction, get_periodic
+from mythos.energy.martini.base import MartiniEnergyFunction
 from mythos.simulators.io import SimulatorTrajectory
 from mythos.utils.types import Arr_N, Arr_States_3, MatrixSq, Vector2D
 
@@ -69,7 +68,6 @@ class LJ(MartiniEnergyFunction):
     """Lennard-Jones potential energy function for Martini 2."""
 
     params: LJConfiguration
-    displacement_fn: Callable = get_periodic
 
     @override
     def __post_init__(self, topology: None = None) -> None:

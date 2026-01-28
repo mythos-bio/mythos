@@ -12,7 +12,7 @@ from jax import tree_map
 from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state
 from mythos.utils.helpers import tree_concatenate
-from mythos.utils.types import ARR_OR_SCALAR, Vector3D
+from mythos.utils.types import ARR_OR_SCALAR, Arr_Box, Vector3D
 
 
 @chex.dataclass(frozen=True)
@@ -30,11 +30,15 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
             state in the trajectory.
         orientation: The orientations (as quaternions) for each rigid body at
             each state in the trajectory.
+        box_size: Optional box size associated with each state in the
+            trajectory.
         metadata: Optional metadata associated with each state in the
           trajectory. This must be a dictionary where each value is a numerical
           array whose first axis has length corresponding to number of states.
     """
+    box_size: Arr_Box|None = None
     metadata: dict[str, jnp.ndarray]|None = None
+
 
     @classmethod
     def from_rigid_body(cls, rigid_body: jax_md.rigid_body.RigidBody, **kwargs: Any) -> "SimulatorTrajectory":

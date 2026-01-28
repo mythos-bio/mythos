@@ -9,7 +9,7 @@ import jax
 import jax.numpy as jnp
 import MDAnalysis
 import pytest
-from mythos.energy.martini.m2.lj import LJ, LJConfiguration
+from mythos.energy.martini.m2.lj import LJ, LJConfiguration, lennard_jones
 from mythos.simulators.gromacs.utils import read_trajectory_mdanalysis
 from mythos.simulators.io import SimulatorTrajectory
 
@@ -17,7 +17,7 @@ jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - common jax practice
 
 
 # Test data directory with GROMACS trajectory files
-TEST_DATA_DIR = Path("data/test-data/gromacs/energy/m2/lj")
+TEST_DATA_DIR = Path("data/test-data/martini/energy/m2/lj")
 
 
 @dataclass
@@ -49,8 +49,8 @@ def get_unbonded_neighbors(n: int, bonded_neighbors: jnp.ndarray) -> jnp.ndarray
 def gromacs_trajectory() -> SimulatorTrajectory:
     """Load the test trajectory from GROMACS output files."""
     return read_trajectory_mdanalysis(
-        TEST_DATA_DIR / "output.tpr",
-        TEST_DATA_DIR / "output.trr",
+        TEST_DATA_DIR / "test.tpr",
+        TEST_DATA_DIR / "test.trr",
     )
 
 
@@ -67,9 +67,13 @@ def lj_config() -> LJConfiguration:
 @pytest.fixture
 def energies() -> jnp.ndarray:
     """Load reference LJ energies from GROMACS output file."""
-    with (TEST_DATA_DIR / "energy_lj.dat").open() as f:
-        energy_values = [float(line.strip()) for line in f.readlines()]
-    return jnp.array(energy_values)
+    with (TEST_DATA_DIR / "lj.xvg").open() as f:
+        energy_values = []
+        for line in f:
+            if not line.startswith(("#", "@")):
+                _, energy = line.strip().split()
+                energy_values.append(float(energy))
+    return jnp.array(energy_values[1:])
 
 
 class TestLJConfiguration:
@@ -108,13 +112,13 @@ class TestLJEnergy:
         energies: jnp.ndarray,
     ):
         """Test LJ energy calculation matches GROMACS reference values."""
-        u = MDAnalysis.Universe(TEST_DATA_DIR / "output.tpr")
-        seq = MockSequence(atom_types=u.atoms.types)
+        u = MDAnalysis.Universe(TEST_DATA_DIR / "test.tpr")
 
         lj_fn = LJ(
             params=lj_config,
-            displacement_fn=1,  # placeholder
-            seq=seq,
+            atom_types=tuple(u.atoms.types),
+            bond_names=(),
+            angle_names=(),
             bonded_neighbors=jnp.array(u.bonds.indices),
             unbonded_neighbors=get_unbonded_neighbors(len(u.atoms), u.bonds.indices),
         )
@@ -129,8 +133,6 @@ class TestLennardJonesPotential:
 
     def test_lj_at_sigma(self):
         """Test LJ potential at r = sigma (should be zero for standard LJ)."""
-        from mythos.energy.martini2.lj import lennard_jones
-
         sigma = 0.47
         eps = 5.0
         r = sigma
@@ -141,8 +143,6 @@ class TestLennardJonesPotential:
 
     def test_lj_beyond_cutoff(self):
         """Test LJ potential beyond cutoff distance (should be zero)."""
-        from mythos.energy.martini2.lj import lennard_jones
-
         sigma = 0.47
         eps = 5.0
         r = 2.0  # Beyond cutoff of 1.1
@@ -152,8 +152,6 @@ class TestLennardJonesPotential:
 
     def test_lj_repulsive_region(self):
         """Test LJ potential in repulsive region (r < sigma)."""
-        from mythos.energy.martini2.lj import lennard_jones
-
         sigma = 0.47
         eps = 5.0
         r = 0.3  # Less than sigma
@@ -164,8 +162,6 @@ class TestLennardJonesPotential:
 
     def test_lj_attractive_region(self):
         """Test LJ potential in attractive region (sigma < r < cutoff)."""
-        from mythos.energy.martini2.lj import lennard_jones
-
         sigma = 0.47
         eps = 5.0
         r = 0.6  # Between sigma and cutoff

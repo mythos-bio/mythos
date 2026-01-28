@@ -52,6 +52,7 @@ Arr_Unbonded_Neighbors = jaxtyp.Int[jaxtyp.Array, "#n_unbonded_pairs"]
 Arr_Bonded_Neighbors_2 = jaxtyp.Int[jaxtyp.Array, "#n_bonded_pairs 2"]
 Arr_Unbonded_Neighbors_2 = jaxtyp.Int[jaxtyp.Array, "#n_unbonded_pairs 2"]
 Arr_States = jaxtyp.Int[jaxtyp.Array, "#n_states"]
+Arr_Box = jaxtyp.Float[jaxtyp.Array, "#n_states #dimensions"]
 Arr_States_3 = jaxtyp.Int[jaxtyp.Array, "#n_states 3"]
 
 ARR_OR_SCALAR = Arr_N | Scalar
