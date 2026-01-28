@@ -115,13 +115,12 @@ class TestGromacsSimulatorRun:
         assert len(result.observables) == 1
 
         trajectory = result.observables[0]
-        assert hasattr(trajectory, "rigid_body")
-        assert hasattr(trajectory.rigid_body, "center")
-        assert hasattr(trajectory.rigid_body, "orientation")
+        assert hasattr(trajectory, "center")
+        assert hasattr(trajectory, "orientation")
 
         # Check that trajectory has expected dimensions (frames, atoms, 3)
-        assert len(trajectory.rigid_body.center.shape) == 3
-        assert trajectory.rigid_body.center.shape[-1] == 3  # 3D positions
+        assert trajectory.length() == 10
+        assert trajectory.center.shape[-1] == 3  # 3D positions
 
     def test_run_with_overwrite_false(
         self,
@@ -243,12 +242,12 @@ class TestGromacsSimulatorTrajectory:
 
         assert isinstance(trajectory, SimulatorTrajectory)
         # Check center positions have shape (n_frames, n_atoms, 3)
-        center = trajectory.rigid_body.center
+        center = trajectory.center
         assert len(center.shape) == 3
         assert center.shape[-1] == 3
 
         # Check orientations have shape (n_frames, n_atoms, 4) for quaternions
-        orientation = trajectory.rigid_body.orientation.vec
+        orientation = trajectory.orientation.vec
         assert len(orientation.shape) == 3
         assert orientation.shape[-1] == 4
 
