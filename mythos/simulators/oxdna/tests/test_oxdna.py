@@ -10,6 +10,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from unittest.mock import MagicMock
 
+import numpy as np
+import pandas as pd
 import pytest
 from mythos.input import oxdna_input
 from mythos.simulators import oxdna
@@ -297,6 +299,185 @@ def test_oxdna_simulator_trajectory_read(monkeypatch, tmp_path) -> None:
     assert isinstance(output, SimulatorOutput)
     assert len(output.observables) == 1
     assert isinstance(output.observables[0], SimulatorTrajectory)
+
+
+def setup_umbrella_test_dir(
+        test_dir: Path, umbrella_sampling: int = 1, *, include_keys: bool = True, num_order_params: int = 1
+    ) -> None:
+    """Setup a test directory configured for umbrella sampling."""
+    test_dir.mkdir(parents=True, exist_ok=True)
+
+    input_content = "backend = CPU\ntrajectory_file = test.conf\ntopology = test.top\nT=300K\n"
+    if include_keys:
+        input_content += f"umbrella_sampling = {umbrella_sampling}\n"
+        input_content += "order_parameters = op.txt\n"
+        input_content += "weights_file = wfile.txt\n"
+        input_content += "energy_file = energy.dat\n"
+        input_content += "last_hist_file = last_hist.dat\n"
+        input_content += "op_file = op.txt\n"
+
+    with (test_dir / "input").open("w") as f:
+        f.write(input_content)
+
+    # Create order parameters file
+    with (test_dir / "op.txt").open("w") as f:
+        for i in range(num_order_params):
+            f.write(f"{{\norder_parameter = op_{i}\nname = op_name_{i}\n}}\n\n")
+
+    # Create weights file
+    with (test_dir / "wfile.txt").open("w") as f:
+        for line in range(5):
+            op_prefix = " ".join(str(line) for i in range(num_order_params))
+            f.write(f"{op_prefix} 1.0\n")
+
+    shutil.copyfile(
+        "data/test-data/dna1/simple-helix/generated.top",
+        test_dir / "test.top",
+    )
+    shutil.copyfile(
+        "data/test-data/dna1/simple-helix/start.conf",
+        test_dir / "test.conf",
+    )
+    return test_dir
+
+
+class TestOxDNAUmbrellaSampler:
+
+    @pytest.mark.parametrize("keys", [
+        ("umbrella_sampling", "order_parameters"),
+        ("weights_file", "order_parameters"),
+        ("umbrella_sampling", "weights_file"),
+    ])
+    def test_umbrella_sampler_raises_for_missing_umbrella_sampling_key(self, tmp_path, mock_energy_fn, keys):
+        setup_umbrella_test_dir(tmp_path, include_keys=False)
+        # Add only some keys, missing umbrella_sampling
+        with (tmp_path / "input").open("a") as f:
+            for k in keys:
+                f.write(f"{k} = test_value\n")
+
+        with pytest.raises(ValueError, match="Missing required umbrella sampling config"):
+            oxdna.oxDNAUmbrellaSampler(
+                input_dir=tmp_path,
+                energy_fn=mock_energy_fn,
+                source_path="src",
+            )
+
+    def test_umbrella_sampler_raises_for_wrong_umbrella_sampling_value(self, tmp_path, mock_energy_fn):
+        """Test that ValueError is raised when umbrella_sampling is not 1."""
+        setup_umbrella_test_dir(tmp_path, umbrella_sampling=0)
+
+        with pytest.raises(ValueError, match="umbrella_sampling must be set to 1"):
+            oxdna.oxDNAUmbrellaSampler(
+                input_dir=tmp_path,
+                energy_fn=mock_energy_fn,
+                source_path="src",
+            )
+
+    def test_umbrella_sampler_init_success(self, tmp_path, mock_energy_fn):
+        setup_umbrella_test_dir(tmp_path, umbrella_sampling=1)
+
+        sim = oxdna.oxDNAUmbrellaSampler(
+            input_dir=tmp_path,
+            energy_fn=mock_energy_fn,
+            source_path="src",
+        )
+        assert str(sim["input_dir"]) == str(tmp_path)
+
+    @pytest.mark.parametrize("num_order_params", [1, 2])
+    def test_umbrella_sampler_run_produces_energy_and_weights(
+        self, tmp_path, mock_energy_fn, monkeypatch, num_order_params
+    ):
+        setup_umbrella_test_dir(tmp_path, umbrella_sampling=1, num_order_params=num_order_params)
+
+        # Create mock energy data file (umbrella sampling format)
+        # Columns: time, potential_energy, acc_ratio_trans, acc_ratio_rot,
+        # acc_ratio_vol, order_param, weight
+        op = " ".join("0" for _ in range(num_order_params))
+        energy_data = f"0 -10.5 0.5 0.5 0.0 {op} 1.0\n1 -11.0 0.5 0.5 0.0 {op} 1.0\n2 -10.8 0.5 0.5 0.0 {op} 1.0\n"
+        with (tmp_path / "energy.dat").open("w") as f:
+            f.write("# header line to skip\n")
+            f.write(energy_data)
+
+        # Create mock last histogram file
+        # Columns: order_param, count, unbiased_count
+        hist_data = f"{op} 10 5\n{op} 8 4\n{op} 12 6\n"
+        with (tmp_path / "last_hist.dat").open("w") as f:
+            f.write("# header line to skip\n")
+            f.write(hist_data)
+
+        # Mock the parent run_simulation to return a valid output
+        mock_trajectory = MagicMock(spec=SimulatorTrajectory)
+        mock_output = SimulatorOutput(observables=[mock_trajectory], state={})
+
+        monkeypatch.setattr(
+            oxdna.oxDNASimulator, "run_simulation",
+            lambda self, input_dir, **kwargs: mock_output,  # noqa: ARG005
+        )
+
+        sim = oxdna.oxDNAUmbrellaSampler(
+            input_dir=tmp_path,
+            energy_fn=mock_energy_fn,
+            source_path="src",
+        )
+
+        output = sim.run_simulation(tmp_path)
+
+        # Check that output has both trajectory and energy observables
+        assert len(output.observables) == 2
+        assert output.observables[0] is mock_trajectory
+        assert isinstance(output.observables[1], oxdna.UmbrellaEnergyInfo)
+
+        # Check that the energy dataframe has expected columns
+        energy_df = output.observables[1]
+        assert "time" in energy_df.columns
+        assert "potential_energy" in energy_df.columns
+        assert "weight" in energy_df.columns
+
+        # Check that weights are computed in state
+        assert "weights" in output.state
+        weights = output.state["weights"]
+        assert isinstance(weights, pd.DataFrame)
+        # Weights should be recomputed based on inverse unbiased_count
+        # of 5,4,6
+        assert np.allclose(weights["weights"], [1.2, 1.5, 1.0])
+        # We should have the right number of columns in output. Since we write
+        # the index, for this test we reset it to get the shape.
+        assert weights.reset_index().shape[1] == 1 + num_order_params
+
+    def test_umbrella_sampler_writes_weights_file(self, tmp_path, mock_energy_fn, monkeypatch):
+        setup_umbrella_test_dir(tmp_path, umbrella_sampling=1)
+
+        # Create mock energy data file
+        with (tmp_path / "energy.dat").open("w") as f:
+            f.write("# header\n")
+            f.write("0 -10.5 0.5 0.5 0.0 0.1 1.0\n")
+
+        # Create mock histogram file
+        with (tmp_path / "last_hist.dat").open("w") as f:
+            f.write("# header\n")
+            f.write("0.1 10 5\n")
+
+        mock_trajectory = MagicMock(spec=SimulatorTrajectory)
+        mock_output = SimulatorOutput(observables=[mock_trajectory], state={})
+        monkeypatch.setattr(
+            oxdna.oxDNASimulator, "run_simulation",
+            lambda self, input_dir, **kwargs: mock_output,  # noqa: ARG005
+        )
+
+        sim = oxdna.oxDNAUmbrellaSampler(
+            input_dir=tmp_path,
+            energy_fn=mock_energy_fn,
+            source_path="src",
+        )
+
+        # Create custom weights to pass in
+        custom_weights = pd.DataFrame({"idx": [0, 1], "w": [2.0, 3.0]})
+        sim.run_simulation(tmp_path, weights=custom_weights)
+
+        # Check that the weights file was written
+        weights_content = (tmp_path / "wfile.txt").read_text()
+        assert "2.0" in weights_content
+        assert "3.0" in weights_content
 
 
 if __name__ == "__main__":

@@ -6,12 +6,16 @@ from mythos.simulators.oxdna.oxdna import (
     ERR_INPUT_FILE_NOT_FOUND,
     ERR_MISSING_REQUIRED_KEYS,
     MAKE_BIN_ENV_VAR,
+    UmbrellaEnergyInfo,
     _guess_binary_location,
     oxDNASimulator,
+    oxDNAUmbrellaSampler,
 )
 
 __all__ = [
     "oxDNASimulator",
+    "oxDNAUmbrellaSampler",
+    "UmbrellaEnergyInfo",
     "BIN_PATH_ENV_VAR",
     "BUILD_PATH_ENV_VAR",
     "ERR_BIN_PATH_NOT_SET",

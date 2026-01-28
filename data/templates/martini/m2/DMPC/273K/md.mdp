@@ -1,0 +1,147 @@
+integrator               = sd
+bd-fric                  = 0
+ld-seed                  = -1
+dt                       = 0.02
+nsteps                   = 100000
+
+nstxout                  = 1000
+nstvout                  = 0
+nstfout                  = 0
+nstlog                   = 1000
+nstenergy                = 1000
+nstcalcenergy            = 1000
+; compressed-x-grps        =
+energygrps               = System
+
+; NEIGHBOURLIST and MARTINI
+; To achieve faster simulations in combination with the Verlet-neighborlist
+; scheme, Martini can be simulated with a straight cutoff. In order to
+; do so, the cutoff distance is reduced 1.1 nm.
+; Neighborlist length should be optimized depending on your hardware setup:
+; updating ever 20 steps should be fine for classic systems, while updating
+; every 30-40 steps might be better for GPU based systems.
+;
+; Improper neighbor list settings result in artifical pressure oscillations and
+; violation of spatial isotropy.
+; To avoid this, the verlet-buffer-tolerance is explicitly disabled.
+; rlist should be at least 1.35 nm (with nstlist = 20 and rcoulomb/rvdw = 1.1).
+; To use nstlist > 20, rlist must be further increased and tested.
+; This helps to reduce the artificially large undulation amplitude of Martini membranes.
+; (Position restraints might not be necessary -- to be confirmed)
+; To further minimize the artifact, nstt/pcouple = n * nstlist, n is positive integer.
+;
+; Coulomb interactions can alternatively be treated using a reaction-field,
+; giving slightly better properties.
+; Please realize that electrostVatic interactions in the Martini model are
+; not considered to be very accurate to begin with, especially as the
+; screening in the system is set to be uniform across the system with
+; a screening constant of 15. When using PME, please make sure your
+; system properties are still reasonable.
+;
+; With the polarizable water model, the relative electrostatic screening
+; (epsilon_r) should have a value of 2.5, representative of a low-dielectric
+; apolar solvent. The polarizable water itself will perform the explicit screening
+; in aqueous environment. In this case, the use of PME is more realistic.
+
+cutoff-scheme            = Verlet
+nstlist                  = 10
+nsttcouple               = -1
+nstpcouple               = -1
+rlist                    = -1
+verlet-buffer-tolerance  = 0.005
+ns_type                  = grid
+pbc                      = xyz
+periodic-molecules       = no
+
+coulombtype              = reaction-field
+coulomb-modifier         = Potential-shift-Verlet
+rcoulomb-switch          = 0
+rcoulomb                 = 1.1
+epsilon_r                = 15	; 2.5 (with polarizable water)
+epsilon_rf               = 0
+vdw_type                 = cutoff
+vdw-modifier             = Potential-shift-verlet
+rvdw-switch              = 0
+rvdw                     = 1.1
+
+; Apply long range dispersion corrections for Energy and Pressure
+DispCorr                 = No
+
+; Extension of the potential lookup tables beyond the cut-off
+table-extension          = 1
+
+; Separate tables between energy group pairs
+energygrp-table          =
+; Spacing for the PME/PPPM FFT grid
+fourierspacing           = 0.12
+; FFT grid size, when a value is 0 fourierspacing will be used
+fourier-nx               = 0
+fourier-ny               = 0
+fourier-nz               = 0
+; EWALD/PME/PPPM parameters
+pme-order                = 4
+ewald-rtol               = 1e-05
+ewald-rtol-lj            = 0.001
+lj-pme-comb-rule         = Geometric
+ewald-geometry           = 3d
+epsilon-surface          = 0
+
+; IMPLICIT SOLVENT ALGORITHM
+implicit-solvent         = No
+
+; MARTINI and 273/PRESSURE
+; normal temperature and pressure coupling schemes can be used.
+; It is recommended to couple individual groups in your system separately.
+; Good temperature control can be achieved with the velocity rescale (V-rescale)
+; thermostat using a coupling constant of the order of 1 ps. Even better
+; temperature control can be achieved by reducing the temperature coupling
+; constant to 0.1 ps, although with such tight coupling (approaching
+; the time step) one can no longer speak of a weak-coupling scheme.
+; We therefore recommend a coupling time constant of at least 0.5 ps.
+; The Berendsen thermostat is less suited since it does not give
+; a well described thermodynamic ensemble.
+;
+; Pressure can be controlled with the Parrinello-Rahman barostat,
+; with a coupling constant in the range 4-8 ps and typical compressibility
+; in the order of 10e-4 - 10e-5 bar-1. Note that, for equilibration purposes,
+; the Berendsen barostat probably gives better results, as the Parrinello-
+; Rahman is prone to oscillating behaviour. For bilayer systems the pressure
+; coupling should be done semiisotropic.
+
+
+
+; Temperature coupling
+tcoupl                   = v-rescale
+nh-chain-length          = 10
+print-nose-hoover-chain-variables = no
+
+
+tc-grps          =  system
+tau-t            =  4.0
+ref-t            =  273
+
+gen_vel                  = no
+
+; Pressure coupling
+pcoupl           =  Parrinello-Rahman
+pcoupltype       =  semiisotropic
+tau-p            =  8.0
+compressibility  =  3e-4 0.0
+ref-p            =  1.0 1.0
+
+refcoord_scaling         = No
+
+; Center of mass removal
+comm-mode                = Linear
+nstcomm                  = 1
+comm-grps                =
+
+; MARTINI and CONSTRAINTS
+; for ring systems and stiff bonds constraints are defined
+; which are best handled using Lincs.
+
+constraints              = none
+constraint_algorithm     = Lincs
+lincs_order              = 8
+lincs_warnangle          = 90
+lincs_iter               = 2
