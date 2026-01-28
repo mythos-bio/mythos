@@ -8,7 +8,6 @@ from mythos.energy.base import BaseEnergyFunction
 from mythos.utils.types import Vector3D
 
 
-
 def get_periodic(box_size: Vector3D) -> callable:
     """Return displacement function given box_size."""
     return space.periodic(box_size)[0]
