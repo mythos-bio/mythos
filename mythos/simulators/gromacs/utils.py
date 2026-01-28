@@ -9,6 +9,8 @@ import numpy as np
 
 import mythos.simulators.io as jd_sio
 
+# MDAnalysis reads into Angstroms, but Gromacs parameters in nm
+ANGSTROMS_TO_NM = 0.1
 logger = logging.getLogger(__name__)
 
 
@@ -44,7 +46,7 @@ def read_trajectory_mdanalysis(topology_file: Path, trajectory_file: Path) -> jd
     )
 
     return jd_sio.SimulatorTrajectory(
-        center=positions,
+        center=positions * ANGSTROMS_TO_NM,
         orientation=jax_md.rigid_body.Quaternion(vec=quaternions),
-        box_size=box_sizes,
+        box_size=box_sizes * ANGSTROMS_TO_NM,
     )

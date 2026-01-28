@@ -79,10 +79,10 @@ class LJ(MartiniEnergyFunction):
 
     @override
     def compute_energy(self, trajectory: SimulatorTrajectory) -> float:
-        displacement_fn = self.displacement_fn(trajectory.box_size / 10.0)
+        displacement_fn = self.displacement_fn(trajectory.box_size)
         ljmap = jax.vmap(pair_lj, in_axes=(None, 0, None, None, None, None))
         return ljmap(
-            trajectory.center / 10.0,
+            trajectory.center,
             self.unbonded_neighbors,
             self.params.sigmas,
             self.params.epsilons,
