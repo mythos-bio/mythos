@@ -2,7 +2,6 @@
 
 import itertools
 import json
-from dataclasses import dataclass
 from pathlib import Path
 
 import jax
@@ -14,17 +13,8 @@ from mythos.simulators.gromacs.utils import read_trajectory_mdanalysis
 from mythos.simulators.io import SimulatorTrajectory
 
 jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - common jax practice
-
-
 # Test data directory with GROMACS trajectory files
 TEST_DATA_DIR = Path("data/test-data/martini/energy/m2/lj")
-
-
-@dataclass
-class MockSequence:
-    """Mock sequence object for testing LJ energy function."""
-
-    atom_types: tuple[str, ...]
 
 
 def load_lj_params() -> dict:
