@@ -80,7 +80,6 @@ class TestLJConfiguration:
 
     def test_valid_configuration(self, lj_config: LJConfiguration):
         """Test that valid configuration is created successfully from JSON."""
-        params = load_lj_params()
         n_types = 37  # Known number of bead types in test config
 
         assert len(lj_config.bead_types) == n_types
