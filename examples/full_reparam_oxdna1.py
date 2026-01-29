@@ -7,7 +7,7 @@ import logging
 from collections.abc import Callable
 from dataclasses import InitVar
 from pathlib import Path
-from typing import Any, ClassVar
+from typing import Any
 from unittest.mock import MagicMock
 
 import chex
@@ -22,7 +22,6 @@ import mythos.optimization.optimization as jdna_optimization
 import optax
 import pandas as pd
 from mythos.energy.base import EnergyFunction
-from mythos.input import oxdna_input
 from mythos.observables.diameter import Diameter
 from mythos.observables.melting_temp import MeltingTemp
 from mythos.observables.persistence_length import PersistenceLength
@@ -33,12 +32,11 @@ from mythos.observables.stretch_torsion import ExtensionZ, TwistXY, stretch_tors
 from mythos.simulators.base import SimulatorOutput
 from mythos.simulators.lammps.lammps_oxdna import LAMMPSoxDNASimulator
 from mythos.simulators.oxdna import oxDNASimulator
-from mythos.simulators.oxdna.utils import read_energy, read_last_hist
+from mythos.simulators.oxdna.oxdna import UmbrellaEnergyInfo, oxDNAUmbrellaSampler
 from mythos.ui.loggers.console import ConsoleLogger
 from mythos.ui.loggers.disk import FileLogger
 from mythos.ui.loggers.multilogger import MultiLogger
 from mythos.utils.types import Params
-from ray import state
 
 jax.config.update("jax_enable_x64", val=True)
 logging.basicConfig(level=logging.INFO)
@@ -150,35 +148,6 @@ class LAMMPSStretchSimulator(LAMMPSoxDNASimulator):
         output = LAMMPSoxDNASimulator.run_simulation(self, *args, params=opt_params, **kwargs)
         tagged_traj = output.observables[0].with_state_metadata(self.variables.copy())
         return SimulatorOutput(observables=[tagged_traj], state=output.state)
-
-
-class EnergyInfo(pd.DataFrame):
-    pass
-
-@chex.dataclass(frozen=True, kw_only=True)
-class UmbrellaSamplingSimulator(oxDNASimulator):
-    exposed_observables: ClassVar[list[str]] = ["trajectory", "energy_info"]
-
-    def run_simulation(
-            self, input_dir: Path, opt_params: Params | None = None, weights: pd.DataFrame | None = None, **kwargs
-    ) -> SimulatorOutput:
-        # rewrite out weights file if provided
-        if weights is not None:
-            wfile = oxdna_input.read(input_dir / "input")["weights_file"]
-            weights.to_csv(input_dir / wfile, sep=" ", header=False)
-        # run underlying oxDNA simulator and read energy data
-        output = oxDNASimulator.run_simulation(self, input_dir, opt_params=opt_params, **kwargs)
-        trajectory = output.observables[0]
-        energy_df = EnergyInfo(read_energy(input_dir))
-        # recompute weights from last histogram
-        hist = read_last_hist(input_dir)
-        op_cols = list(hist.columns[:hist.columns.get_loc("counts")]) # columns before counts are the order parameters
-        hist = hist.set_index(op_cols)
-        weights = hist.query("unbiased_count > 0").eval("weights = 1 / unbiased_count")[["weights"]]
-        weights /= weights.min()  # for numerical stability
-        # Store in state to pass back in on next run (or combined post-opt-step)
-        output.state["weights"] = weights.reindex(hist.index, fill_value=0)
-        return SimulatorOutput(observables=[trajectory, energy_df], state=output.state)
 
 
 def create_stretch_twist_simulators(
@@ -608,7 +577,7 @@ def create_thermo_simulators(
     thermo_cfg: dict[str, Any],
     thermo_name: str = "default",
     **kwargs: Any,
-) -> list[UmbrellaSamplingSimulator]:
+) -> list[oxDNAUmbrellaSampler]:
     n_steps = thermo_cfg["n_steps"]
     n_replicas = thermo_cfg["n_replicas"]
     snapshot_interval = thermo_cfg["snapshot_interval"]
@@ -619,7 +588,7 @@ def create_thermo_simulators(
         "print_conf_interval": snapshot_interval,
     }
     return [
-        UmbrellaSamplingSimulator(
+        oxDNAUmbrellaSampler(
             input_dir=str(input_dir),
             energy_fn=energy_fn,
             name=f"thermo_{thermo_name}_r{r}",
@@ -631,7 +600,7 @@ def create_thermo_simulators(
 
 
 def create_thermo_objective(
-    simulators: list[UmbrellaSamplingSimulator],
+    simulators: list[oxDNAUmbrellaSampler],
     energy_fn: EnergyFunction,
     kt: float,
     thermo_cfg: dict[str, Any],
@@ -660,7 +629,7 @@ def create_thermo_objective(
         traj: Any, weights: jnp.ndarray, _energy_model: Any, opt_params: Params, observables: list
     ) -> LossOutput:
         # Filter energy info from observables
-        e_info = pd.concat([i for i in observables if isinstance(i, EnergyInfo)])
+        e_info = pd.concat([i for i in observables if isinstance(i, UmbrellaEnergyInfo)])
         melting_temp = melting_temp_fn(traj, e_info["bond"].to_numpy(), e_info["weight"].to_numpy(), opt_params)
         expected_melting_temp = jnp.dot(weights, melting_temp).sum()
         loss = jnp.sqrt((expected_melting_temp - target_kt) ** 2)
