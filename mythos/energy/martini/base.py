@@ -86,4 +86,3 @@ class MartiniEnergyConfiguration:
     @override
     def __contains__(self, key: str) -> bool:
         return key in self.params or key in self.couplings
-

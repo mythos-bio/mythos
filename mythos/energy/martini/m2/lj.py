@@ -41,15 +41,14 @@ class LJConfiguration(MartiniEnergyConfiguration):
                 raise ValueError(f"Missing LJ {prefix} parameter for pair {a}-{b} ({b}-{a})")
             return param
 
-        self.sigmas = jnp.array([
+        self.sigmas: MatrixSq = jnp.array([
             [get_param("sigma", i, j) for j in self.bead_types]
             for i in self.bead_types
         ])
-        self.epsilons = jnp.array([
+        self.epsilons: MatrixSq = jnp.array([
             [get_param("epsilon", i, j) for j in self.bead_types]
             for i in self.bead_types
         ])
-
 
 
 def lennard_jones(r: float, eps: float, sigma: float) -> float:
@@ -63,6 +62,7 @@ def lennard_jones(r: float, eps: float, sigma: float) -> float:
     return jnp.where(
         r < cutoff, v - v_c, 0.0  # shifting the potential by subtracting V(r_c)
     )
+
 
 def pair_lj(
         centers: Arr_States_3,
