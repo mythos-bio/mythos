@@ -22,10 +22,6 @@ class MartiniEnergyFunction(BaseEnergyFunction):
     angle_names: tuple[str, ...]
     displacement_fn: callable = get_periodic
 
-    @override
-    def __post_init__(self) -> None:
-        pass  # We don't support the instantiation from topology here
-
 
 class MartiniEnergyConfiguration:
     """Base class for Martini energy function configurations.
@@ -81,7 +77,7 @@ class MartiniEnergyConfiguration:
             return self.params[key]
         if key in self.couplings:
             return self.params[self.couplings[key][0]]  # All have same value
-        raise KeyError(f"Key {key} not found in configuration.")
+        raise KeyError(f"Parameter '{key}' not found in configuration.")
 
     @override
     def __contains__(self, key: str) -> bool:
