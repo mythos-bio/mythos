@@ -344,8 +344,8 @@ def setup_umbrella_test_dir(
 class TestOxDNAUmbrellaSampler:
 
     @pytest.mark.parametrize("keys", [
-        ("umbrella_sampling", "order_parameters"),
-        ("weights_file", "order_parameters"),
+        ("umbrella_sampling", "op_file"),
+        ("weights_file", "op_file"),
         ("umbrella_sampling", "weights_file"),
     ])
     def test_umbrella_sampler_raises_for_missing_umbrella_sampling_key(self, tmp_path, mock_energy_fn, keys):

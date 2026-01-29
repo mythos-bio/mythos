@@ -235,7 +235,7 @@ class oxDNAUmbrellaSampler(oxDNASimulator):  # noqa: N801 oxDNA is a special wor
         oxDNASimulator.__post_init__(self, *args, **kwds)
         # verify that umbrella sampling is setup in the input file
         input_config = jd_oxdna.read(Path(self.input_dir) / "input")
-        for key in ["umbrella_sampling", "order_parameters", "weights_file"]:
+        for key in ["umbrella_sampling", "op_file", "weights_file"]:
             if key not in input_config:
                 raise ValueError("Missing required umbrella sampling config in input file: " + key)
         if input_config["umbrella_sampling"] != 1:
