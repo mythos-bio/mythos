@@ -133,7 +133,7 @@ class GromacsSimulator(InputDirSimulator):
             trajectory_file=input_dir / "output.trr",
         )
 
-        logger.debug("GROMACS trajectory size: %s", trajectory.rigid_body.center.shape)
+        logger.debug("GROMACS trajectory size: %s", trajectory.length())
 
         return trajectory
 

@@ -7,60 +7,83 @@ from typing import Any
 import chex
 import jax.numpy as jnp
 import jax_md
-from typing_extensions import override
+from jax import tree_map
 
 from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state
-from mythos.utils.types import Vector3D
+from mythos.utils.helpers import tree_concatenate
+from mythos.utils.types import ARR_OR_SCALAR, Vector3D
 
 
-@chex.dataclass()
-class SimulatorTrajectory:
-    """A trajectory of a simulation run."""
+@chex.dataclass(frozen=True)
+class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
+    """A trajectory of a simulation run.
 
-    rigid_body: jax_md.rigid_body.RigidBody
-    metadata: jnp.ndarray | None = None
+    This class extends jax_md.rigid_body.RigidBody to include optional
+    metadata associated with each state in the trajectory. This object can also
+    store data associated with a single state, but in such a case certain
+    methods do not make sense (e.g. filtering or slicing). Such single-state
+    usage is primarily intended for use within mapping functions.
 
-    @override
-    def __post_init__(self) -> None:
-        if self.metadata is None:
-            self.metadata = [None] * self.rigid_body.center.shape[0]
-        if len(self.metadata) != self.rigid_body.center.shape[0]:
-            raise ValueError(
-                f"Metadata length {len(self.metadata)} does not match "
-                f"trajectory length {self.rigid_body.center.shape[0]}"
-            )
+    Parameters:
+        center: The center of mass positions for each rigid body at each
+            state in the trajectory.
+        orientation: The orientations (as quaternions) for each rigid body at
+            each state in the trajectory.
+        metadata: Optional metadata associated with each state in the
+          trajectory. This must be a dictionary where each value is a numerical
+          array whose first axis has length corresponding to number of states.
+    """
+    metadata: dict[str, jnp.ndarray]|None = None
 
-    def with_state_metadata(self, metadata: Any) -> "SimulatorTrajectory":
+    @classmethod
+    def from_rigid_body(cls, rigid_body: jax_md.rigid_body.RigidBody, **kwargs: Any) -> "SimulatorTrajectory":
+        """Create a SimulatorTrajectory from a RigidBody instance.
+
+        Args:
+            rigid_body: The RigidBody instance to create the SimulatorTrajectory from.
+            **kwargs: Additional keyword arguments to pass to the
+            SimulatorTrajectory constructor.
+
+        Returns:
+            A SimulatorTrajectory instance.
+        """
+        return cls(center=rigid_body.center, orientation=rigid_body.orientation, **kwargs)
+
+    def with_state_metadata(self, **metadata: dict[str, ARR_OR_SCALAR]) -> "SimulatorTrajectory":
         """Set the same metadata for all states in the trajectory."""
-        return self.replace(metadata=[metadata] * self.length())
+        new_metadata = self.metadata.copy() if self.metadata is not None else {}
+        for key, value in metadata.items():
+            new_metadata[key] = jnp.stack([jnp.asarray(value)] * self.length())
+        return self.replace(metadata=new_metadata)
 
     def filter(self, filter_fn: Callable[[Any], bool]) -> "SimulatorTrajectory":
         """Filter the trajectory based on metadata.
 
         Args:
-            filter_fn: A function that takes in metadata and returns a boolean
-                indicating whether to keep the state.
+            filter_fn: A function that takes in metadata tree and returns a
+                boolean array of length equal to the number of states,
+                indicating which states to keep.
 
         Returns:
             A new SimulatorTrajectory with only the states that pass the filter.
         """
-        indices = [i for i, md in enumerate(self.metadata) if filter_fn(md)]
+        indices = jnp.where(filter_fn(self.metadata))[0]
         return self.slice(indices)
 
     def slice(self, key: int | slice | jnp.ndarray | list) -> "SimulatorTrajectory":
         """Slice the trajectory."""
         if isinstance(key, int):
             key = slice(key, key + 1)
+        if not isinstance(key, slice):
+            key = jnp.asarray(key)
 
-        metadata = self.metadata[key] if isinstance(key, slice) else [self.metadata[i] for i in key]
+        metadata = None if self.metadata is None else tree_map(lambda x: x[key, ...], self.metadata)
 
         return self.replace(
-            rigid_body=jax_md.rigid_body.RigidBody(
-                center=self.rigid_body.center[key, ...],
-                orientation=jax_md.rigid_body.Quaternion(
-                    vec=self.rigid_body.orientation.vec[key, ...],
-                ),
+            center=self.center[key, ...],
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=self.orientation.vec[key, ...],
             ),
             metadata=metadata,
         )
@@ -75,21 +98,19 @@ class SimulatorTrajectory:
         See here:
         https://github.com/google-deepmind/chex/blob/8af2c9e8a19f3a57d9bd283c2a34148aef952f60/chex/_src/dataclass.py#L50
         """
-        return self.rigid_body.center.shape[0]
+        return self.center.shape[0]
 
     def __add__(self, other: "SimulatorTrajectory") -> "SimulatorTrajectory":
         """Concatenate two trajectories."""
         return self.replace(
-            rigid_body=jax_md.rigid_body.RigidBody(
-                center=jnp.concat(
-                    [self.rigid_body.center, other.rigid_body.center],
-                    axis=0,
-                ),
-                orientation=jax_md.rigid_body.Quaternion(
-                    vec=jnp.concatenate([self.rigid_body.orientation.vec, other.rigid_body.orientation.vec], axis=0)
-                ),
+            center=jnp.concat(
+                [self.center, other.center],
+                axis=0,
             ),
-            metadata=self.metadata + other.metadata,
+            orientation=jax_md.rigid_body.Quaternion(
+                vec=jnp.concatenate([self.orientation.vec, other.orientation.vec], axis=0)
+            ),
+            metadata=_merge_metadata(self.metadata, self.length(), other.metadata, other.length()),
         )
 
     def to_file(self, filepath: Path, box_size: Vector3D = (0, 0, 0)) -> None:
@@ -109,9 +130,35 @@ class SimulatorTrajectory:
         """
         with Path(filepath).open("w") as f:
             for i in range(self.length()):
-                coms = self.rigid_body.center[i]
-                bb_vecs = q_to_back_base(self.rigid_body.orientation[i])
-                base_norms = q_to_base_normal(self.rigid_body.orientation[i])
+                coms = self.center[i]
+                bb_vecs = q_to_back_base(self.orientation[i])
+                base_norms = q_to_base_normal(self.orientation[i])
                 dummy_vels_angmom = jnp.zeros((coms.shape[0], 6))  # vels and angular momenta are not available
                 state = jnp.hstack([coms, bb_vecs, base_norms, dummy_vels_angmom])
                 _write_state(f, time=float(i), energies=jnp.zeros(3), state=state, box_size=box_size)
+
+
+def _merge_metadata(
+        left: dict[str, jnp.ndarray]|None,
+        len_left: int,
+        right: dict[str, jnp.ndarray]|None,
+        len_right: int,
+    ) -> dict[str, jnp.ndarray]|None:
+    """Merge two metadata dictionaries for SimulatorTrajectory concatenation.
+
+    If a key is missing in one of the dictionaries, it is filled with NaNs of
+    the same shape (excluding leading axis which is num_states) as the
+    corresponding array in the other dictionary. If a key is present in both
+    dictionaries the shapes must be consistent beyond the leading axis.
+    """
+    if not left and not right:
+        return None
+    left, right = (left or {}, right or {})
+    for key in left.keys() | right.keys():
+        if key in left and key in right and left[key].shape[1:] != right[key].shape[1:]:
+            raise ValueError(f"Metadata key '{key}' has mismatched shapes when adding trajectories.")
+        shape = left.get(key, right.get(key)).shape[1:]
+        # fill with NaNs of the appropriate shape where missing.
+        left.setdefault(key, jnp.full((len_left, *shape), jnp.nan))
+        right.setdefault(key, jnp.full((len_right, *shape), jnp.nan))
+    return tree_concatenate([left, right])

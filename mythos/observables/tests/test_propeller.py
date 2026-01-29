@@ -69,9 +69,8 @@ def test_propeller_twist_call(pairs: list[tuple[int, int]], expected: jnp.ndarra
 
     t = 5
     trajectory = jd_sio.SimulatorTrajectory(
-        rigid_body=jax_md.rigid_body.RigidBody(
-            center=jnp.array([TEST_NORMALS] * t), orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones([t, 4, 4]))
-        )
+        center=jnp.array([TEST_NORMALS] * t),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones([t, 4, 4])),
     )
 
     actual = ptwist(trajectory)

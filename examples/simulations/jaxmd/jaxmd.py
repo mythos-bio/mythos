@@ -97,7 +97,7 @@ def main():
 
     print("Running simulation...")
     trajectory = sim_fn(params)
-    print("Simulation Complete! ✅ Trajectory length:", trajectory.rigid_body.center.shape[0])
+    print("Simulation Complete! ✅ Trajectory length:", trajectory.center.shape[0])
 
 
 if __name__ == "__main__":

@@ -64,7 +64,7 @@ class PropellerTwist(jd_obs.BaseObservable):
             jd_types.ARR_OR_SCALAR: the propeller twist in degrees for each state , so expect a size
             of (n_states,)
         """
-        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory.rigid_body)
+        nucleotides = jax.vmap(self.rigid_body_transform_fn)(trajectory)
 
         base_normals = nucleotides.base_normals
         ptwist = jax.vmap(lambda bn: 180.0 - (propeller_twist_rad(self.h_bonded_base_pairs, bn) * 180.0 / jnp.pi))

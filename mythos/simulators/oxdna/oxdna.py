@@ -148,8 +148,8 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
 
         logger.debug("oxDNA trajectory com size: %s", trajectory.state_rigid_body.center.shape)
 
-        return jd_sio.SimulatorTrajectory(
-            rigid_body=trajectory.state_rigid_body,
+        return jd_sio.SimulatorTrajectory.from_rigid_body(
+            trajectory.state_rigid_body,
         )
 
 

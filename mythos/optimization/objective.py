@@ -192,7 +192,7 @@ def compute_loss(
         size and the measured value of the trajectory, and the new energies.
     """
     energy_fn = energy_fn.with_params(opt_params)
-    new_energies = energy_fn.map(ref_states.rigid_body)
+    new_energies = energy_fn.map(ref_states)
     weights, neff = compute_weights_and_neff(
         beta,
         new_energies,
@@ -288,12 +288,12 @@ class DiffTReObjective(Objective):
         # within neff tolerance (or max_valid_opt_steps). These params are then
         # used to compute reference energies.
         reference_opt_params = reference_opt_params or opt_params
-        reference_energies = self.energy_fn.with_params(reference_opt_params).map(reference_states.rigid_body)
+        reference_energies = self.energy_fn.with_params(reference_opt_params).map(reference_states)
 
         # Compute neff to check if trajectory is still valid
         _, neff = compute_weights_and_neff(
             beta=self.beta,
-            new_energies=self.energy_fn.with_params(opt_params).map(reference_states.rigid_body),
+            new_energies=self.energy_fn.with_params(opt_params).map(reference_states),
             ref_energies=reference_energies,
         )
 

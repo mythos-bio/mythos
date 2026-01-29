@@ -51,7 +51,7 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
         traj = _read_lammps_output(input_dir.joinpath("trajectory.dat"))
 
         return SimulatorOutput(
-            observables=[SimulatorTrajectory(rigid_body=traj.state_rigid_body)]
+            observables=[SimulatorTrajectory.from_rigid_body(traj.state_rigid_body)]
         )
 
     def _replace_parameters(self, input_dir: Path, params: Params, seed: int | None) -> None:
