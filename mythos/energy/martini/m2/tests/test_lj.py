@@ -48,6 +48,7 @@ def gromacs_trajectory() -> SimulatorTrajectory:
 def lj_config() -> LJConfiguration:
     """Create a LJConfiguration from the JSON parameters file."""
     params = load_lj_params()
+    assert len(params) > 703  # 37 bead types, self-pairings no directionality -> 37*38/2 = 703 pairs
     # unpack into dict for config
     return LJConfiguration(
         **params
@@ -79,20 +80,20 @@ class TestLJConfiguration:
     def test_invalid_parameter_raises_error(self):
         invalid_params = {
             "invalid_param_1": 0.5,
-            "lj_sigma_A-B": 0.47,
-            "lj_epsilon_A-B": 5.0,
+            "lj_sigma_A_B": 0.47,
+            "lj_epsilon_A_B": 5.0,
         }
         with pytest.raises(ValueError, match="Unexpected parameter"):
             LJConfiguration(**invalid_params)
 
     def test_sigma_epsilon_matrix_construction(self):
         params = {
-            "lj_sigma_A-A": 0.47,
-            "lj_sigma_A-B": 0.50,
-            "lj_sigma_B-B": 0.52,
-            "lj_epsilon_A-A": 5.0,
-            "lj_epsilon_A-B": 4.5,
-            "lj_epsilon_B-B": 4.0,
+            "lj_sigma_A_A": 0.47,
+            "lj_sigma_A_B": 0.50,
+            "lj_sigma_B_B": 0.52,
+            "lj_epsilon_A_A": 5.0,
+            "lj_epsilon_A_B": 4.5,
+            "lj_epsilon_B_B": 4.0,
         }
         config = LJConfiguration(**params)
 
@@ -107,10 +108,10 @@ class TestLJConfiguration:
     @pytest.mark.parametrize(
         "incomplete_params",
         [
-            {"lj_sigma_A-A": 0.47},  # Missing epsilon
-            {"lj_epsilon_A-A": 5.0},  # Missing sigma
-            {"lj_sigma_A-B": 0.5, "lj_epsilon_A-B": 4.5},  # Missing A-A and B-B
-            {"lj_sigma_A-B": 0.5, "lj_sigma_A-A": 0.47, "lj_epsilon_A-B": 4.5},  # partial missing
+            {"lj_sigma_A_A": 0.47},  # Missing epsilon
+            {"lj_epsilon_A_A": 5.0},  # Missing sigma
+            {"lj_sigma_A_B": 0.5, "lj_epsilon_A_B": 4.5},  # Missing A_A and B_B
+            {"lj_sigma_A_B": 0.5, "lj_sigma_A_A": 0.47, "lj_epsilon_A_B": 4.5},  # partial missing
         ]
     )
     def test_missing_bead_type_pairing_raises_error(self, incomplete_params):
@@ -120,102 +121,102 @@ class TestLJConfiguration:
     def test_coupling_sets_multiple_params(self):
         """Test that a coupled parameter sets all underlying parameters."""
         couplings = {
-            "lj_epsilon_hydrophobic": ["lj_epsilon_A-A", "lj_epsilon_B-B"],
+            "lj_epsilon_hydrophobic": ["lj_epsilon_A_A", "lj_epsilon_B_B"],
         }
         params = {
-            "lj_sigma_A-A": 0.47,
-            "lj_sigma_A-B": 0.50,
-            "lj_sigma_B-B": 0.52,
+            "lj_sigma_A_A": 0.47,
+            "lj_sigma_A_B": 0.50,
+            "lj_sigma_B_B": 0.52,
             "lj_epsilon_hydrophobic": 5.0,  # Coupled param
-            "lj_epsilon_A-B": 4.5,
+            "lj_epsilon_A_B": 4.5,
         }
         config = LJConfiguration(couplings=couplings, **params)
 
-        # Both A-A and B-B epsilon should be set to the coupled value
-        assert config.params["lj_epsilon_A-A"] == 5.0
-        assert config.params["lj_epsilon_B-B"] == 5.0
-        assert config.params["lj_epsilon_A-B"] == 4.5
+        # Both A_A and B_B epsilon should be set to the coupled value
+        assert config.params["lj_epsilon_A_A"] == 5.0
+        assert config.params["lj_epsilon_B_B"] == 5.0
+        assert config.params["lj_epsilon_A_B"] == 4.5
 
     def test_coupling_opt_params_returns_coupled_name(self):
         """Test that opt_params returns coupled parameter name instead of individuals."""
         couplings = {
-            "lj_epsilon_hydrophobic": ["lj_epsilon_A-A", "lj_epsilon_B-B"],
+            "lj_epsilon_hydrophobic": ["lj_epsilon_A_A", "lj_epsilon_B_B"],
         }
         params = {
-            "lj_sigma_A-A": 0.47,
-            "lj_sigma_A-B": 0.50,
-            "lj_sigma_B-B": 0.52,
+            "lj_sigma_A_A": 0.47,
+            "lj_sigma_A_B": 0.50,
+            "lj_sigma_B_B": 0.52,
             "lj_epsilon_hydrophobic": 5.0,
-            "lj_epsilon_A-B": 4.5,
+            "lj_epsilon_A_B": 4.5,
         }
         config = LJConfiguration(couplings=couplings, **params)
 
         opt = config.opt_params
         # Should have the coupled name, not the individual names
         assert "lj_epsilon_hydrophobic" in opt
-        assert "lj_epsilon_A-A" not in opt
-        assert "lj_epsilon_B-B" not in opt
+        assert "lj_epsilon_A_A" not in opt
+        assert "lj_epsilon_B_B" not in opt
         # Non-coupled params should still appear
-        assert "lj_epsilon_A-B" in opt
+        assert "lj_epsilon_A_B" in opt
 
     def test_coupling_getitem_access(self):
         """Test that coupled parameters can be accessed via __getitem__."""
         couplings = {
-            "lj_sigma_all": ["lj_sigma_A-A", "lj_sigma_A-B", "lj_sigma_B-B"],
+            "lj_sigma_all": ["lj_sigma_A_A", "lj_sigma_A_B", "lj_sigma_B_B"],
         }
         params = {
             "lj_sigma_all": 0.5,
-            "lj_epsilon_A-A": 5.0,
-            "lj_epsilon_A-B": 4.5,
-            "lj_epsilon_B-B": 4.0,
+            "lj_epsilon_A_A": 5.0,
+            "lj_epsilon_A_B": 4.5,
+            "lj_epsilon_B_B": 4.0,
         }
         config = LJConfiguration(couplings=couplings, **params)
 
         # Access via coupled name should work
         assert config["lj_sigma_all"] == 0.5
         # Access via individual names should also work
-        assert config["lj_sigma_A-A"] == 0.5
-        assert config["lj_sigma_A-B"] == 0.5
+        assert config["lj_sigma_A_A"] == 0.5
+        assert config["lj_sigma_A_B"] == 0.5
 
     def test_coupling_contains(self):
         """Test that __contains__ works for both coupled and individual param names."""
         couplings = {
-            "lj_epsilon_coupled": ["lj_epsilon_A-A", "lj_epsilon_B-B"],
+            "lj_epsilon_coupled": ["lj_epsilon_A_A", "lj_epsilon_B_B"],
         }
         params = {
-            "lj_sigma_A-A": 0.47,
-            "lj_sigma_A-B": 0.50,
-            "lj_sigma_B-B": 0.52,
+            "lj_sigma_A_A": 0.47,
+            "lj_sigma_A_B": 0.50,
+            "lj_sigma_B_B": 0.52,
             "lj_epsilon_coupled": 5.0,
-            "lj_epsilon_A-B": 4.5,
+            "lj_epsilon_A_B": 4.5,
         }
         config = LJConfiguration(couplings=couplings, **params)
 
         assert "lj_epsilon_coupled" in config
-        assert "lj_epsilon_A-A" in config
-        assert "lj_epsilon_B-B" in config
+        assert "lj_epsilon_A_A" in config
+        assert "lj_epsilon_B_B" in config
         assert "nonexistent_param" not in config
 
     def test_multiple_couplings(self):
         """Test that multiple independent couplings work correctly."""
         couplings = {
-            "lj_sigma_diagonal": ["lj_sigma_A-A", "lj_sigma_B-B"],
-            "lj_epsilon_diagonal": ["lj_epsilon_A-A", "lj_epsilon_B-B"],
+            "lj_sigma_diagonal": ["lj_sigma_A_A", "lj_sigma_B_B"],
+            "lj_epsilon_diagonal": ["lj_epsilon_A_A", "lj_epsilon_B_B"],
         }
         params = {
             "lj_sigma_diagonal": 0.5,
-            "lj_sigma_A-B": 0.48,
+            "lj_sigma_A_B": 0.48,
             "lj_epsilon_diagonal": 5.0,
-            "lj_epsilon_A-B": 4.0,
+            "lj_epsilon_A_B": 4.0,
         }
         config = LJConfiguration(couplings=couplings, **params)
 
-        assert config.params["lj_sigma_A-A"] == 0.5
-        assert config.params["lj_sigma_B-B"] == 0.5
-        assert config.params["lj_sigma_A-B"] == 0.48
-        assert config.params["lj_epsilon_A-A"] == 5.0
-        assert config.params["lj_epsilon_B-B"] == 5.0
-        assert config.params["lj_epsilon_A-B"] == 4.0
+        assert config.params["lj_sigma_A_A"] == 0.5
+        assert config.params["lj_sigma_B_B"] == 0.5
+        assert config.params["lj_sigma_A_B"] == 0.48
+        assert config.params["lj_epsilon_A_A"] == 5.0
+        assert config.params["lj_epsilon_B_B"] == 5.0
+        assert config.params["lj_epsilon_A_B"] == 4.0
 
 class TestLJEnergy:
     """Tests for LJ energy computation."""
