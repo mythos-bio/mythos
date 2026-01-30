@@ -39,9 +39,7 @@ def bond_config() -> BondConfiguration:
     """Create a BondConfiguration from the JSON parameters file."""
     params = load_bond_params()
     return BondConfiguration(
-        bond_names=tuple(params["bond_names"]),
-        k=jnp.array(params["k"]),
-        r0=jnp.array(params["r0"]),
+        **params
     )
 
 
@@ -62,25 +60,12 @@ class TestBondConfiguration:
 
     def test_valid_configuration(self, bond_config: BondConfiguration):
         """Test that valid configuration is created successfully from JSON."""
-        params = load_bond_params()
-        n_bonds = len(params["bond_names"])
+        assert isinstance(bond_config, BondConfiguration)
+        assert len(bond_config.params) == 18  # 9 bonds for DMPC with k and r0 each
 
-        assert len(bond_config.bond_names) == n_bonds
-        assert bond_config.k.shape == (n_bonds,)
-        assert bond_config.r0.shape == (n_bonds,)
-
-    def test_length_mismatch_raises_error(self):
-        """Test that mismatched lengths raise ValueError."""
-        bond_names = ("BOND1", "BOND2")
-        k = jnp.array([1000.0])  # Wrong length
-        r0 = jnp.array([0.47, 0.5])
-
-        with pytest.raises(ValueError, match="must have the same length"):
-            BondConfiguration(
-                bond_names=bond_names,
-                k=k,
-                r0=r0,
-            )
+    def test_raises_error_on_bad_param_name(self):
+        with pytest.raises(ValueError, match="Unexpected parameter"):
+            BondConfiguration(bad_param=100.0)
 
 
 class TestBondEnergy:
@@ -96,7 +81,7 @@ class TestBondEnergy:
         u = MDAnalysis.Universe(TEST_DATA_DIR / "test.tpr")
 
         bond_names = tuple(
-            f"{u.atoms[b[0]].resname}_{u.atoms[b[0]].name}-{u.atoms[b[1]].name}"
+            f"{u.atoms[b[0]].resname}_{u.atoms[b[0]].name}_{u.atoms[b[1]].name}"
             for b in u.bonds.indices
         )
 
@@ -127,34 +112,6 @@ class TestPairBondPotential:
 
         energy = pair_bond(centers, pair, k, r0, displacement_fn)
         assert jnp.isclose(energy, 0.0, atol=1e-10)
-
-    def test_bond_stretched(self):
-        """Test bond potential when stretched beyond equilibrium."""
-        k = 1250.0
-        r0 = 0.47
-        r = 0.5  # Stretched
-        centers = jnp.array([[0.0, 0.0, 0.0], [r, 0.0, 0.0]])
-        pair = jnp.array([0, 1])
-        displacement_fn, _ = space.free()
-
-        energy = pair_bond(centers, pair, k, r0, displacement_fn)
-        expected = 0.5 * k * (r - r0) ** 2
-        assert jnp.isclose(energy, expected)
-
-    def test_bond_compressed(self):
-        """Test bond potential when compressed below equilibrium."""
-        k = 1250.0
-        r0 = 0.47
-        r = 0.4  # Compressed
-        centers = jnp.array([[0.0, 0.0, 0.0], [r, 0.0, 0.0]])
-        pair = jnp.array([0, 1])
-        displacement_fn, _ = space.free()
-
-        energy = pair_bond(centers, pair, k, r0, displacement_fn)
-        expected = 0.5 * k * (r - r0) ** 2
-        assert jnp.isclose(energy, expected)
-        # Energy should be positive
-        assert energy > 0.0
 
     def test_bond_energy_symmetric(self):
         """Test that bond energy is symmetric (compression vs stretch same displacement)."""

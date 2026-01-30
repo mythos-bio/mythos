@@ -5,27 +5,28 @@ import jax.numpy as jnp
 from jax_md import space
 from typing_extensions import override
 
-from mythos.energy.configuration import BaseConfiguration
-from mythos.energy.martini.base import MartiniEnergyFunction
+from mythos.energy.martini.base import MartiniEnergyConfiguration, MartiniEnergyFunction
 from mythos.simulators.io import SimulatorTrajectory
-from mythos.utils.types import Arr_N, Arr_States_3, Vector2D
+from mythos.utils.types import Arr_States_3, Vector2D
 
+BOND_K_PREFIX = "bond_k_"
+BOND_R0_PREFIX = "bond_r0_"
 
-@chex.dataclass(frozen=True, kw_only=True)
-class BondConfiguration(BaseConfiguration):
-    """Configuration for Martini bond energy function."""
+class BondConfiguration(MartiniEnergyConfiguration):
+    """Configuration for Martini bond energy function.
 
-    bond_names: tuple[str, ...]
-    k: Arr_N
-    r0: Arr_N
-
-    required_params = ("k", "r0")
-    non_optimizable_required_params = ("bond_names",)
+    Bond params must be provided as "bond_k_NAME" and "bond_r0_NAME" in
+    corresponding pairs for each bond name in the system. NAME should be in the
+    format of "MOLTYPE_ATOMNAME1_ATOMNAME2", e.g., "DMPC_NC3_PO4".
+    """
 
     @override
     def __post_init__(self) -> None:
-        if not (len(self.bond_names) == len(self.k) == len(self.r0)):
-            raise ValueError("bond_names, k, and r0 must have the same length")
+        for param in self.params:
+            if not param.startswith((BOND_K_PREFIX, BOND_R0_PREFIX)):
+                raise ValueError(f"Unexpected parameter {param} for BondConfiguration")
+        if len(self.params) == 0 or len(self.params) % 2 != 0:
+            raise ValueError("BondConfiguration requires pairs of k and r0 parameters")
 
 
 def pair_bond(
@@ -53,10 +54,10 @@ class Bond(MartiniEnergyFunction):
     def __post_init__(self, topology: None = None) -> None:
         # cache parameters mapped to bonds by indices. The result is arrays of
         # len(bonded_neighbors) where each element corresponds to the k or r0 for that bond.
-        bond_name_to_index = {name: idx for idx, name in enumerate(self.params.bond_names)}
-        bond_index_map = jnp.array([bond_name_to_index[name] for name in self.bond_names])
-        object.__setattr__(self, "_bonds_k", self.params.k[bond_index_map])
-        object.__setattr__(self, "_bonds_r0", self.params.r0[bond_index_map])
+        k = [self.params[BOND_K_PREFIX + name] for name in self.bond_names]
+        r0 = [self.params[BOND_R0_PREFIX + name] for name in self.bond_names]
+        object.__setattr__(self, "_bonds_k", jnp.array(k))
+        object.__setattr__(self, "_bonds_r0", jnp.array(r0))
 
     @override
     def compute_energy(self, trajectory: SimulatorTrajectory) -> float:
