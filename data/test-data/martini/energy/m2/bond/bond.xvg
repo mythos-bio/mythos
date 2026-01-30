@@ -1,0 +1,35 @@
+# This file was created Wed Jan 28 16:21:58 2026
+# Created by:
+#                      :-) GROMACS - gmx energy, 2025.4 (-:
+# 
+# Executable:   /Users/arik/ws/ssec/gromacs-2025.4/build/bin/gmx
+# Data prefix:  /Users/arik/ws/ssec/gromacs-2025.4 (source tree)
+# Working dir:  /Users/arik/ws/ssec/mythos/data/templates/martini/m2/DMPC/273K
+# Command line:
+#   gmx energy -f test.edr -s test.tpr -o bond.xvg
+# gmx energy is part of G R O M A C S:
+#
+# Gnomes, ROck Monsters And Chili Sauce
+#
+@    title "GROMACS Energies"
+@    xaxis  label "Time (ps)"
+@    yaxis  label "(kJ/mol)"
+@TYPE xy
+@ view 0.15, 0.15, 0.75, 0.85
+@ legend on
+@ legend box on
+@ legend loctype view
+@ legend 0.78, 0.8
+@ legend length 2
+@ s0 legend "Bond"
+    0.000000  1826.864014
+   20.000000  1703.163086
+   40.000000  1614.189575
+   60.000000  1813.000000
+   80.000000  1815.498413
+  100.000000  1786.932861
+  120.000000  1825.370117
+  140.000000  1694.288086
+  160.000000  1831.860962
+  180.000000  1854.518433
+  200.000000  1884.056763
