@@ -7,27 +7,48 @@ import jax.numpy as jnp
 from jax_md import space
 from typing_extensions import override
 
-from mythos.energy.configuration import BaseConfiguration
-from mythos.energy.martini.base import MartiniEnergyFunction
+from mythos.energy.martini.base import MartiniEnergyConfiguration, MartiniEnergyFunction
 from mythos.simulators.io import SimulatorTrajectory
 from mythos.utils.types import Arr_N, Arr_States_3, MatrixSq, Vector2D
 
 
-@chex.dataclass(frozen=True, kw_only=True)
-class LJConfiguration(BaseConfiguration):
-    """Configuration for Lennard-Jones potential in Martini 2."""
-    bead_types: tuple[str, ...]  # Bead type corresponding to sigma/epsilon indices
-    sigmas: MatrixSq  # shape: (n_types, n_types)
-    epsilons: MatrixSq  # shape: (n_types, n_types)
+class LJConfiguration(MartiniEnergyConfiguration):
+    """"Configuration for Martini Lennard-Jones energy function.
 
-    required_params = ("sigmas", "epsilons")
-    non_optimizable_required_params = ("bead_types",)
+    All parameters provided must be of the form "lj_sigma_A-B" or "lj_epsilon_A-B",
+    where A and B are bead types. Pair order is ignored unless both orderings
+    are provided. It is required that sigma and epsilon parameters are provided
+    for any bead type pairs present in the system.
 
+    Couplings are supported (see :class:`MartiniEnergyConfiguration` for details).
+    """
     @override
     def __post_init__(self) -> None:
-        bead_type_shape = (len(self.bead_types), len(self.bead_types))
-        if not (bead_type_shape == self.sigmas.shape == self.epsilons.shape):
-            raise ValueError("sigmas and epsilons must have shape (n_types, n_types)")
+        bead_types = set()
+        for param in self.params:
+            if not param.startswith(("lj_sigma_", "lj_epsilon_")):
+                raise ValueError(f"Unexpected parameter {param} for LJConfiguration")
+            bead_types.update(param.split("_")[2].split("-"))
+        self.bead_types = tuple(sorted(bead_types))
+
+        # Construct lookup tables for the values for use in vmapped energy
+        # calculations. These should be symmetric matrices, but we do not
+        # explicitly force that. At least one of the pair orderings must exist
+        # or an exception is raised.
+        def get_param(prefix: str, a: str, b: str) -> float:
+            param = self.params.get(f"lj_{prefix}_{a}-{b}", self.params.get(f"lj_{prefix}_{b}-{a}"))
+            if param is None:
+                raise ValueError(f"Missing LJ {prefix} parameter for pair {a}-{b} ({b}-{a})")
+            return param
+
+        self.sigmas: MatrixSq = jnp.array([
+            [get_param("sigma", i, j) for j in self.bead_types]
+            for i in self.bead_types
+        ])
+        self.epsilons: MatrixSq = jnp.array([
+            [get_param("epsilon", i, j) for j in self.bead_types]
+            for i in self.bead_types
+        ])
 
 
 def lennard_jones(r: float, eps: float, sigma: float) -> float:
@@ -41,6 +62,7 @@ def lennard_jones(r: float, eps: float, sigma: float) -> float:
     return jnp.where(
         r < cutoff, v - v_c, 0.0  # shifting the potential by subtracting V(r_c)
     )
+
 
 def pair_lj(
         centers: Arr_States_3,
