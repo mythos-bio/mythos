@@ -11,6 +11,8 @@ from typing import Any, ClassVar
 import chex
 from typing_extensions import override
 
+from mythos.utils.scheduler import SchedulerUnit
+
 
 @chex.dataclass(frozen=True)
 class SimulatorOutput:
@@ -20,7 +22,7 @@ class SimulatorOutput:
 
 
 @chex.dataclass(frozen=True, kw_only=True)
-class Simulator:
+class Simulator(SchedulerUnit):
     """Base class for a simulation."""
     name: str = field(default_factory=lambda: str(uuid.uuid4()))
     exposed_observables: ClassVar[list[str]] = ["trajectory"]

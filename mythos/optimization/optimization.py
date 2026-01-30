@@ -14,6 +14,7 @@ from typing_extensions import override
 from mythos.optimization.objective import Objective, ObjectiveOutput
 from mythos.simulators.base import Simulator
 from mythos.ui.loggers import logger as jdna_logger
+from mythos.utils.scheduler import SchedulerUnit
 from mythos.utils.types import Grads, Params
 
 ERR_MISSING_OBJECTIVES = "At least one objective is required."
@@ -93,6 +94,7 @@ class RayOptimizer(Optimizer):
         optimizer: An optax optimizer.
         optimizer_state: The state of the optimizer.
         logger: A logger to use for the optimization.
+        remote_options_default: Default Ray options to apply to all remote calls.
     """
 
     objectives: list[Objective]
@@ -100,6 +102,7 @@ class RayOptimizer(Optimizer):
     aggregate_grad_fn: Callable[[list[Grads]], Grads]
     optimizer: optax.GradientTransformation
     logger: jdna_logger.Logger = field(default_factory=jdna_logger.NullLogger)
+    remote_options_default: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
         """Validate the initialization of the Optimization."""
@@ -126,6 +129,14 @@ class RayOptimizer(Optimizer):
         remote_fun = ray.remote(fun).options(**ray_options)
         return remote_fun.remote(*args)
 
+    def _get_ray_options(self, unit: SchedulerUnit) -> dict[str, Any]:
+        options = {}
+        if unit_hints := getattr(unit, "scheduler_hints", None):
+            options = unit_hints.to_dict(engine="ray", rewrite_options={"mem_mb": "memory"})
+            if "memory" in options:
+                options["memory"] = int(options["memory"] * 1024 * 1024)  # Ray expects bytes
+        return {**self.remote_options_default, **options}
+
     def _run_simulator(
             self, simulator: Simulator, params: Params, **state
         ) -> tuple[list[RayRef], RayRef]:
@@ -133,7 +144,11 @@ class RayOptimizer(Optimizer):
             output = simulator.run(opt_params=params, **state)
             return *output.observables, output.state
 
-        ray_opts = {"name": "simulator_run:" + simulator.name, "num_returns": 1 + len(simulator.exposes())}
+        ray_opts = {
+            **self._get_ray_options(simulator),
+            "name": "simulator_run:" + simulator.name,
+            "num_returns": 1 + len(simulator.exposes()),
+        }
         refs = self._create_and_run_remote(simulator_run_fn, ray_opts, params, state)
         return refs[:-1], refs[-1]  # observables as a list, state
 
@@ -144,7 +159,10 @@ class RayOptimizer(Optimizer):
             obs = {k: ray.get(v) for k, v in obs.items()}
             return objective.calculate(observables=obs, opt_params=params, **state)
 
-        ray_opts = {"name": "objective_compute:" + objective.name}
+        ray_opts = {
+            **self._get_ray_options(objective),
+            "name": "objective_compute:" + objective.name,
+        }
         return self._create_and_run_remote(objective_compute_fn, ray_opts, observables, params, state)
 
     def _wait_remotes(self, refs: list[RayRef]) -> list[RayRef]:
