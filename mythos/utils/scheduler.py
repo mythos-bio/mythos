@@ -55,6 +55,7 @@ class SchedulerHints:
         }
 
 
+@chex.dataclass(frozen=True, kw_only=True)
 class SchedulerUnit:
     """Mixin for classes that support scheduler hints.
 
@@ -71,4 +72,4 @@ class SchedulerUnit:
             # ... rest of simulator implementation
     """
 
-    scheduler_hints: SchedulerHints | None
+    scheduler_hints: SchedulerHints | None = None
