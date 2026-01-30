@@ -235,6 +235,7 @@ class TestLJEnergy:
             atom_types=tuple(u.atoms.types),
             bond_names=(),
             angle_names=(),
+            angles=(),
             bonded_neighbors=jnp.array(u.bonds.indices),
             unbonded_neighbors=get_unbonded_neighbors(len(u.atoms), u.bonds.indices),
         )
