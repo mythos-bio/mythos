@@ -99,6 +99,9 @@ class Angle(MartiniEnergyFunction):
     """Angle potential energy function for Martini 2."""
 
     params: AngleConfiguration
+    # https://manual.gromacs.org/current/reference-manual/functions/bonded-interactions.html#harmonicangle
+    # Martini2 uses angle type 2 (G96 Angle) so MSE is defined w.r.t.
+    # cos(theta). Martini3 can set this classvar to False and reuse this code.
     use_G96: ClassVar[bool] = True  # noqa: N815
 
     @override
