@@ -11,11 +11,14 @@ from mythos.energy.martini.base import MartiniEnergyConfiguration, MartiniEnergy
 from mythos.simulators.io import SimulatorTrajectory
 from mythos.utils.types import Arr_N, Arr_States_3, MatrixSq, Vector2D
 
+LJ_SIGMA_PREFIX = "lj_sigma_"
+LJ_EPSILON_PREFIX = "lj_epsilon_"
+
 
 class LJConfiguration(MartiniEnergyConfiguration):
     """"Configuration for Martini Lennard-Jones energy function.
 
-    All parameters provided must be of the form "lj_sigma_A-B" or "lj_epsilon_A-B",
+    All parameters provided must be of the form "lj_sigma_A_B" or "lj_epsilon_A_B",
     where A and B are bead types. Pair order is ignored unless both orderings
     are provided. It is required that sigma and epsilon parameters are provided
     for any bead type pairs present in the system.
@@ -26,19 +29,19 @@ class LJConfiguration(MartiniEnergyConfiguration):
     def __post_init__(self) -> None:
         bead_types = set()
         for param in self.params:
-            if not param.startswith(("lj_sigma_", "lj_epsilon_")):
+            if not param.startswith((LJ_SIGMA_PREFIX, LJ_EPSILON_PREFIX)):
                 raise ValueError(f"Unexpected parameter {param} for LJConfiguration")
-            bead_types.update(param.split("_")[2].split("-"))
+            bead_types.update(param.split("_")[2:4])
         self.bead_types = tuple(sorted(bead_types))
 
         # Construct lookup tables for the values for use in vmapped energy
         # calculations. These should be symmetric matrices, but we do not
-        # explicitly force that. At least one of the pair orderings must exist
+        # explicitly enforce that. At least one of the pair orderings must exist
         # or an exception is raised.
         def get_param(prefix: str, a: str, b: str) -> float:
-            param = self.params.get(f"lj_{prefix}_{a}-{b}", self.params.get(f"lj_{prefix}_{b}-{a}"))
+            param = self.params.get(f"lj_{prefix}_{a}_{b}", self.params.get(f"lj_{prefix}_{b}_{a}"))
             if param is None:
-                raise ValueError(f"Missing LJ {prefix} parameter for pair {a}-{b} ({b}-{a})")
+                raise ValueError(f"Missing LJ {prefix} parameter for pair {a}_{b} ({b}_{a})")
             return param
 
         self.sigmas: MatrixSq = jnp.array([
@@ -84,6 +87,7 @@ def pair_lj(
 
     r = space.distance(displacement_fn(centers[i], centers[j]))
     return lennard_jones(r, eps, sigma)
+
 
 @chex.dataclass(frozen=True, kw_only=True)
 class LJ(MartiniEnergyFunction):
