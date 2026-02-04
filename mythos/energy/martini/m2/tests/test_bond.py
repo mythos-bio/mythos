@@ -90,6 +90,7 @@ class TestBondEnergy:
             atom_types=tuple(u.atoms.types),
             bond_names=bond_names,
             angle_names=(),
+            angles=(),
             bonded_neighbors=jnp.array(u.bonds.indices),
             unbonded_neighbors=jnp.array([]),
         )
