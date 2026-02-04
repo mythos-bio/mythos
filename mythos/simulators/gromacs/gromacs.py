@@ -10,11 +10,13 @@ import chex
 import numpy as np
 
 from mythos.energy.base import EnergyFunction
-from mythos.input.gromacs_input import update_mdp_params
+from mythos.input.gromacs_input import replace_params_in_topology, update_mdp_params
 from mythos.simulators import io as jd_sio
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.simulators.gromacs import utils as gromacs_utils
 from mythos.utils.helpers import run_command
+
+PREPROCESSED_TOPOLOGY_FILE = "_pp_topol.top"
 
 logger = logging.getLogger(__name__)
 
@@ -79,13 +81,6 @@ class GromacsSimulator(InputDirSimulator):
             SimulatorOutput containing the trajectory.
         """
         mdp_path = input_dir / self.mdp_file
-        topology_path = input_dir / self.topology_file
-        gmx_binary = self.binary_path or shutil.which("gmx")
-        if gmx_binary is None:
-            raise FileNotFoundError(
-                "GROMACS binary not found. Please install GROMACS into PATH or provide the path "
-                "to the binary via the 'binary_path' argument."
-            )
 
         seed = seed or np.random.default_rng().integers(0, 2**31)
         update_mdp_params(mdp_path, {**self.input_overrides, "gen-seed": seed})
@@ -96,36 +91,36 @@ class GromacsSimulator(InputDirSimulator):
         logger.info("Starting GROMACS simulation")
         # prepare the run
         cmd = [
-            gmx_binary,
             "grompp",
-            "-f",
-            f"{mdp_path}",
-            "-c",
-            f"{input_dir / self.structure_file}",
-            "-p",
-            f"{topology_path}",
-            "-n",
-            f"{input_dir / self.index_file}",
-            "-o",
-            "output.tpr",
+            "-f", self.mdp_file,
+            "-c", self.structure_file,
+            "-p", PREPROCESSED_TOPOLOGY_FILE,  # created in _update_topology_params
+            "-n", self.index_file,
+            "-o", "output.tpr",
         ]
-        run_command(cmd, cwd=input_dir, log_prefix="grompp")
+        self._run_gromacs(cmd, cwd=input_dir, log_prefix="grompp")
 
         # run the simulation
         cmd = [
-            gmx_binary,
             "mdrun",
-            "-deffnm",
-            "output",
-            "-ntmpi",
-            "1",
-            "-rdd",
-            "1.5",
+            "-deffnm", "output",
+            "-ntmpi", "1",
+            "-rdd", "1.5",
         ]
-        run_command(cmd, cwd=input_dir, log_prefix="mdrun")
+        self._run_gromacs(cmd, cwd=input_dir, log_prefix="mdrun")
         logger.info("GROMACS simulation complete")
 
         return SimulatorOutput(observables=[self._read_trajectory(input_dir)])
+
+    def _run_gromacs(self, cmd: list[str], cwd: Path, log_prefix: str) -> None:
+        gmx_binary = self.binary_path or shutil.which("gmx")
+        if gmx_binary is None:
+            raise FileNotFoundError(
+                "GROMACS binary not found. Please install GROMACS into PATH or provide the path "
+                "to the binary via the 'binary_path' argument."
+            )
+        run_command(cmd, cwd=cwd, log_prefix=log_prefix)
+
 
     def _read_trajectory(self, input_dir: Path) -> jd_sio.SimulatorTrajectory:
         trajectory = gromacs_utils.read_trajectory_mdanalysis(
@@ -137,9 +132,20 @@ class GromacsSimulator(InputDirSimulator):
 
         return trajectory
 
-    def _update_topology_params(self, opt_params: dict[str, typing.Any]) -> None:
-        # Parameter mapping from energy function to topology will be implemented
-        # once the GROMACS energy function is defined. This will involve getting
-        # updated params from self.energy_fn.with_params() and mapping them to
-        # the GROMACS topology format.
-        logger.debug("Topology parameter update not yet implemented for params: %s", opt_params)
+    def _update_topology_params(self, params: dict[str, typing.Any]) -> None:
+        # ensure we start with a preprocessed topology, so create using grompp
+        # which then will be used for writing replacement parameters.
+        topo_pp = self.input_dir / PREPROCESSED_TOPOLOGY_FILE
+        cmd = [
+            "grompp",
+            "-p", self.topology_file,
+            "-f", self.mdp_file,
+            "-c", self.structure_file,
+            "-pp", PREPROCESSED_TOPOLOGY_FILE
+        ]
+        self._run_gromacs(cmd, cwd=self.input_dir, log_prefix="topology_pp")
+        if not topo_pp.exists():
+            raise FileNotFoundError(f"Preprocessed topology file not found after grompp: {topo_pp}")
+
+        replace_params_in_topology(topo_pp, params, topo_pp)
+
