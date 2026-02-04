@@ -5,7 +5,7 @@ from jax_md import space
 from typing_extensions import override
 
 from mythos.energy.base import BaseEnergyFunction
-from mythos.utils.types import Vector3D
+from mythos.utils.types import Arr_N, Vector3D
 
 
 def get_periodic(box_size: Vector3D) -> callable:
@@ -20,6 +20,7 @@ class MartiniEnergyFunction(BaseEnergyFunction):
     atom_types: tuple[str, ...]
     bond_names: tuple[str, ...]
     angle_names: tuple[str, ...]
+    angles: Arr_N  # Shape: (n_angles, 3) - triplets of atom indices
     displacement_fn: callable = get_periodic
 
 
