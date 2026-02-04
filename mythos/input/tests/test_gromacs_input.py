@@ -396,3 +396,62 @@ class TestGromacsParamsParser:
         parser.replace({"bond_r0_DMPC_NC3_PO4": 0.52}, topology_copy)
         modified = gi.GromacsParamsParser(topology_copy).parse()
         assert modified["bond_params"]["bond_r0_DMPC_NC3_PO4"] == 0.52
+
+    def test_nonbond_params_raises_for_unknown_bead_types(self, tmp_path):
+        # Create a minimal topology with nonbond_params referencing unknown types
+        topology_content = """; Test topology with unknown bead types
+        [ defaults ]
+        1      2         no        1.0     1.0
+
+        [ atomtypes ]
+        ; only define TypeA, not TypeB
+        TypeA     72.0 0.0  A     0.0 0.0
+
+        [ nonbond_params ]
+        ; TypeB is not defined in atomtypes
+            TypeA TypeB    1    0.6000 2.7000
+        """
+        topology_file = tmp_path / "bad_topology.top"
+        topology_file.write_text(topology_content)
+
+        parser = gi.GromacsParamsParser(topology_file)
+        with pytest.raises(ValueError, match="Unknown atom types in nonbond_params"):
+            parser.parse()
+
+
+class TestReadParamsFromTopology:
+    """Tests for read_params_from_topology function."""
+
+    def test_read_params_from_topology(self):
+        result = gi.read_params_from_topology(GROMACS_TEST_DATA / "preprocessed_topology.top")
+
+        assert set(result.keys()) == {"nonbond_params", "bond_params", "angle_params"}
+        assert result["nonbond_params"]["lj_sigma_Qda_Qda"] == 0.6
+        assert result["bond_params"]["bond_r0_DMPC_NC3_PO4"] == 0.45
+        assert result["angle_params"]["angle_theta0_DMPC_PO4_GL1_GL2"] == 120.0
+
+
+class TestReplaceParamsInTopology:
+    """Tests for replace_params_in_topology function."""
+
+    def test_replace_params_in_topology(self, tmp_path):
+        output_file = tmp_path / "modified.top"
+        new_params = {
+            "bond_r0_DMPC_NC3_PO4": 0.50,
+            "lj_sigma_Qda_Qda": 0.65,
+            "angle_k_DMPC_PO4_GL1_GL2": 30.0,
+        }
+
+        gi.replace_params_in_topology(
+            GROMACS_TEST_DATA / "preprocessed_topology.top",
+            new_params,
+            output_file,
+        )
+
+        # Verify the modifications
+        modified = gi.read_params_from_topology(output_file)
+        assert modified["bond_params"]["bond_r0_DMPC_NC3_PO4"] == 0.50
+        assert modified["nonbond_params"]["lj_sigma_Qda_Qda"] == 0.65
+        assert modified["angle_params"]["angle_k_DMPC_PO4_GL1_GL2"] == 30.0
+        # Unmodified params preserved
+        assert modified["bond_params"]["bond_k_DMPC_NC3_PO4"] == 1250.0

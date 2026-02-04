@@ -236,8 +236,6 @@ class GromacsParamsParser:
     def _handle_section_data(self, stripped: str, original_line: str) -> None:
         parts = stripped.split()
         if not parts:
-            if self._write_mode:
-                self._output_lines.append(original_line)
             return
 
         section = self._current_section
