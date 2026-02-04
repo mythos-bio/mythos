@@ -92,28 +92,20 @@ class GromacsSimulator(InputDirSimulator):
         # prepare the run
         cmd = [
             "grompp",
-            "-f",
-            f"{mdp_path}",
-            "-c",
-            f"{self.structure_file}",
-            "-p",
-            PREPROCESSED_TOPOLOGY_FILE,  # created in _update_topology_params
-            "-n",
-            f"{self.index_file}",
-            "-o",
-            "output.tpr",
+            "-f", self.mdp_file,
+            "-c", self.structure_file,
+            "-p", PREPROCESSED_TOPOLOGY_FILE,  # created in _update_topology_params
+            "-n", self.index_file,
+            "-o", "output.tpr",
         ]
         self._run_gromacs(cmd, cwd=input_dir, log_prefix="grompp")
 
         # run the simulation
         cmd = [
             "mdrun",
-            "-deffnm",
-            "output",
-            "-ntmpi",
-            "1",
-            "-rdd",
-            "1.5",
+            "-deffnm", "output",
+            "-ntmpi", "1",
+            "-rdd", "1.5",
         ]
         self._run_gromacs(cmd, cwd=input_dir, log_prefix="mdrun")
         logger.info("GROMACS simulation complete")
@@ -146,10 +138,10 @@ class GromacsSimulator(InputDirSimulator):
         topo_pp = self.input_dir / PREPROCESSED_TOPOLOGY_FILE
         cmd = [
             "grompp",
-            "-p", str(self.topology_file),
-            "-f", str(self.mdp_file),
-            "-c", str(self.structure_file),
-            "-pp", str(topo_pp),
+            "-p", self.topology_file,
+            "-f", self.mdp_file,
+            "-c", self.structure_file,
+            "-pp", PREPROCESSED_TOPOLOGY_FILE
         ]
         self._run_gromacs(cmd, cwd=self.input_dir, log_prefix="topology_pp")
         if not topo_pp.exists():
