@@ -122,7 +122,7 @@ class TestGromacsSimulatorRun:
         assert hasattr(trajectory, "orientation")
 
         # Check that trajectory has expected dimensions (frames, atoms, 3)
-        assert len(trajectory.center.shape) == 3
+        assert trajectory.length() == 10
         assert trajectory.center.shape[-1] == 3  # 3D positions
 
     def test_run_with_overwrite_false(
