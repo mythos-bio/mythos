@@ -35,8 +35,10 @@ PathOrStr = Path | str
 # NOTE: jaxtyping has it's own scalar type but general to any numeric type
 #       we can switch to it here if we think that is ok.
 Scalar = jaxtyp.Float[jaxtyp.Array, ""]
+Vector2D = jaxtyp.Float[jaxtyp.Array, "2"]
 Vector3D = jaxtyp.Float[jaxtyp.Array, "3"]
 Vector4D = jaxtyp.Float[jaxtyp.Array, "4"]
+MatrixSq = jaxtyp.Float[jaxtyp.Array, "#n #n"]
 Arr_N = jaxtyp.Array  # jaxtyp.Float[jaxtyp.Array, "#n"]
 Arr_Nucleotide = jaxtyp.Float[jaxtyp.Array, "#n_nucleotides"]
 Arr_Nucleotide_Int = jaxtyp.Int[jaxtyp.Array, "#n_nucleotides"]
@@ -50,6 +52,7 @@ Arr_Unbonded_Neighbors = jaxtyp.Int[jaxtyp.Array, "#n_unbonded_pairs"]
 Arr_Bonded_Neighbors_2 = jaxtyp.Int[jaxtyp.Array, "#n_bonded_pairs 2"]
 Arr_Unbonded_Neighbors_2 = jaxtyp.Int[jaxtyp.Array, "#n_unbonded_pairs 2"]
 Arr_States = jaxtyp.Int[jaxtyp.Array, "#n_states"]
+Arr_Box = jaxtyp.Float[jaxtyp.Array, "#n_states #dimensions"]
 Arr_States_3 = jaxtyp.Int[jaxtyp.Array, "#n_states 3"]
 
 ARR_OR_SCALAR = Arr_N | Scalar

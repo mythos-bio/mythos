@@ -9,6 +9,8 @@ import numpy as np
 
 import mythos.simulators.io as jd_sio
 
+# MDAnalysis reads into Angstroms, but Gromacs parameters in nm
+ANGSTROMS_TO_NM = 0.1
 logger = logging.getLogger(__name__)
 
 
@@ -33,7 +35,8 @@ def read_trajectory_mdanalysis(topology_file: Path, trajectory_file: Path) -> jd
     logger.debug("Trajectory contains %d frames with %d atoms", n_frames, n_atoms)
 
     # Skip the first frame (initial state) by starting from frame 1
-    positions = np.stack([ts.positions for ts in u.trajectory[1:]]).astype(np.float64)
+    positions = np.stack([ts.positions.copy() for ts in u.trajectory[1:]]).astype(np.float64)
+    box_sizes = np.stack([ts.dimensions[:3].copy() for ts in u.trajectory[1:]]).astype(np.float64)
     n_frames = n_frames - 1
 
     # Create quaternions (identity for now - GROMACS doesn't typically store orientations)
@@ -43,6 +46,7 @@ def read_trajectory_mdanalysis(topology_file: Path, trajectory_file: Path) -> jd
     )
 
     return jd_sio.SimulatorTrajectory(
-        center=positions,
+        center=positions * ANGSTROMS_TO_NM,
         orientation=jax_md.rigid_body.Quaternion(vec=quaternions),
+        box_size=box_sizes * ANGSTROMS_TO_NM,
     )
