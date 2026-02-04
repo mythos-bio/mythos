@@ -21,6 +21,7 @@ import mythos.energy as jdna_energy
 import mythos.utils.types as jdna_types
 from mythos.energy.base import EnergyFunction
 from mythos.simulators.io import SimulatorTrajectory
+from mythos.utils.scheduler import SchedulerUnit
 
 ERR_DIFFTRE_MISSING_KWARGS = "Missing required kwargs: {missing_kwargs}."
 ERR_MISSING_ARG = "Missing required argument: {missing_arg}."
@@ -51,7 +52,7 @@ class ObjectiveOutput:
 
 
 @chex.dataclass(frozen=True, kw_only=True)
-class Objective:
+class Objective(SchedulerUnit):
     """Frozen dataclass for objectives that calculate gradients.
 
     Objectives are immutable - all state is passed in and out through the
@@ -63,6 +64,7 @@ class Objective:
         required_observables: Observable names required to compute gradients.
         logging_observables: Observable names used for logging.
         grad_or_loss_fn: Function that computes gradients from observables.
+        scheduler_hints: Optional hints for scheduling this objective.
     """
 
     name: str

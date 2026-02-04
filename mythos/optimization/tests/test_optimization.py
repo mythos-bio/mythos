@@ -12,6 +12,7 @@ from typing_extensions import override
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
 from mythos.simulators.base import Simulator, SimulatorOutput
+from mythos.utils.scheduler import SchedulerHints
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -21,6 +22,7 @@ class MockSimulator(Simulator):
     exposed_observables: list[str] = field(default_factory=lambda: ["trajectory"])
     output_state: dict = field(default_factory=dict)
     state_tracker: dict = field(default_factory=dict)  # external object to track state passed in
+    scheduler_hints: SchedulerHints | None = None
 
     @override
     def run(self, *_args, opt_params, **state) -> SimulatorOutput:
@@ -40,6 +42,7 @@ class MockObjective(jdna_objective.Objective):
     output_state: dict = field(default_factory=dict)
     output_observables: dict = field(default_factory=dict)
     state_tracker: dict = field(default_factory=dict)  # external object to track state passed in
+    scheduler_hints: SchedulerHints | None = None
 
     def calculate(self, observables, opt_params, **state):
         self.state_tracker.update(state)
@@ -669,3 +672,210 @@ class TestOptimizationStep:
 
         with pytest.raises(RuntimeError, match="could not be resolved after multiple attempts"):
             opt.step(params=params)
+
+
+class TestRayOptimizerSchedulerHints:
+    """Tests for RayOptimizer scheduler hints processing."""
+
+    @pytest.fixture
+    def ray_options_tracker(self, monkeypatch):
+        """Track ray options passed to _create_and_run_remote."""
+        captured_options = []
+
+        original_create_and_run = jdna_optimization.RayOptimizer._create_and_run_remote
+
+        def tracking_create_and_run(self, fun, ray_options, *args):
+            captured_options.append(ray_options.copy())
+            return original_create_and_run(self, fun, ray_options, *args)
+
+        monkeypatch.setattr(
+            jdna_optimization.RayOptimizer,
+            "_create_and_run_remote",
+            tracking_create_and_run,
+        )
+        return captured_options
+
+    @pytest.mark.parametrize(
+        ("default_hints", "sim_hints", "obj_hints", "expected_sim_opts", "expected_obj_opts"),
+        [
+            # No hints anywhere - empty options (except name/num_returns)
+            pytest.param(
+                None, None, None,
+                {},
+                {},
+                id="no_hints",
+            ),
+            # Only default hints - both get defaults
+            pytest.param(
+                {"num_cpus": 2},
+                None, None,
+                {"num_cpus": 2},
+                {"num_cpus": 2},
+                id="default_only",
+            ),
+            # Only simulator hints
+            pytest.param(
+                None,
+                SchedulerHints(num_cpus=4, num_gpus=1.0),
+                None,
+                {"num_cpus": 4, "num_gpus": 1.0},
+                {},
+                id="sim_hints_only",
+            ),
+            # Only objective hints
+            pytest.param(
+                None,
+                None,
+                SchedulerHints(num_cpus=8, mem_mb=4096),
+                {},
+                {"num_cpus": 8, "memory": 4096 * 1024 * 1024},
+                id="obj_hints_only",
+            ),
+            # Default + simulator hints (simulator overrides default)
+            pytest.param(
+                {"num_cpus": 2, "num_gpus": 0.5},
+                SchedulerHints(num_cpus=4),
+                None,
+                {"num_cpus": 4, "num_gpus": 0.5},
+                {"num_cpus": 2, "num_gpus": 0.5},
+                id="default_and_sim",
+            ),
+            # Default + objective hints (objective overrides default)
+            pytest.param(
+                {"num_cpus": 2},
+                None,
+                SchedulerHints(num_cpus=16, max_retries=3),
+                {"num_cpus": 2},
+                {"num_cpus": 16, "max_retries": 3},
+                id="default_and_obj",
+            ),
+            # All three - each component uses its own hints merged with defaults
+            pytest.param(
+                {"num_cpus": 1, "num_gpus": 0.1},
+                SchedulerHints(num_cpus=4, num_gpus=2.0),
+                SchedulerHints(num_cpus=8, mem_mb=8192),
+                {"num_cpus": 4, "num_gpus": 2.0},
+                {"num_cpus": 8, "num_gpus": 0.1, "memory": 8192 * 1024 * 1024},
+                id="all_hints",
+            ),
+            # Custom ray-specific options
+            pytest.param(
+                None,
+                SchedulerHints(num_cpus=2, custom={"ray": {"scheduling_strategy": "SPREAD"}}),
+                SchedulerHints(custom={"ray": {"max_task_retries": 5}}),
+                {"num_cpus": 2, "scheduling_strategy": "SPREAD"},
+                {"max_task_retries": 5},
+                id="custom_ray_options",
+            ),
+        ],
+    )
+    def test_scheduler_hints_applied_to_ray_options(
+        self,
+        ray_options_tracker,
+        basic_optimizer,
+        default_hints,
+        sim_hints,
+        obj_hints,
+        expected_sim_opts,
+        expected_obj_opts,
+    ):
+        """Test that scheduler hints are correctly translated to Ray options."""
+        simulator = MockSimulator(
+            name="test_sim",
+            return_observables=[jnp.array([1.0])],
+            scheduler_hints=sim_hints,
+        )
+        objective = MockObjective(
+            name="test_obj",
+            required_observables=("trajectory",),  # MockSimulator.exposes() returns raw names
+            grad_or_loss_fn=lambda x: x,
+            scheduler_hints=obj_hints,
+        )
+
+        opt = jdna_optimization.RayOptimizer(
+            objectives=[objective],
+            simulators=[simulator],
+            aggregate_grad_fn=lambda grads: grads[0] if grads else {},
+            optimizer=basic_optimizer,
+            remote_options_default=default_hints or {},
+        )
+
+        params = {"param": jnp.array(1.0)}
+        opt.step(params=params)
+
+        # Find simulator and objective calls by name prefix
+        sim_calls = [
+            opts for opts in ray_options_tracker
+            if opts.get("name", "").startswith("simulator_run:")
+        ]
+        obj_calls = [
+            opts for opts in ray_options_tracker
+            if opts.get("name", "").startswith("objective_compute:")
+        ]
+
+        assert len(sim_calls) >= 1, "Expected at least one simulator call"
+        assert len(obj_calls) >= 1, "Expected at least one objective call"
+
+        # Check simulator options (excluding name and num_returns which are always set)
+        sim_opts = {
+            k: v for k, v in sim_calls[0].items()
+            if k not in ("name", "num_returns")
+        }
+        for key, expected_value in expected_sim_opts.items():
+            assert key in sim_opts, f"Expected {key} in simulator options"
+            assert sim_opts[key] == expected_value, (
+                f"Simulator option {key}: expected {expected_value}, got {sim_opts[key]}"
+            )
+
+        # Check objective options (excluding name)
+        obj_opts = {
+            k: v for k, v in obj_calls[0].items()
+            if k != "name"
+        }
+        for key, expected_value in expected_obj_opts.items():
+            assert key in obj_opts, f"Expected {key} in objective options"
+            assert obj_opts[key] == expected_value, (
+                f"Objective option {key}: expected {expected_value}, got {obj_opts[key]}"
+            )
+
+    def test_works_without_scheduler_hints_attribute(self, basic_optimizer):
+        """Test compatibility when scheduler_hints attribute is missing."""
+        # Create classes that don't have scheduler_hints at all
+        @chex.dataclass(frozen=True, kw_only=True)
+        class NoHintsSimulator(Simulator):
+            name: str = "nohints_sim"
+            @override
+            def run(self, *_args, opt_params, **_state) -> SimulatorOutput:
+                return SimulatorOutput(observables=[jnp.array([1.0])], state={})
+
+        @chex.dataclass(frozen=True, kw_only=True)
+        class NoHintsObjective(jdna_objective.Objective):
+            @override
+            def calculate(self, observables, opt_params, **_state):
+                return jdna_objective.ObjectiveOutput(
+                    is_ready=True,
+                    grads={k: v * 0.1 for k, v in opt_params.items()},
+                    observables={},
+                    state={},
+                )
+
+        simulator = NoHintsSimulator()
+        objective = NoHintsObjective(
+            name="nohints_obj",
+            required_observables=tuple(simulator.exposes()),
+            grad_or_loss_fn=lambda _x: ({}, []),
+        )
+
+        opt = jdna_optimization.RayOptimizer(
+            objectives=[objective],
+            simulators=[simulator],
+            aggregate_grad_fn=lambda grads: grads[0] if grads else {},
+            optimizer=basic_optimizer,
+        )
+
+        params = {"param": jnp.array(1.0)}
+        output = opt.step(params=params)
+
+        assert output is not None
+        assert isinstance(output, jdna_optimization.OptimizerOutput)
+
