@@ -322,7 +322,7 @@ class TestGromacsParamsParser:
 
     def test_parse_bead_types(self, parser):
         parser.parse()
-        assert set(parser.bead_types) == {"Qda", "Qd", "Qa", "Q0", "P5"}
+        assert set(parser._bead_types) == {"Qda", "Qd", "Qa", "Q0", "P5"}
 
     def test_replace_bond_params(self, parser, tmp_path):
         output_file = tmp_path / "modified.top"
