@@ -1,5 +1,6 @@
 """Test for GROMACS input file reader."""
 
+import importlib
 import io
 from pathlib import Path
 
@@ -8,6 +9,7 @@ import pytest
 import mythos.input.gromacs_input as gi
 
 TEST_FILES_DIR = Path(__file__).parent / "test_files"
+GROMACS_TEST_DATA = importlib.resources.files("mythos").parent / "data" / "test-data" / "gromacs"
 
 
 class TestParseNumeric:
@@ -283,3 +285,114 @@ class TestIntegration:
         assert modified_config["nsteps"] == 100000
         assert modified_config["ref-t"] == 310
         assert not modified_config["gen-vel"]
+
+
+class TestGromacsParamsParser:
+    @pytest.fixture
+    def parser(self):
+        return gi.GromacsParamsParser(GROMACS_TEST_DATA / "preprocessed_topology.top")
+
+    def test_parse_returns_expected_keys(self, parser):
+        result = parser.parse()
+        assert set(result.keys()) == {"nonbond_params", "bond_params", "angle_params"}
+
+    def test_parse_nonbond_params(self, parser):
+        result = parser.parse()
+        nonbond = result["nonbond_params"]
+        assert nonbond["lj_sigma_Qda_Qda"] == 0.6
+        assert nonbond["lj_epsilon_Qda_Qda"] == 2.7
+        assert nonbond["lj_sigma_Qda_P5"] == 0.47
+        assert nonbond["lj_epsilon_Qda_P5"] == 0.5
+
+    def test_parse_bond_params(self, parser):
+        result = parser.parse()
+        bonds = result["bond_params"]
+        assert bonds["bond_r0_DMPC_NC3_PO4"] == 0.45
+        assert bonds["bond_k_DMPC_NC3_PO4"] == 1250.0
+        assert bonds["bond_r0_DMPC_GL1_GL2"] == 0.37
+        assert bonds["bond_k_DMPC_GL1_GL2"] == 1250.0
+
+    def test_parse_angle_params(self, parser):
+        result = parser.parse()
+        angles = result["angle_params"]
+        assert angles["angle_theta0_DMPC_PO4_GL1_GL2"] == 120.0
+        assert angles["angle_k_DMPC_PO4_GL1_GL2"] == 25.0
+        assert angles["angle_theta0_DMPC_C1A_C2A_C3A"] == 180.0
+        assert angles["angle_k_DMPC_C1A_C2A_C3A"] == 35.0
+
+    def test_parse_bead_types(self, parser):
+        parser.parse()
+        assert set(parser.bead_types) == {"Qda", "Qd", "Qa", "Q0", "P5"}
+
+    def test_replace_bond_params(self, parser, tmp_path):
+        output_file = tmp_path / "modified.top"
+        new_params = {"bond_r0_DMPC_NC3_PO4": 0.50, "bond_k_DMPC_NC3_PO4": 1500.0}
+        parser.replace(new_params, output_file)
+        modified = gi.GromacsParamsParser(output_file).parse()
+        assert modified["bond_params"]["bond_r0_DMPC_NC3_PO4"] == 0.50
+        assert modified["bond_params"]["bond_k_DMPC_NC3_PO4"] == 1500.0
+
+    def test_replace_angle_params(self, parser, tmp_path):
+        output_file = tmp_path / "modified.top"
+        new_params = {"angle_theta0_DMPC_PO4_GL1_GL2": 110.0, "angle_k_DMPC_PO4_GL1_GL2": 30.0}
+        parser.replace(new_params, output_file)
+        modified = gi.GromacsParamsParser(output_file).parse()
+        assert modified["angle_params"]["angle_theta0_DMPC_PO4_GL1_GL2"] == 110.0
+        assert modified["angle_params"]["angle_k_DMPC_PO4_GL1_GL2"] == 30.0
+
+    def test_replace_nonbond_params(self, parser, tmp_path):
+        output_file = tmp_path / "modified.top"
+        new_params = {"lj_sigma_Qda_Qda": 0.65, "lj_epsilon_Qda_Qda": 3.0}
+        parser.replace(new_params, output_file)
+        modified = gi.GromacsParamsParser(output_file).parse()
+        assert modified["nonbond_params"]["lj_sigma_Qda_Qda"] == 0.65
+        assert modified["nonbond_params"]["lj_epsilon_Qda_Qda"] == 3.0
+
+    def test_replace_preserves_unmodified_params(self, parser, tmp_path):
+        output_file = tmp_path / "modified.top"
+        new_params = {"bond_r0_DMPC_NC3_PO4": 0.55}
+        parser.replace(new_params, output_file)
+        modified = gi.GromacsParamsParser(output_file).parse()
+        # Modified param changed
+        assert modified["bond_params"]["bond_r0_DMPC_NC3_PO4"] == 0.55
+        # Unmodified params preserved
+        assert modified["bond_params"]["bond_k_DMPC_NC3_PO4"] == 1250.0
+        assert modified["nonbond_params"]["lj_sigma_Qda_Qda"] == 0.6
+
+    def test_replace_multiple_param_types(self, parser, tmp_path):
+        output_file = tmp_path / "modified.top"
+        new_params = {
+            "bond_r0_DMPC_NC3_PO4": 0.48,
+            "angle_k_DMPC_PO4_GL1_GL2": 28.0,
+            "lj_epsilon_Qda_P5": 0.6,
+        }
+        parser.replace(new_params, output_file)
+        modified = gi.GromacsParamsParser(output_file).parse()
+        assert modified["bond_params"]["bond_r0_DMPC_NC3_PO4"] == 0.48
+        assert modified["angle_params"]["angle_k_DMPC_PO4_GL1_GL2"] == 28.0
+        assert modified["nonbond_params"]["lj_epsilon_Qda_P5"] == 0.6
+
+    def test_replace_preserves_non_parameter_lines(self, parser, tmp_path):
+        output_file = tmp_path / "modified.top"
+        parser.replace({"bond_r0_DMPC_NC3_PO4": 0.50}, output_file)
+        content = output_file.read_text()
+        assert "; DRY MARTINI v2.1" in content
+        assert "[ defaults ]" in content
+        assert "[ atomtypes ]" in content
+        assert "[moleculetype]" in content
+        assert "[ system ]" in content
+        assert "[ molecules ]" in content
+        assert "DMPC            64" in content
+
+    def test_replace_in_place(self, tmp_path):
+        import shutil
+        topology_copy = tmp_path / "topology.top"
+        shutil.copy(GROMACS_TEST_DATA / "preprocessed_topology.top", topology_copy)
+        parser = gi.GromacsParamsParser(topology_copy)
+        # get the original and ensure it's different from the new value we will
+        # set as a sanity check
+        bond_params = parser.parse()["bond_params"]
+        assert bond_params["bond_r0_DMPC_NC3_PO4"] != 0.52, "unexpected test data"
+        parser.replace({"bond_r0_DMPC_NC3_PO4": 0.52}, topology_copy)
+        modified = gi.GromacsParamsParser(topology_copy).parse()
+        assert modified["bond_params"]["bond_r0_DMPC_NC3_PO4"] == 0.52
