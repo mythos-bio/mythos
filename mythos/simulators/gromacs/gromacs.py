@@ -2,10 +2,11 @@
 
 import logging
 import shutil
-import typing
+from typing import Any, ClassVar
 from dataclasses import field
 from pathlib import Path
 
+import MDAnalysis
 import chex
 import numpy as np
 
@@ -44,6 +45,7 @@ class GromacsSimulator(InputDirSimulator):
         input_overrides: Key-value pairs to override in the .mdp input file.
         overwrite_input: Whether to overwrite the input directory or copy it.
     """
+    exposed_observables: ClassVar[list[str]] = ["trajectory", "mda_universe"]
 
     energy_fn: EnergyFunction
     mdp_file: str = "md.mdp"
@@ -51,7 +53,7 @@ class GromacsSimulator(InputDirSimulator):
     structure_file: str = "membrane.gro"
     index_file: str = "index.ndx"
     binary_path: Path | None = None
-    input_overrides: dict[str, typing.Any] = field(default_factory=dict)
+    input_overrides: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self, *args, **kwds) -> None:
         """Check the validity of the configuration."""
@@ -64,7 +66,7 @@ class GromacsSimulator(InputDirSimulator):
     def run_simulation(
         self,
         input_dir: Path,
-        opt_params: dict[str, typing.Any] | None = None,
+        opt_params: dict[str, Any] | None = None,
         seed: int | None = None,
         **_,
     ) -> SimulatorOutput:
@@ -110,7 +112,10 @@ class GromacsSimulator(InputDirSimulator):
         self._run_gromacs(cmd, cwd=input_dir, log_prefix="mdrun")
         logger.info("GROMACS simulation complete")
 
-        return SimulatorOutput(observables=[self._read_trajectory(input_dir)])
+        u = MDAnalysis.Universe(str(input_dir / "output.tpr"), str(input_dir / "output.trr"))
+        u.transfer_to_memory(start=1)  # need to do this to avoid file handle issues later
+
+        return SimulatorOutput(observables=[self._read_trajectory(input_dir), u])
 
     def _run_gromacs(self, cmd: list[str], cwd: Path, log_prefix: str) -> None:
         gmx_binary = self.binary_path or shutil.which("gmx")
@@ -119,7 +124,7 @@ class GromacsSimulator(InputDirSimulator):
                 "GROMACS binary not found. Please install GROMACS into PATH or provide the path "
                 "to the binary via the 'binary_path' argument."
             )
-        run_command(cmd, cwd=cwd, log_prefix=log_prefix)
+        run_command([gmx_binary, *cmd], cwd=cwd, log_prefix=log_prefix)
 
 
     def _read_trajectory(self, input_dir: Path) -> jd_sio.SimulatorTrajectory:
@@ -132,7 +137,7 @@ class GromacsSimulator(InputDirSimulator):
 
         return trajectory
 
-    def _update_topology_params(self, params: dict[str, typing.Any]) -> None:
+    def _update_topology_params(self, params: dict[str, Any]) -> None:
         # ensure we start with a preprocessed topology, so create using grompp
         # which then will be used for writing replacement parameters.
         topo_pp = self.input_dir / PREPROCESSED_TOPOLOGY_FILE
