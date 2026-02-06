@@ -313,7 +313,7 @@ class TestGromacsSimulatorRun:
         assert result is not None
 
         # Should have exactly 4 subprocess calls:
-        # grompp (equil) + mdrun (equil) + grompp (prod) + mdrun (prod)
+        # From these: grompp (equil) + mdrun (equil) + grompp (prod) + mdrun (prod)
         assert len(calls) == 4
 
         # --- Equilibration stage ---
