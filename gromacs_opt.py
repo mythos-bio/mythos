@@ -8,6 +8,7 @@ This script demonstrates:
 5. Setting up a GromacsSimulator for running MD simulations
 """
 
+import logging
 import shutil
 import tempfile
 from pathlib import Path
@@ -237,7 +238,8 @@ def create_gromacs_simulator(
     simulator = GromacsSimulator(
         input_dir=data_dir,
         energy_fn=energy_fn,
-        input_overrides={"nsteps": 1_000_000},
+        equilibration_steps=10000,
+        simulation_steps=50000,
         binary_path="/Users/arik/ws/ssec/gromacs-2025.4/build/bin/gmx",  # Adjust as needed
     )
 
@@ -271,6 +273,7 @@ def thickness_loss(traj, weights, ef, opt_params, observables):
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
     # Check if a preprocessed topology already exists, otherwise preprocess
     preprocessed_path = DATA_DIR / PREPROCESSED_TOPOLOGY_FILE
 

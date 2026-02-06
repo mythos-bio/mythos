@@ -2,12 +2,12 @@
 
 import logging
 import shutil
-from typing import Any, ClassVar
 from dataclasses import field
 from pathlib import Path
+from typing import Any, ClassVar
 
-import MDAnalysis
 import chex
+import MDAnalysis
 import numpy as np
 
 from mythos.energy.base import EnergyFunction
@@ -18,6 +18,7 @@ from mythos.simulators.gromacs import utils as gromacs_utils
 from mythos.utils.helpers import run_command
 
 PREPROCESSED_TOPOLOGY_FILE = "_pp_topol.top"
+OUTPUT_PREFIX = "output"
 
 logger = logging.getLogger(__name__)
 
@@ -52,6 +53,8 @@ class GromacsSimulator(InputDirSimulator):
     topology_file: str = "topol.top"
     structure_file: str = "membrane.gro"
     index_file: str = "index.ndx"
+    equilibration_steps: int = 0
+    simulation_steps: int | None = None
     binary_path: Path | None = None
     input_overrides: dict[str, Any] = field(default_factory=dict)
 
@@ -82,40 +85,72 @@ class GromacsSimulator(InputDirSimulator):
         Returns:
             SimulatorOutput containing the trajectory.
         """
-        mdp_path = input_dir / self.mdp_file
-
-        seed = seed or np.random.default_rng().integers(0, 2**31)
-        update_mdp_params(mdp_path, {**self.input_overrides, "gen-seed": seed})
-
         # Update topology file with energy function parameters and overrides
         self._update_topology_params(opt_params or {})
 
-        logger.info("Starting GROMACS simulation")
+        seed = seed or np.random.default_rng().integers(0, 2**31)
+        # If simulation_steps is not set, we don't override to accept the , hence the dict
+
+        sim_steps_override = {"nsteps": self.simulation_steps} if self.simulation_steps is not None else {}
+        overrides = {**self.input_overrides, "gen-seed": seed, **sim_steps_override}
+        if self.equilibration_steps > 0:
+            logger.info("Running equilibration for %d steps with seed %d", self.equilibration_steps, seed)
+            eq_overrides = {
+                **overrides,
+                "nsteps": self.equilibration_steps,
+                # reduce outputs for equilibration
+                "nstxout": 0,
+                "nstenergy": 0,
+            }
+            self._run_simulation_step(
+                structure_file=self.structure_file,
+                overrides=eq_overrides,
+                input_dir=input_dir,
+                step="equilibration",
+            )
+            logger.info("Equilibration complete.")
+
+        # If we didn't run equilibration, must use the original structure file
+        # for production, otherwise use the output structure from equilibration
+        prod_structure = f"{OUTPUT_PREFIX}.gro" if self.equilibration_steps > 0 else self.structure_file
+        logger.info("Starting GROMACS simulation for %d steps with seed %d", self.simulation_steps, seed)
+        self._run_simulation_step(
+            structure_file=prod_structure,  # use the output structure from equilibration
+            overrides=overrides,
+            input_dir=input_dir,
+            step="production",
+        )
+        logger.info("GROMACS simulation complete.")
+
+        u = MDAnalysis.Universe(str(input_dir / f"{OUTPUT_PREFIX}.tpr"), str(input_dir / f"{OUTPUT_PREFIX}.trr"))
+        u.transfer_to_memory(start=1)  # need to do this to avoid file handle issues later
+
+        return SimulatorOutput(observables=[self._read_trajectory(input_dir), u])
+
+    def _run_simulation_step(
+            self, structure_file: str, overrides: dict[str, Any], input_dir: Path, step: str
+        ) -> None:
+        step_mdp = f"{step}_{self.mdp_file}"
+        update_mdp_params(input_dir / self.mdp_file, overrides, out_file=input_dir / step_mdp)
         # prepare the run
         cmd = [
             "grompp",
-            "-f", self.mdp_file,
-            "-c", self.structure_file,
+            "-f", step_mdp,
+            "-c", structure_file,
             "-p", PREPROCESSED_TOPOLOGY_FILE,  # created in _update_topology_params
             "-n", self.index_file,
-            "-o", "output.tpr",
+            "-o", f"{OUTPUT_PREFIX}.tpr",
         ]
-        self._run_gromacs(cmd, cwd=input_dir, log_prefix="grompp")
+        self._run_gromacs(cmd, cwd=input_dir, log_prefix=f"{step}_grompp")
 
         # run the simulation
         cmd = [
             "mdrun",
-            "-deffnm", "output",
+            "-deffnm", OUTPUT_PREFIX,
             "-ntmpi", "1",
             "-rdd", "1.5",
         ]
-        self._run_gromacs(cmd, cwd=input_dir, log_prefix="mdrun")
-        logger.info("GROMACS simulation complete")
-
-        u = MDAnalysis.Universe(str(input_dir / "output.tpr"), str(input_dir / "output.trr"))
-        u.transfer_to_memory(start=1)  # need to do this to avoid file handle issues later
-
-        return SimulatorOutput(observables=[self._read_trajectory(input_dir), u])
+        self._run_gromacs(cmd, cwd=input_dir, log_prefix=f"{step}_mdrun")
 
     def _run_gromacs(self, cmd: list[str], cwd: Path, log_prefix: str) -> None:
         gmx_binary = self.binary_path or shutil.which("gmx")
@@ -129,8 +164,8 @@ class GromacsSimulator(InputDirSimulator):
 
     def _read_trajectory(self, input_dir: Path) -> jd_sio.SimulatorTrajectory:
         trajectory = gromacs_utils.read_trajectory_mdanalysis(
-            topology_file=input_dir / "output.tpr",
-            trajectory_file=input_dir / "output.trr",
+            topology_file=input_dir / f"{OUTPUT_PREFIX}.tpr",
+            trajectory_file=input_dir / f"{OUTPUT_PREFIX}.trr",
         )
 
         logger.debug("GROMACS trajectory size: %s", trajectory.length())

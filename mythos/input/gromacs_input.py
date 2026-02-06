@@ -108,16 +108,19 @@ def write_mdp(input_config: dict, input_file: Path) -> None:
         write_mdp_to(input_config, f)
 
 
-def update_mdp_params(mdp_file: Path, params: dict) -> None:
+def update_mdp_params(mdp_file: Path, params: dict, out_file: Path|None = None) -> None:
     """Update parameters in a GROMACS .mdp file.
 
     Args:
         mdp_file: Path to the .mdp file to update.
         params: Dictionary of parameters to update.
+        out_file: Optional path to write the updated .mdp file. If None,
+            overwrites the original file.
     """
     config = read_mdp(mdp_file)
     config.update(params)
-    write_mdp(config, mdp_file)
+    out_file = out_file or mdp_file
+    write_mdp(config, out_file)
 
 
 class GromacsParamsParser:
