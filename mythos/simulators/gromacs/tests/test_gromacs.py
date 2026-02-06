@@ -84,11 +84,16 @@ class TestGromacsSimulatorRun:
 
         def _mock_check_call(cmd, cwd=None, **kwargs):
             """Mock subprocess.check_call to copy test data files."""
+            # We set the binary to "gmx" in tests, ensure that the command
+            # the simulator wants to run is actually "gmx"
+            assert cmd[0] == "gmx", "Expected 'gmx' command in subprocess call"
             # If this is the mdrun command, copy the test output files
             if cmd and "mdrun" in cmd:
                 cwd_path = Path(cwd) if cwd else gromacs_input_dir
                 shutil.copy(TEST_DATA_DIR / "output.tpr", cwd_path / "output.tpr")
                 shutil.copy(TEST_DATA_DIR / "output.trr", cwd_path / "output.trr")
+                # Create output.gro to simulate the structure output from mdrun
+                (cwd_path / "output.gro").write_text("; Output structure\n")
             return 0
 
         return _mock_check_call
@@ -172,7 +177,8 @@ class TestGromacsSimulatorRun:
 
         def mock_subproc_store_mdp(cmd, cwd=None, **kwargs):
             mock_subprocess_and_copy_outputs(cmd, cwd=cwd, **kwargs)
-            mdp_content["after"] = (Path(cwd) / "md.mdp").read_text()
+            prod_mdp = Path(cwd) / "production_md.mdp"
+            mdp_content["after"] = prod_mdp.read_text()
             return 0
 
         with (
@@ -181,7 +187,7 @@ class TestGromacsSimulatorRun:
         ):
             sim.run(seed=42)
 
-        # With overwrite_input=True (default), the MDP should be modified in place
+        # The overrides should be written to the production MDP file
         assert "nsteps = 500" not in mdp_content["before"]
         assert "nsteps = 500" in mdp_content["after"]
 
@@ -207,7 +213,8 @@ class TestGromacsSimulatorRun:
 
         def mock_subproc_store_mdp(cmd, cwd=None, **kwargs):
             mock_subprocess_and_copy_outputs(cmd, cwd=cwd, **kwargs)
-            mdp_content["after"] = (Path(cwd) / "md.mdp").read_text()
+            prod_mdp = Path(cwd) / "production_md.mdp"
+            mdp_content["after"] = prod_mdp.read_text()
             return 0
 
         with (
@@ -230,6 +237,197 @@ class TestGromacsSimulatorRun:
         # find a real install!
         with patch("shutil.which", return_value=None), pytest.raises(FileNotFoundError, match="binary not found"):
             sim.run()
+
+    def test_zero_equilibration_runs_production_only(
+        self,
+        gromacs_input_dir: Path,
+        mock_energy_fn,
+        mock_subprocess_and_copy_outputs,
+    ) -> None:
+        """Test that equilibration_steps=0 runs only the production step."""
+        sim = GromacsSimulator(
+            input_dir=gromacs_input_dir,
+            energy_fn=mock_energy_fn,
+            equilibration_steps=0,
+            binary_path="gmx",
+        )
+
+        calls = []
+
+        def tracking_check_call(cmd, cwd=None, **kwargs):
+            calls.append({"cmd": cmd, "cwd": cwd})
+            return mock_subprocess_and_copy_outputs(cmd, cwd=cwd, **kwargs)
+
+        with (
+            patch("subprocess.check_call", side_effect=tracking_check_call),
+            patch.object(GromacsSimulator, "_update_topology_params"),
+        ):
+            result = sim.run(seed=42)
+
+        assert result is not None
+
+        # Should have exactly 2 subprocess calls: grompp + mdrun for production only
+        assert len(calls) == 2
+
+        # First call should be grompp for production
+        grompp_cmd = calls[0]["cmd"]
+        assert "grompp" in grompp_cmd
+        assert "production_md.mdp" in grompp_cmd
+
+        # grompp should use the original structure file (not output.gro)
+        c_flag_idx = grompp_cmd.index("-c")
+        assert grompp_cmd[c_flag_idx + 1] == "membrane.gro"
+
+        # Second call should be mdrun for production
+        assert "mdrun" in calls[1]["cmd"]
+
+        # No equilibration MDP should have been written
+        assert not (gromacs_input_dir / "equilibration_md.mdp").exists()
+
+    def test_positive_equilibration_runs_two_stages(
+        self,
+        gromacs_input_dir: Path,
+        mock_energy_fn,
+        mock_subprocess_and_copy_outputs,
+    ) -> None:
+        """Test that equilibration_steps>0 runs equilibration then production."""
+        sim = GromacsSimulator(
+            input_dir=gromacs_input_dir,
+            energy_fn=mock_energy_fn,
+            equilibration_steps=500,
+            binary_path="gmx",
+        )
+
+        calls = []
+
+        def tracking_check_call(cmd, cwd=None, **kwargs):
+            calls.append({"cmd": cmd, "cwd": cwd})
+            return mock_subprocess_and_copy_outputs(cmd, cwd=cwd, **kwargs)
+
+        with (
+            patch("subprocess.check_call", side_effect=tracking_check_call),
+            patch.object(GromacsSimulator, "_update_topology_params"),
+        ):
+            result = sim.run(seed=42)
+
+        assert result is not None
+
+        # Should have exactly 4 subprocess calls:
+        # grompp (equil) + mdrun (equil) + grompp (prod) + mdrun (prod)
+        assert len(calls) == 4
+
+        # --- Equilibration stage ---
+        eq_grompp_cmd = calls[0]["cmd"]
+        assert "grompp" in eq_grompp_cmd
+        assert "equilibration_md.mdp" in eq_grompp_cmd
+
+        # Equilibration grompp should use the original structure file
+        c_flag_idx = eq_grompp_cmd.index("-c")
+        assert eq_grompp_cmd[c_flag_idx + 1] == "membrane.gro"
+
+        eq_mdrun_cmd = calls[1]["cmd"]
+        assert "mdrun" in eq_mdrun_cmd
+
+        # --- Production stage ---
+        prod_grompp_cmd = calls[2]["cmd"]
+        assert "grompp" in prod_grompp_cmd
+        assert "production_md.mdp" in prod_grompp_cmd
+
+        # Production grompp should use output.gro from equilibration
+        c_flag_idx = prod_grompp_cmd.index("-c")
+        assert prod_grompp_cmd[c_flag_idx + 1] == "output.gro"
+
+        prod_mdrun_cmd = calls[3]["cmd"]
+        assert "mdrun" in prod_mdrun_cmd
+
+    def test_equilibration_mdp_overrides(
+        self,
+        gromacs_input_dir: Path,
+        mock_energy_fn,
+        mock_subprocess_and_copy_outputs,
+    ) -> None:
+        """Test that equilibration MDP has nsteps, nstxout=0, nstenergy=0."""
+        eq_steps = 1000
+        sim = GromacsSimulator(
+            input_dir=gromacs_input_dir,
+            energy_fn=mock_energy_fn,
+            equilibration_steps=eq_steps,
+            binary_path="gmx",
+        )
+
+        mdp_contents = {}
+
+        def tracking_check_call(cmd, cwd=None, **kwargs):
+            cwd_path = Path(cwd) if cwd else gromacs_input_dir
+            # Capture MDP file contents when grompp is called
+            if cmd and "grompp" in cmd:
+                f_flag_idx = cmd.index("-f")
+                mdp_name = cmd[f_flag_idx + 1]
+                mdp_path = cwd_path / mdp_name
+                if mdp_path.exists():
+                    mdp_contents[mdp_name] = mdp_path.read_text()
+            return mock_subprocess_and_copy_outputs(cmd, cwd=cwd, **kwargs)
+
+        with (
+            patch("subprocess.check_call", side_effect=tracking_check_call),
+            patch.object(GromacsSimulator, "_update_topology_params"),
+        ):
+            sim.run(seed=42)
+
+        # Verify equilibration MDP overrides
+        eq_mdp = mdp_contents["equilibration_md.mdp"]
+        assert f"nsteps = {eq_steps}" in eq_mdp
+        assert "nstxout = 0" in eq_mdp
+        assert "nstenergy = 0" in eq_mdp
+
+        # Verify production MDP does NOT have the equilibration-specific overrides
+        prod_mdp = mdp_contents["production_md.mdp"]
+        assert "nstxout = 0" not in prod_mdp
+        assert "nstenergy = 0" not in prod_mdp
+
+    def test_equilibration_with_simulation_steps(
+        self,
+        gromacs_input_dir: Path,
+        mock_energy_fn,
+        mock_subprocess_and_copy_outputs,
+    ) -> None:
+        """Test that simulation_steps overrides production nsteps but not equilibration."""
+        eq_steps = 200
+        sim_steps = 5000
+        sim = GromacsSimulator(
+            input_dir=gromacs_input_dir,
+            energy_fn=mock_energy_fn,
+            equilibration_steps=eq_steps,
+            simulation_steps=sim_steps,
+            binary_path="gmx",
+        )
+
+        mdp_contents = {}
+
+        def tracking_check_call(cmd, cwd=None, **kwargs):
+            cwd_path = Path(cwd) if cwd else gromacs_input_dir
+            if cmd and "grompp" in cmd:
+                f_flag_idx = cmd.index("-f")
+                mdp_name = cmd[f_flag_idx + 1]
+                mdp_path = cwd_path / mdp_name
+                if mdp_path.exists():
+                    mdp_contents[mdp_name] = mdp_path.read_text()
+            return mock_subprocess_and_copy_outputs(cmd, cwd=cwd, **kwargs)
+
+        with (
+            patch("subprocess.check_call", side_effect=tracking_check_call),
+            patch.object(GromacsSimulator, "_update_topology_params"),
+        ):
+            sim.run(seed=42)
+
+        # Equilibration should use equilibration_steps, not simulation_steps
+        eq_mdp = mdp_contents["equilibration_md.mdp"]
+        assert f"nsteps = {eq_steps}" in eq_mdp
+        assert f"nsteps = {sim_steps}" not in eq_mdp
+
+        # Production should use simulation_steps
+        prod_mdp = mdp_contents["production_md.mdp"]
+        assert f"nsteps = {sim_steps}" in prod_mdp
 
 
 class TestGromacsSimulatorTrajectory:
