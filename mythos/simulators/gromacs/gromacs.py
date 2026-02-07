@@ -84,7 +84,7 @@ class GromacsSimulator(InputDirSimulator):
             SimulatorOutput containing the trajectory.
         """
         # Update topology file with energy function parameters and overrides
-        self._update_topology_params(opt_params or {})
+        self._update_topology_params(input_dir, opt_params or {})
 
         seed = seed or np.random.default_rng().integers(0, 2**31)
         # If simulation_steps is not set, we don't override to accept the
@@ -168,10 +168,9 @@ class GromacsSimulator(InputDirSimulator):
 
         return trajectory
 
-    def _update_topology_params(self, params: dict[str, Any]) -> None:
+    def _update_topology_params(self, input_dir: Path, params: dict[str, Any]) -> None:
         # ensure we start with a preprocessed topology, so create using grompp
         # which then will be used for writing replacement parameters.
-        topo_pp = self.input_dir / PREPROCESSED_TOPOLOGY_FILE
         cmd = [
             "grompp",
             "-p", self.topology_file,
@@ -179,7 +178,9 @@ class GromacsSimulator(InputDirSimulator):
             "-c", self.structure_file,
             "-pp", PREPROCESSED_TOPOLOGY_FILE
         ]
-        self._run_gromacs(cmd, cwd=self.input_dir, log_prefix="topology_pp")
+        self._run_gromacs(cmd, cwd=input_dir, log_prefix="topology_pp")
+        topo_pp = input_dir / PREPROCESSED_TOPOLOGY_FILE
+
         if not topo_pp.exists():
             raise FileNotFoundError(f"Preprocessed topology file not found after grompp: {topo_pp}")
 

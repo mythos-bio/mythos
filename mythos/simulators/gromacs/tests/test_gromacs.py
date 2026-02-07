@@ -5,7 +5,7 @@ from pathlib import Path
 from unittest.mock import patch
 
 import pytest
-from mythos.simulators.gromacs.gromacs import GromacsSimulator
+from mythos.simulators.gromacs.gromacs import PREPROCESSED_TOPOLOGY_FILE, GromacsSimulator
 from mythos.simulators.io import SimulatorTrajectory
 
 # Test data directory
@@ -481,33 +481,29 @@ class TestUpdateTopologyParams:
             binary_path="gmx",
         )
 
-        # The preprocessed topology file that should be created
-        pp_topology_file = gromacs_input_dir / "_pp_topol.top"
-
-        def mock_grompp_creates_pp_file(cmd, cwd=None, **kwargs):
-            """Mock subprocess that creates the preprocessed topology file."""
-            # Only create the file if this is the grompp command with -pp flag
-            if cmd and "grompp" in cmd and "-pp" in cmd:
-                pp_topology_file.write_text("; Preprocessed topology\n")
+        def mock_check_call(cmd, cwd=None, **kwargs):
+            assert cmd[0] == "gmx"
+            cwd = Path(cwd)
+            assert not cwd.samefile(gromacs_input_dir)  # Sanity check, we expect tmpdir
+            if "grompp" in cmd and "-pp" in cmd:
+                # mock -pp making the expected preprocessed file
+                (cwd / PREPROCESSED_TOPOLOGY_FILE).write_text("; Preprocessed topology\n")
+            elif "grompp" in cmd:
+                # Test assertion ensuring we called and created in the correct dir and
+                assert (cwd / PREPROCESSED_TOPOLOGY_FILE).exists(), "Preprocessed topology should exist"
+            if "mdrun" in cmd:
+                # to satisfy the completion of a run
+                shutil.copy(TEST_DATA_DIR / "output.tpr", cwd / "output.tpr")
+                shutil.copy(TEST_DATA_DIR / "output.trr", cwd / "output.trr")
+                (cwd / "output.gro").write_text("; Output structure\n")
             return 0
 
-        with (
-            patch("subprocess.check_call", side_effect=mock_grompp_creates_pp_file),
-            patch("mythos.simulators.gromacs.gromacs.replace_params_in_topology") as mock_replace,
-        ):
-            sim._update_topology_params({"test_param": 1.0})
+        with patch("subprocess.check_call", side_effect=mock_check_call):
+            result = sim.run(seed=42)
 
-        # Verify the preprocessed file was created
-        assert pp_topology_file.exists()
+        assert result is not None
 
-        # Verify replace_params_in_topology was called with the right arguments
-        mock_replace.assert_called_once_with(
-            pp_topology_file,
-            {"test_param": 1.0},
-            pp_topology_file,
-        )
-
-    def test_update_topology_params_raises_when_file_not_created(
+    def test_run_raises_when_preprocessed_file_not_created(
         self,
         gromacs_input_dir: Path,
         mock_energy_fn,
@@ -527,4 +523,4 @@ class TestUpdateTopologyParams:
             patch("subprocess.check_call", side_effect=mock_grompp_no_output),
             pytest.raises(FileNotFoundError, match="Preprocessed topology file not found"),
         ):
-            sim._update_topology_params({})
+            sim.run(seed=42)
