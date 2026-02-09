@@ -54,17 +54,21 @@ class MartiniTopology:
             object.__setattr__(self, "unbonded_neighbors", jnp.array(list(unbonded_pairs)))
 
     @classmethod
+    def from_universe(cls, universe: MDAnalysis.Universe) -> "MartiniTopology":
+        """Create a MartiniTopology from a Universe object."""
+        return cls(
+            atom_types = tuple(universe.atoms.types),
+            atom_names = tuple(universe.atoms.names),
+            residue_names = tuple(universe.atoms.resnames),
+            angles = jnp.array(universe.angles.indices),
+            bonded_neighbors = jnp.array(universe.bonds.indices),
+        )
+
+    @classmethod
     def from_tpr(cls, tpr_file: Path) -> "MartiniTopology":
         """Create a MartiniTopology from a TPR format topology file."""
-        u = MDAnalysis.Universe(tpr_file)
-
-        return cls(
-            atom_types = tuple(u.atoms.types),
-            atom_names = tuple(u.atoms.names),
-            residue_names = tuple(u.atoms.resnames),
-            angles = jnp.array(u.angles.indices),
-            bonded_neighbors = jnp.array(u.bonds.indices),
-        )
+        universe = MDAnalysis.Universe(tpr_file)
+        return cls.from_universe(universe)
 
 
 @chex.dataclass(frozen=True, kw_only=True)
