@@ -1,13 +1,12 @@
 """Tests for Martini 2 Lennard-Jones potential energy function."""
 
-import itertools
 import json
 from pathlib import Path
 
 import jax
 import jax.numpy as jnp
-import MDAnalysis
 import pytest
+from mythos.energy.martini.base import MartiniTopology
 from mythos.energy.martini.m2.lj import LJ, LJConfiguration, lennard_jones
 from mythos.simulators.gromacs.utils import read_trajectory_mdanalysis
 from mythos.simulators.io import SimulatorTrajectory
@@ -21,18 +20,6 @@ def load_lj_params() -> dict:
     """Load LJ parameters from the JSON configuration file."""
     with (TEST_DATA_DIR / "ljconf.json").open() as f:
         return json.load(f)
-
-
-def get_unbonded_neighbors(n: int, bonded_neighbors: jnp.ndarray) -> jnp.ndarray:
-    """Compute unbonded neighbor pairs from bonded neighbors.
-
-    Takes a set of bonded neighbors and returns the set of unbonded neighbors
-    for a given `n` by enumerating all pairs and removing bonded neighbors.
-    """
-    unbonded = set(itertools.combinations(range(n), 2))
-    unbonded -= {tuple(i) for i in bonded_neighbors.tolist()}
-    unbonded -= {tuple(reversed(i)) for i in bonded_neighbors.tolist()}
-    return jnp.array(list(unbonded))
 
 
 @pytest.fixture
@@ -228,16 +215,11 @@ class TestLJEnergy:
         energies: jnp.ndarray,
     ):
         """Test LJ energy calculation matches GROMACS reference values."""
-        u = MDAnalysis.Universe(TEST_DATA_DIR / "test.tpr")
+        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr")
 
-        lj_fn = LJ(
+        lj_fn = LJ.from_topology(
+            topology=top,
             params=lj_config,
-            atom_types=tuple(u.atoms.types),
-            bond_names=(),
-            angle_names=(),
-            angles=(),
-            bonded_neighbors=jnp.array(u.bonds.indices),
-            unbonded_neighbors=get_unbonded_neighbors(len(u.atoms), u.bonds.indices),
         )
 
         computed_energies = lj_fn.map(gromacs_trajectory)

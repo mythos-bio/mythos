@@ -1,6 +1,11 @@
 """Common Martini Energy Utilities."""
 
+import itertools
+from pathlib import Path
+
 import chex
+import jax.numpy as jnp
+import MDAnalysis
 from jax_md import space
 from typing_extensions import override
 
@@ -14,14 +19,92 @@ def get_periodic(box_size: Vector3D) -> callable:
 
 
 @chex.dataclass(frozen=True, kw_only=True)
+class MartiniTopology:
+    """Class representing the topology of a Martini system.
+
+    This class contains information about the atom types, bonded interactions,
+    and angles in the system. It can be used to construct energy functions and
+    to interpret simulation results.
+
+    Attributes:
+        atom_types: A tuple of atom type names.
+        atom_names: A tuple of atom names.
+        angles: An array of shape (n_angles, 3) containing the indices of the
+            atoms involved in each angle.
+        bonded_neighbors: An array of shape (n_bonds, 2) containing the indices
+            of the bonded pairs of atoms.
+        unbonded_neighbors: An array of shape (n_unbonded, 2) containing the indices
+            of the unbonded pairs of atoms. If not supplied, it will be computed
+            as all pairs of atoms that are not bonded.
+    """
+    atom_types: tuple[str, ...]
+    atom_names: tuple[str, ...]
+    residue_names: tuple[str, ...]
+    angles: Arr_N
+    bonded_neighbors: Arr_N
+    unbonded_neighbors: Arr_N | None = None
+
+    @override
+    def __post_init__(self) -> None:
+        if self.unbonded_neighbors is None:
+            n_atoms = len(self.atom_types)
+            all_pairs = set(itertools.combinations(range(n_atoms), 2))
+            bonded_pairs = {tuple(sorted(pair)) for pair in self.bonded_neighbors.tolist()}
+            unbonded_pairs = all_pairs - bonded_pairs
+            object.__setattr__(self, "unbonded_neighbors", jnp.array(list(unbonded_pairs)))
+
+    @classmethod
+    def from_tpr(cls, tpr_file: Path) -> "MartiniTopology":
+        """Create a MartiniTopology from a TPR format topology file."""
+        u = MDAnalysis.Universe(tpr_file)
+
+        return cls(
+            atom_types = tuple(u.atoms.types),
+            atom_names = tuple(u.atoms.names),
+            residue_names = tuple(u.atoms.resnames),
+            angles = jnp.array(u.angles.indices),
+            bonded_neighbors = jnp.array(u.bonds.indices),
+        )
+
+
+@chex.dataclass(frozen=True, kw_only=True)
 class MartiniEnergyFunction(BaseEnergyFunction):
     """Base class for Martini energy functions."""
 
     atom_types: tuple[str, ...]
-    bond_names: tuple[str, ...]
-    angle_names: tuple[str, ...]
-    angles: Arr_N  # Shape: (n_angles, 3) - triplets of atom indices
+    atom_names: tuple[str, ...]
+    residue_names: tuple[str, ...]
+    angles: Arr_N
     displacement_fn: callable = get_periodic
+
+    @classmethod
+    def from_topology(cls, topology: MartiniTopology, **kwargs) -> "MartiniEnergyFunction":
+        """Create an energy function from a MartiniTopology."""
+        return cls(
+            atom_types=topology.atom_types,
+            atom_names=topology.atom_names,
+            residue_names=topology.residue_names,
+            angles=topology.angles,
+            bonded_neighbors=topology.bonded_neighbors,
+            unbonded_neighbors=topology.unbonded_neighbors,
+            **kwargs
+        )
+
+    @property
+    def bond_names(self) -> tuple[str, ...]:
+        """Return bond names based on atom names and bonded neighbors."""
+        return tuple(
+            f"{self.residue_names[b[0]]}_{self.atom_names[b[0]]}_{self.atom_names[b[1]]}"
+            for b in self.bonded_neighbors
+        )
+
+    @property
+    def angle_names(self) -> tuple[str, ...]:
+        """Return angle names based on atom names and angles."""
+        return tuple(
+            f"{self.atom_names[a[0]]}_{self.atom_names[a[1]]}_{self.atom_names[a[2]]}"
+            for a in self.angles
+        )
 
 
 class MartiniEnergyConfiguration:

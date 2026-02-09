@@ -1,5 +1,5 @@
 import pytest
-from mythos.energy.martini.base import MartiniEnergyConfiguration
+from mythos.energy.martini.base import MartiniEnergyConfiguration, MartiniTopology
 
 
 class TestMartiniEnergyConfiguration:
@@ -40,3 +40,15 @@ class TestMartiniEnergyConfiguration:
             _ = conf["param_2"]
 
 
+class TestMartiniTopology:
+    def test_topology_from_tpr(self):
+        top = MartiniTopology.from_tpr("data/test-data/martini/energy/m2/bond/test.tpr")
+        n_atoms = 1280  # Known system for test, all DMPC lipids with 1280 atoms, 768 angles and 1158 bonded neighbors
+        n_angles = 768
+        n_bonds = 1152
+        assert len(top.atom_names) == n_atoms
+        assert len(top.atom_types) == n_atoms
+        assert top.residue_names == ("DMPC",) * n_atoms
+        assert top.angles.shape == (n_angles, 3)
+        assert top.bonded_neighbors.shape == (n_bonds, 2)
+        assert top.unbonded_neighbors.shape == (n_atoms * (n_atoms - 1) // 2 - n_bonds, 2)  # All pairs minus bonded
