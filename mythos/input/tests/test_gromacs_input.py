@@ -4,6 +4,7 @@ import importlib
 import io
 from pathlib import Path
 
+import numpy as np
 import pytest
 
 import mythos.input.gromacs_input as gi
@@ -315,9 +316,9 @@ class TestGromacsParamsParser:
     def test_parse_angle_params(self, parser):
         result = parser.parse()
         angles = result["angle_params"]
-        assert angles["angle_theta0_DMPC_PO4_GL1_GL2"] == 120.0
+        assert angles["angle_theta0_DMPC_PO4_GL1_GL2"] == np.deg2rad(120.0)
         assert angles["angle_k_DMPC_PO4_GL1_GL2"] == 25.0
-        assert angles["angle_theta0_DMPC_C1A_C2A_C3A"] == 180.0
+        assert angles["angle_theta0_DMPC_C1A_C2A_C3A"] == np.deg2rad(180.0)
         assert angles["angle_k_DMPC_C1A_C2A_C3A"] == 35.0
 
     def test_parse_bead_types(self, parser):
@@ -428,7 +429,7 @@ class TestReadParamsFromTopology:
         assert set(result.keys()) == {"nonbond_params", "bond_params", "angle_params"}
         assert result["nonbond_params"]["lj_sigma_Qda_Qda"] == 0.6
         assert result["bond_params"]["bond_r0_DMPC_NC3_PO4"] == 0.45
-        assert result["angle_params"]["angle_theta0_DMPC_PO4_GL1_GL2"] == 120.0
+        assert result["angle_params"]["angle_theta0_DMPC_PO4_GL1_GL2"] == np.deg2rad(120.0)
 
 
 class TestReplaceParamsInTopology:

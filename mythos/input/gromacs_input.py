@@ -9,6 +9,8 @@ import logging
 from pathlib import Path
 from typing import TypeAlias
 
+import numpy as np
+
 # Type alias for the parameters dictionary
 
 logger = logging.getLogger(__name__)
@@ -290,12 +292,15 @@ class GromacsParamsParser:
             theta0_key = f"angle_theta0_{self._current_molname}_{atom_i}_{atom_j}_{atom_k}"
             k_key = f"angle_k_{self._current_molname}_{atom_i}_{atom_j}_{atom_k}"
 
+            # Convert theta0 from degrees to radians for internal storage, and
+            # back to degrees when writing since GROMACS uses degrees.
+            theta0_rad = np.deg2rad(float(parts[4]))
             if self._write_mode:
-                theta0 = self._replacement_params.get(theta0_key, float(parts[4]))
+                theta0 = np.rad2deg(self._replacement_params.get(theta0_key, theta0_rad))
                 k = self._replacement_params.get(k_key, float(parts[5]))
                 return f"    {parts[0]} {parts[1]} {parts[2]} {parts[3]} {theta0} {k}\n"
 
-            self._angle_params[theta0_key] = float(parts[4])
+            self._angle_params[theta0_key] = theta0_rad
             self._angle_params[k_key] = float(parts[5])
             return original_line
 
