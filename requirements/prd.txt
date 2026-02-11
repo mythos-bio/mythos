@@ -10,3 +10,4 @@ ipywidgets==8.1.7
 anywidget==0.9.18
 plotly==6.1.1
 mdanalysis==2.10.0
+lipyphilic==0.12.1
