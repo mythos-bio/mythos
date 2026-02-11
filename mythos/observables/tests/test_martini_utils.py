@@ -34,10 +34,12 @@ def topology() -> MDAnalysis.Universe:
 @pytest.fixture
 def full_universe() -> MDAnalysis.Universe:
     """Load the full universe with both topology and trajectory."""
-    return MDAnalysis.Universe(
+    u = MDAnalysis.Universe(
         str(TEST_DATA_DIR / "test.tpr"),
         str(TEST_DATA_DIR / "test.trr"),
     )
+    u.transfer_to_memory(start=1)  # skip first frame to match SimulatorTrajectory
+    return u
 
 
 class TestUniverseFromTrajectory:
@@ -59,11 +61,9 @@ class TestUniverseFromTrajectory:
         gromacs_trajectory: SimulatorTrajectory,
         full_universe: MDAnalysis.Universe,
     ):
-        """The reconstructed universe should have matching frame count (minus the skipped first frame)."""
+        """The reconstructed universe should have matching frame count."""
         reconstructed = universe_from_trajectory(topology, gromacs_trajectory)
-        # read_trajectory_mdanalysis skips the first frame, so the reconstructed
-        # trajectory has one fewer frame than the full universe.
-        assert len(reconstructed.trajectory) == len(full_universe.trajectory) - 1
+        assert len(reconstructed.trajectory) == len(full_universe.trajectory)
 
     def test_reconstructed_positions_match_full_universe(
         self,
@@ -71,13 +71,11 @@ class TestUniverseFromTrajectory:
         gromacs_trajectory: SimulatorTrajectory,
         full_universe: MDAnalysis.Universe,
     ):
-        """Positions in the reconstructed universe should match the full universe (after skipping frame 0)."""
+        """Positions in the reconstructed universe should match the full universe."""
         reconstructed = universe_from_trajectory(topology, gromacs_trajectory)
 
-        for i, ts in enumerate(reconstructed.trajectory):
-            # full_universe frame i+1 corresponds to reconstructed frame i
-            full_universe.trajectory[i + 1]
-            np.testing.assert_allclose(ts.positions, full_universe.trajectory.ts.positions, atol=1e-4)
+        for rec_ts, ref_ts in zip(reconstructed.trajectory, full_universe.trajectory, strict=False):
+            np.testing.assert_allclose(rec_ts.positions, ref_ts.positions, atol=1e-6)
 
     def test_reconstructed_box_dimensions_match_full_universe(
         self,
@@ -88,9 +86,8 @@ class TestUniverseFromTrajectory:
         """Box dimensions in the reconstructed universe should match the full universe."""
         reconstructed = universe_from_trajectory(topology, gromacs_trajectory)
 
-        for i, ts in enumerate(reconstructed.trajectory):
-            full_universe.trajectory[i + 1]
-            np.testing.assert_allclose(ts.dimensions, full_universe.trajectory.ts.dimensions, atol=1e-4)
+        for rec_ts, ref_ts in zip(reconstructed.trajectory, full_universe.trajectory, strict=False):
+            np.testing.assert_allclose(rec_ts.dimensions, ref_ts.dimensions, atol=1e-6)
 
     def test_reconstructed_universe_preserves_topology_attributes(
         self,
