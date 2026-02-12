@@ -5,9 +5,9 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
-import MDAnalysis
 import pytest
 from jax_md import space
+from mythos.energy.martini.base import MartiniTopology
 from mythos.energy.martini.m2.angle import Angle, AngleConfiguration, compute_angle, triplet_angle
 from mythos.simulators.gromacs.utils import read_trajectory_mdanalysis
 from mythos.simulators.io import SimulatorTrajectory
@@ -117,21 +117,11 @@ class TestAngleEnergy:
         energies: jnp.ndarray,
     ):
         """Test angle energy calculation matches GROMACS reference values."""
-        u = MDAnalysis.Universe(TEST_DATA_DIR / "test.tpr")
+        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr")
 
-        angle_names = tuple(
-            f"{u.atoms[a[0]].name}_{u.atoms[a[1]].name}_{u.atoms[a[2]].name}"
-            for a in u.angles.indices
-        )
-
-        angle_fn = Angle(
+        angle_fn = Angle.from_topology(
+            topology=top,
             params=angle_config,
-            atom_types=tuple(u.atoms.types),
-            bond_names=(),
-            angle_names=angle_names,
-            angles=jnp.array(u.angles.indices),
-            bonded_neighbors=jnp.array(u.bonds.indices),
-            unbonded_neighbors=jnp.array([]),
         )
 
         computed_energies = angle_fn.map(gromacs_trajectory)

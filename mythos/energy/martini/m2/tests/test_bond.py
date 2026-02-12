@@ -5,9 +5,9 @@ from pathlib import Path
 
 import jax
 import jax.numpy as jnp
-import MDAnalysis
 import pytest
 from jax_md import space
+from mythos.energy.martini.base import MartiniTopology
 from mythos.energy.martini.m2.bond import Bond, BondConfiguration, pair_bond
 from mythos.simulators.gromacs.utils import read_trajectory_mdanalysis
 from mythos.simulators.io import SimulatorTrajectory
@@ -78,21 +78,11 @@ class TestBondEnergy:
         energies: jnp.ndarray,
     ):
         """Test bond energy calculation matches GROMACS reference values."""
-        u = MDAnalysis.Universe(TEST_DATA_DIR / "test.tpr")
+        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr")
 
-        bond_names = tuple(
-            f"{u.atoms[b[0]].resname}_{u.atoms[b[0]].name}_{u.atoms[b[1]].name}"
-            for b in u.bonds.indices
-        )
-
-        bond_fn = Bond(
+        bond_fn = Bond.from_topology(
+            topology=top,
             params=bond_config,
-            atom_types=tuple(u.atoms.types),
-            bond_names=bond_names,
-            angle_names=(),
-            angles=(),
-            bonded_neighbors=jnp.array(u.bonds.indices),
-            unbonded_neighbors=jnp.array([]),
         )
 
         computed_energies = bond_fn.map(gromacs_trajectory)
