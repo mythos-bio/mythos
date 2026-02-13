@@ -106,7 +106,7 @@ class MartiniEnergyFunction(BaseEnergyFunction):
     def angle_names(self) -> tuple[str, ...]:
         """Return angle names based on atom names and angles."""
         return tuple(
-            f"{self.atom_names[a[0]]}_{self.atom_names[a[1]]}_{self.atom_names[a[2]]}"
+            f"{self.residue_names[a[0]]}_{self.atom_names[a[0]]}_{self.atom_names[a[1]]}_{self.atom_names[a[2]]}"
             for a in self.angles
         )
 
@@ -148,6 +148,10 @@ class MartiniEnergyConfiguration:
     def __post_init__(self) -> None:
         """Hook for additional initialization in subclasses."""
 
+    def init_params(self) -> "MartiniEnergyConfiguration":
+        """Dependent params initialization. Default to no-op."""
+        return self
+
     @property
     def opt_params(self) -> dict[str, any]:
         """Returns the parameters to optimize."""
@@ -170,3 +174,13 @@ class MartiniEnergyConfiguration:
     @override
     def __contains__(self, key: str) -> bool:
         return key in self.params or key in self.couplings
+
+    @override
+    def __or__(self, other: "MartiniEnergyConfiguration") -> "MartiniEnergyConfiguration":
+        """Merge two configurations, with `other` taking precedence."""
+        new_params = self.params.copy()
+        if isinstance(other, MartiniEnergyConfiguration):
+            new_params.update(other.params.copy())
+        else:
+            new_params.update(other.copy())
+        return self.__class__(**new_params)
