@@ -1,0 +1,35 @@
+# This file was created Thu Feb 12 09:45:48 2026
+# Created by:
+#                      :-) GROMACS - gmx energy, 2025.4 (-:
+# 
+# Executable:   /Users/arik/ws/ssec/gromacs-2025.4/build/bin/gmx
+# Data prefix:  /Users/arik/ws/ssec/gromacs-2025.4 (source tree)
+# Working dir:  /Users/arik/ws/ssec/jax-martini/data/membrane_init/m3/DOPC/303K
+# Command line:
+#   gmx energy -f test.edr -s test.tpr -o angle.xvg
+# gmx energy is part of G R O M A C S:
+#
+# Grunge ROck MAChoS
+#
+@    title "GROMACS Energies"
+@    xaxis  label "Time (ps)"
+@    yaxis  label "(kJ/mol)"
+@TYPE xy
+@ view 0.15, 0.15, 0.75, 0.85
+@ legend on
+@ legend box on
+@ legend loctype view
+@ legend 0.78, 0.8
+@ legend length 2
+@ s0 legend "Angle"
+    0.000000  3638.005371
+   20.000000  3609.025635
+   40.000000  3590.201416
+   60.000000  3584.932129
+   80.000000  3655.230469
+  100.000000  3744.279297
+  120.000000  3636.705078
+  140.000000  3574.089111
+  160.000000  3636.815430
+  180.000000  3464.317383
+  200.000000  3682.971924
