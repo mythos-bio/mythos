@@ -39,6 +39,22 @@ class TestMartiniEnergyConfiguration:
         with pytest.raises(KeyError, match="Parameter 'param_2' not found"):
             _ = conf["param_2"]
 
+    def test_init_params_returns_self(self):
+        conf = MartiniEnergyConfiguration(param_1 = 1.0)
+        assert conf.init_params() == conf
+
+    def test_configuration_concatenate_with_config(self):
+        conf1 = MartiniEnergyConfiguration(param_1 = 1.0)
+        conf2 = MartiniEnergyConfiguration(param_2 = 2.0)
+        combined = conf1 | conf2
+        assert combined["param_1"] == 1.0
+        assert combined["param_2"] == 2.0
+
+    def test_configuration_concatenate_with_dict(self):
+        conf = MartiniEnergyConfiguration(param_1 = 1.0)
+        combined = conf | {"param_2": 2.0}
+        assert combined["param_1"] == 1.0
+        assert combined["param_2"] == 2.0
 
 class TestMartiniTopology:
     def test_topology_from_tpr(self):
