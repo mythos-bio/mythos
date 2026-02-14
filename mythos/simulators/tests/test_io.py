@@ -196,6 +196,7 @@ def test_simulatortrajectory_addition() -> None:
         orientation=jax_md.rigid_body.Quaternion(
             vec=jnp.ones((n1, 4)),
         ),
+        box_size=jnp.ones((n1, 3)) * 10,
         metadata={
             "value": jnp.array([1, 1, 1]),  # one dimensional concat
             "value2": jnp.array([2, 2, 2]),  # one dimensional NaN fill
@@ -208,6 +209,7 @@ def test_simulatortrajectory_addition() -> None:
         orientation=jax_md.rigid_body.Quaternion(
             vec=jnp.zeros((n2, 4)),
         ),
+        box_size=jnp.zeros((n2, 3)),
         metadata={
             "value": jnp.array([0, 0]),
             "value3": jnp.array([[0, 0], [0, 0]]),
@@ -229,6 +231,10 @@ def test_simulatortrajectory_addition() -> None:
     assert combined_traj.metadata["value3"].shape == (5, 2)
     assert jnp.array_equal(combined_traj.metadata["value4"][:3], jnp.array([[4, 4], [4, 4], [4, 4]]))
     assert jnp.all(jnp.isnan(combined_traj.metadata["value4"][3:]))
+    assert combined_traj.box_size.shape == (5, 3)
+    assert combined_traj.box_size[0, :].tolist() == [10, 10, 10]
+    assert combined_traj.box_size[n1, :].tolist() == [0, 0, 0]
+
 
 def test_simulatortrajectory_addition_no_metadata() -> None:
     n1 = 2
@@ -273,6 +279,59 @@ def test_simulatortrajectory_addition_raises_on_incompatible_md() -> None:
 
     with pytest.raises(ValueError, match="Metadata key 'value' has mismatched shapes"):
         _ = traj1 + traj2
+
+
+def test_simulatortrajectory_addition_both_box_size_none() -> None:
+    """Test adding two trajectories when both have box_size=None."""
+    n1 = 2
+    n2 = 3
+    traj1 = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((n1, 3)),
+        orientation=jax_md.rigid_body.Quaternion(
+            vec=jnp.ones((n1, 4)),
+        ),
+        box_size=None,
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((n2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(
+            vec=jnp.zeros((n2, 4)),
+        ),
+        box_size=None,
+    )
+
+    combined_traj = traj1 + traj2
+
+    assert combined_traj.length() == n1 + n2
+    assert combined_traj.box_size is None
+
+
+def test_simulatortrajectory_addition_mismatched_box_size_raises() -> None:
+    """Test adding trajectories when one has box_size and the other doesn't raises ValueError."""
+    n1 = 2
+    n2 = 3
+    traj_with_box = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((n1, 3)),
+        orientation=jax_md.rigid_body.Quaternion(
+            vec=jnp.ones((n1, 4)),
+        ),
+        box_size=jnp.ones((n1, 3)) * 10,
+    )
+    traj_without_box = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((n2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(
+            vec=jnp.zeros((n2, 4)),
+        ),
+        box_size=None,
+    )
+
+    with pytest.raises(ValueError, match="Cannot concatenate, trajectories have incompatible box sizes"):
+        _ = traj_with_box + traj_without_box
+
+    # Also verify the reverse order raises
+    with pytest.raises(ValueError, match="Cannot concatenate, trajectories have incompatible box sizes"):
+        _ = traj_without_box + traj_with_box
+
 
 def test_simulatortrajectory_vmappable() -> None:
     traj = jd_sio.SimulatorTrajectory(

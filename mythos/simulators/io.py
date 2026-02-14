@@ -106,14 +106,19 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
 
     def __add__(self, other: "SimulatorTrajectory") -> "SimulatorTrajectory":
         """Concatenate two trajectories."""
+        if self.box_size is None and other.box_size is None:
+            box_size = None
+        elif self.box_size is None or other.box_size is None:
+            raise ValueError("Cannot concatenate, trajectories have incompatible box sizes.")
+        else:
+            box_size = jnp.concatenate([self.box_size, other.box_size], axis=0)
+
         return self.replace(
-            center=jnp.concat(
-                [self.center, other.center],
-                axis=0,
-            ),
+            center=jnp.concatenate([self.center, other.center], axis=0),
             orientation=jax_md.rigid_body.Quaternion(
                 vec=jnp.concatenate([self.orientation.vec, other.orientation.vec], axis=0)
             ),
+            box_size=box_size,
             metadata=_merge_metadata(self.metadata, self.length(), other.metadata, other.length()),
         )
 
@@ -130,7 +135,8 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
 
         Args:
             filepath: The path to write the trajectory file to.
-            box_size: The box size in 3 dimensions to write to the file. defaults to (0,0,0).
+            box_size: The default box size in 3 dimensions to write to the file,
+                if trajectory box_size is not available. defaults to (0,0,0).
         """
         with Path(filepath).open("w") as f:
             for i in range(self.length()):
@@ -139,7 +145,8 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
                 base_norms = q_to_base_normal(self.orientation[i])
                 dummy_vels_angmom = jnp.zeros((coms.shape[0], 6))  # vels and angular momenta are not available
                 state = jnp.hstack([coms, bb_vecs, base_norms, dummy_vels_angmom])
-                _write_state(f, time=float(i), energies=jnp.zeros(3), state=state, box_size=box_size)
+                box = self.box_size[i] if self.box_size is not None else box_size
+                _write_state(f, time=float(i), energies=jnp.zeros(3), state=state, box_size=box)
 
 
 def _merge_metadata(
