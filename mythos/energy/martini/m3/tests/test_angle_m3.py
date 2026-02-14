@@ -7,7 +7,6 @@ import jax
 import jax.numpy as jnp
 import pytest
 from jax_md import space
-
 from mythos.energy.martini.base import MartiniTopology
 from mythos.energy.martini.m2.angle import AngleConfiguration, triplet_angle
 from mythos.energy.martini.m3.angle import Angle
@@ -67,7 +66,7 @@ class TestAngleEnergy:
         energies: jnp.ndarray,
     ):
         """Test angle energy calculation matches GROMACS reference values."""
-        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr", unbonded=jnp.array([]))
+        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr", unbonded_neighbors=jnp.array([]))
 
         angle_fn = Angle.from_topology(
             topology=top,
