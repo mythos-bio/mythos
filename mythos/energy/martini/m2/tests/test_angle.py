@@ -117,7 +117,7 @@ class TestAngleEnergy:
         energies: jnp.ndarray,
     ):
         """Test angle energy calculation matches GROMACS reference values."""
-        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr", unbonded=jnp.array([]))
+        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr", unbonded_neighbors=jnp.array([]))
 
         angle_fn = Angle.from_topology(
             topology=top,

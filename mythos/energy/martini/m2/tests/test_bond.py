@@ -78,7 +78,7 @@ class TestBondEnergy:
         energies: jnp.ndarray,
     ):
         """Test bond energy calculation matches GROMACS reference values."""
-        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr", unbonded=jnp.array([]))
+        top = MartiniTopology.from_tpr(TEST_DATA_DIR / "test.tpr", unbonded_neighbors=jnp.array([]))
 
         bond_fn = Bond.from_topology(
             topology=top,
