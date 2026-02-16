@@ -146,7 +146,8 @@ class LAMMPSStretchSimulator(LAMMPSoxDNASimulator):
 
     def run_simulation(self, *args, opt_params: Params, **kwargs) -> SimulatorOutput:
         output = LAMMPSoxDNASimulator.run_simulation(self, *args, params=opt_params, **kwargs)
-        tagged_traj = output.observables[0].with_state_metadata(self.variables.copy())
+        force, torque = self.variables["force"], self.variables["torque"]
+        tagged_traj = output.observables[0].with_state_metadata(force=force, torque=torque)
         return SimulatorOutput(observables=[tagged_traj], state=output.state)
 
 
@@ -280,12 +281,10 @@ def create_stretch_torsion_objectives(
     def compute_moduli_from_traj(
         traj: Any, weights: jnp.ndarray
     ) -> tuple[float, float, float]:
-        forces_arr = jnp.array([md["force"] for md in traj.metadata])
-        torques_arr = jnp.array([md["torque"] for md in traj.metadata])
-        force_segment_ids = jnp.searchsorted(stretch_forces, forces_arr).astype(jnp.int32)
-        torque_segment_ids = jnp.searchsorted(twist_torques, torques_arr).astype(jnp.int32)
-        stretch_mask = torques_arr == stretch_torque  # held torque for stretch experiments
-        twist_mask = forces_arr == twist_force  # held force for twist experiments
+        force_segment_ids = jnp.searchsorted(stretch_forces, traj.metadata["force"]).astype(jnp.int32)
+        torque_segment_ids = jnp.searchsorted(twist_torques, traj.metadata["torque"]).astype(jnp.int32)
+        stretch_mask = traj.metadata["torque"] == stretch_torque  # held torque for stretch experiments
+        twist_mask = traj.metadata["force"] == twist_force  # held force for twist experiments
 
         # Compute observables for all states once
         all_extensions = extension_obs(traj) * NM_PER_OXDNA_LENGTH_UNIT
@@ -646,9 +645,11 @@ def create_thermo_objective(
     )
 
 def thermo_reweight_simulators(group: list[str], component_states: dict[str, Any]) -> None:
+    if not set(group).intersection(component_states.keys()):  # we are not running this
+        return
     all_weights = pd.concat([component_states[i]["weights"] for i in group])
     all_weights = all_weights.groupby(all_weights.index.names).mean()
-    all_weights /= all_weights.min()
+    all_weights /= all_weights.query("weights > 0").min()  # many mindist=1 will be 0
     for name in group:
         component_states[name]["weights"] = all_weights
 
@@ -805,6 +806,13 @@ def run_optimization(
             all_objectives.append(thermo_objective)
             thermo_simulator_groups.append([s.name for s in thermo_simulators])
 
+    # Final filter on objectives (all_objectives is built by category, but
+    # needed migtht be a subset of those). We use startswith predicate for
+    # melting_temperature objectives as they are tagged by system suffix.
+    all_objectives = [
+        obj for obj in all_objectives if any(obj.name.startswith(prefix) for prefix in selected_objectives)
+    ]
+
     logging.info("Using objectives: %s", [obj.name for obj in all_objectives])
 
     # Setup Ray optimizer
@@ -951,6 +959,9 @@ if __name__ == "__main__":
 
     # Load config (with optional overrides from file)
     config = load_config(Path(args.config) if args.config else None)
+    # allow user to specify which thermo objectives to include by suffix from config,
+    # e.g. --objectives melting_temperature_1
+    full_thermo_objectives = {f"melting_temperature_{suffix}" for suffix in config["thermo"]}
     if args.dump_config:
         if args.dump_config == "-":
             print(json.dumps(config, indent=2))
@@ -962,18 +973,24 @@ if __name__ == "__main__":
     # Parse and validate objectives
     if args.objectives:
         selected_objectives = {obj.strip() for obj in args.objectives.split(",")}
-        invalid = selected_objectives - VALID_OBJECTIVES
+        # add thermo prefixes to valid objectives for startswith matching
+        valid_with_thermo = VALID_OBJECTIVES | full_thermo_objectives
+        invalid = selected_objectives - valid_with_thermo
         if invalid:
             raise ValueError(
                 f"Invalid objective(s): {invalid}. "
-                f"Valid options are: {VALID_OBJECTIVES}"
+                f"Valid options are: {valid_with_thermo}"
             )
     else:
         selected_objectives = VALID_OBJECTIVES
 
     # Check if oxDNA source is needed
     oxdna_source = Path(args.oxdna_source).resolve() if args.oxdna_source else None
-    need_oxdna = bool(selected_objectives & (STRUCTURAL_OBJECTIVES | PERSISTENCE_OBJECTIVES | THERMO_OBJECTIVES))
+    need_oxdna = bool(
+        selected_objectives & (
+            STRUCTURAL_OBJECTIVES | PERSISTENCE_OBJECTIVES | THERMO_OBJECTIVES | full_thermo_objectives
+        )
+    )
     if need_oxdna and oxdna_source is None:
         raise ValueError("--oxdna-source is required when using oxDNA based objectives")
 
