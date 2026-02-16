@@ -1,4 +1,4 @@
-"""Membrane thickness observable."""
+"""Membrane area per lipid observable."""
 import chex
 import jax.numpy as jnp
 import lipyphilic as lpp

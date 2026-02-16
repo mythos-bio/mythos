@@ -14,7 +14,7 @@ from mythos.simulators.io import SimulatorTrajectory
 jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - common jax practice
 
 # For these tests we recycle the trajectory from LennardJones tests, it just
-# needs to be some system where we've already calculated the thickness.
+# needs to be some system where we've already calculated the area per lipid.
 TEST_DATA_DIR = Path("data/test-data/martini/energy/m2/lj")
 
 
@@ -36,12 +36,12 @@ def topology() -> MDAnalysis.Universe:
 class TestAreaPerLipid:
     """Tests for AreaPerLipid observable."""
 
-    def test_thickness_against_expected(
+    def test_area_per_lipid_against_expected(
         self,
         topology: MDAnalysis.Universe,
         gromacs_trajectory: SimulatorTrajectory,
     ):
-        """Test membrane thickness calculation against known reference values."""
+        """Test area per lipid calculation against known reference values."""
         expected = np.array([
             51.189245, 51.382128, 50.695458, 51.42874 , 51.178519,
             51.148737, 50.517493, 51.3376  , 51.586332, 51.005933
