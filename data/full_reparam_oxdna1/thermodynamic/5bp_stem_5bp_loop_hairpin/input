@@ -34,8 +34,8 @@ dh_half_charged_ends = 1
 use_average_seq = 1
 
 # Input/output
-topology = 5bp_stem_5bp_loop_hairpin.top
-conf_file = 5bp_stem_5bp_loop_hairpin.conf
+topology = sys.top
+conf_file = sys.conf
 #conf_file = last_conf.dat
 log_file = sim.log
 trajectory_file = trajectory.dat
