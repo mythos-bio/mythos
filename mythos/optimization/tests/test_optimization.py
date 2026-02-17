@@ -952,6 +952,7 @@ class TestOptimizerRun:
                 observables={
                     "my_objective": {"loss": jnp.array(1.5), "accuracy": jnp.array(0.9)},
                     "my_regularizer": {"penalty": jnp.array(0.01)},
+                    "non_float_metric": {"info": "not logged"},
                 },
             )
 
@@ -966,6 +967,7 @@ class TestOptimizerRun:
         assert "my_objective.loss" in names
         assert "my_objective.accuracy" in names
         assert "my_regularizer.penalty" in names
+        assert "non_float_metric.info" not in names  # Should not log non-float metric
         # Check step numbers
         step_0_entries = [(n, v, s) for n, v, s in logged if s == 0]
         step_1_entries = [(n, v, s) for n, v, s in logged if s == 1]
