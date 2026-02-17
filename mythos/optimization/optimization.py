@@ -1,5 +1,7 @@
 """Runs an optimization loop using Ray actors for objectives and simulators."""
 
+import contextlib
+import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
 from dataclasses import field
@@ -25,6 +27,7 @@ ERR_MISSING_OPTIMIZER = "An optimizer is required."
 # observables, so may required rerun of sims. After this, we don't expect any
 # new information, so not-ready state after this is an error.
 OBJECTIVE_PER_STEP_CALL_LIMIT = 2
+LOGGER = logging.getLogger(__name__)
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -66,9 +69,15 @@ class OptimizerOutput:
     observables: dict[str, dict[str, Any]] = field(default_factory=dict)
 
 
+def _try_to_float(value: Any) -> float | None:
+    with contextlib.suppress(Exception):
+        return float(value)
+    return None
+
 @chex.dataclass(frozen=True, kw_only=True)
 class Optimizer(ABC):
     """Abstract base class for optimizers."""
+    logger: jdna_logger.Logger = field(default_factory=jdna_logger.NullLogger)
 
     @abstractmethod
     def step(self, params: Params, state: OptimizerState | None = None) -> OptimizerOutput:
@@ -81,6 +90,38 @@ class Optimizer(ABC):
         Returns:
             An optimizer output including params, new state, grads, and observables.
         """
+
+    def run(self, params: Params, n_steps: int, callback: Callable | None = None) -> OptimizerOutput:
+        """Run the optimization loop for a given number of steps.
+
+        The callback function, if provided, is called at the end of each step
+        with the signature `callback(optimizer_output: OptimizerOutput, step:
+        int)`. The callback must return either an OptimizerOutput (modified or
+        not) to continue iteration, or None to signal early stopping.
+
+        Args:
+            params: The initial parameters for optimization.
+            n_steps: The number of optimization steps to run.
+            callback: An optional function to call at the end of each step.
+        """
+        state = None
+        for step in range(n_steps):
+            output = self.step(params, state)
+
+            if callback is not None:
+                output = callback(optimizer_output=output, step=step)
+                if output is None:
+                    LOGGER.info("Callback requested early stopping at step %d.", step)
+                    break
+
+            for component, obs in output.observables.items():
+                for obs_name, value in obs.items():
+                    if (value := _try_to_float(value)) is not None:
+                        self.logger.log_metric(f"{component}.{obs_name}", value, step=step)
+
+            params = output.opt_params
+            state = output.state
+        return output
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -101,7 +142,6 @@ class RayOptimizer(Optimizer):
     simulators: list[Simulator]
     aggregate_grad_fn: Callable[[list[Grads]], Grads]
     optimizer: optax.GradientTransformation
-    logger: jdna_logger.Logger = field(default_factory=jdna_logger.NullLogger)
     remote_options_default: dict[str, Any] = field(default_factory=dict)
 
     def __post_init__(self) -> None:
@@ -274,7 +314,6 @@ class SimpleOptimizer(Optimizer):
     objective: Objective
     simulator: Simulator
     optimizer: optax.GradientTransformation
-    logger: jdna_logger.Logger = field(default_factory=jdna_logger.NullLogger)
 
     @override
     def step(self, params: Params, state: OptimizerState | None = None) -> OptimizerOutput:
