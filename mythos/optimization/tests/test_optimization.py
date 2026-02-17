@@ -879,3 +879,158 @@ class TestRayOptimizerSchedulerHints:
         assert output is not None
         assert isinstance(output, jdna_optimization.OptimizerOutput)
 
+
+@chex.dataclass(frozen=True, kw_only=True)
+class StubOptimizer(jdna_optimization.Optimizer):
+    """A minimal Optimizer subclass whose step() returns a fixed output."""
+
+    step_output_fn: Callable = field(
+        default=lambda params, state, _step_count: jdna_optimization.OptimizerOutput(
+            grads={"p": jnp.zeros(1)},
+            opt_params=params,
+            state=state or jdna_optimization.OptimizerState(),
+            observables={"obj": {"loss": jnp.array(0.5)}},
+        )
+    )
+
+    @override
+    def step(self, params, state=None):
+        # Use a mutable counter stored on the function to track calls
+        if not hasattr(self.step_output_fn, "_call_count"):
+            object.__setattr__(self.step_output_fn, "_call_count", 0)
+        count = self.step_output_fn._call_count
+        object.__setattr__(self.step_output_fn, "_call_count", count + 1)
+        return self.step_output_fn(params, state, count)
+
+
+class TestOptimizerRun:
+    """Tests for the Optimizer.run() method."""
+
+    def test_honors_number_of_steps(self):
+        """run() calls step exactly n_steps times."""
+        call_counts = []
+
+        def counting_step_fn(params, state, step_count):
+            call_counts.append(step_count)
+            return jdna_optimization.OptimizerOutput(
+                grads={"p": jnp.zeros(1)},
+                opt_params=params,
+                state=state or jdna_optimization.OptimizerState(),
+                observables={},
+            )
+
+        opt = StubOptimizer(step_output_fn=counting_step_fn)
+        params = {"p": jnp.array(1.0)}
+
+        opt.run(params, n_steps=5)
+
+        assert len(call_counts) == 5
+        assert call_counts == [0, 1, 2, 3, 4]
+
+    def test_accepts_none_callback(self):
+        """run() works when callback is None (the default)."""
+        opt = StubOptimizer()
+        params = {"p": jnp.array(1.0)}
+
+        output = opt.run(params, n_steps=3, callback=None)
+
+        assert isinstance(output, jdna_optimization.OptimizerOutput)
+
+    def test_logs_metrics_with_qualified_names(self):
+        """run() logs metrics as 'component.observable_name'."""
+        logged = []
+
+        class CapturingLogger:
+            def log_metric(self, name, value, step):
+                logged.append((name, float(value), step))
+
+        def step_fn(params, state, step_count):
+            return jdna_optimization.OptimizerOutput(
+                grads={"p": jnp.zeros(1)},
+                opt_params=params,
+                state=state or jdna_optimization.OptimizerState(),
+                observables={
+                    "my_objective": {"loss": jnp.array(1.5), "accuracy": jnp.array(0.9)},
+                    "my_regularizer": {"penalty": jnp.array(0.01)},
+                },
+            )
+
+        opt = StubOptimizer(step_output_fn=step_fn, logger=CapturingLogger())
+        params = {"p": jnp.array(1.0)}
+
+        opt.run(params, n_steps=2)
+
+        # 3 observables per step * 2 steps = 6 logged metrics
+        assert len(logged) == 6
+        names = [name for name, _, _ in logged]
+        assert "my_objective.loss" in names
+        assert "my_objective.accuracy" in names
+        assert "my_regularizer.penalty" in names
+        # Check step numbers
+        step_0_entries = [(n, v, s) for n, v, s in logged if s == 0]
+        step_1_entries = [(n, v, s) for n, v, s in logged if s == 1]
+        assert len(step_0_entries) == 3
+        assert len(step_1_entries) == 3
+
+    def test_callback_early_stopping(self):
+        """run() stops when callback returns None."""
+        call_counts = []
+
+        def step_fn(params, state, step_count):
+            call_counts.append(step_count)
+            return jdna_optimization.OptimizerOutput(
+                grads={"p": jnp.zeros(1)},
+                opt_params=params,
+                state=state or jdna_optimization.OptimizerState(),
+                observables={},
+            )
+
+        def stopping_callback(optimizer_output, step):
+            if step >= 2:
+                return None  # signal early stop
+            return optimizer_output
+
+        opt = StubOptimizer(step_output_fn=step_fn)
+        params = {"p": jnp.array(1.0)}
+
+        opt.run(params, n_steps=10, callback=stopping_callback)
+
+        # Steps 0, 1, 2 are executed; callback returns None at step 2,
+        # so we should see exactly 3 step calls.
+        assert len(call_counts) == 3
+
+    def test_callback_modifies_output(self):
+        """run() uses the modified output returned by the callback."""
+        replacement_params = {"p": jnp.array(999.0)}
+
+        def step_fn(params, state, step_count):
+            return jdna_optimization.OptimizerOutput(
+                grads={"p": jnp.zeros(1)},
+                opt_params=params,
+                state=state or jdna_optimization.OptimizerState(),
+                observables={},
+            )
+
+        def modifying_callback(optimizer_output, step):
+            # Replace params on every step
+            return optimizer_output.replace(opt_params=replacement_params)
+
+        received_params = []
+        original_step_fn = step_fn
+
+        def tracking_step_fn(params, state, step_count):
+            received_params.append(params)
+            return original_step_fn(params, state, step_count)
+
+        opt = StubOptimizer(step_output_fn=tracking_step_fn)
+        params = {"p": jnp.array(1.0)}
+
+        output = opt.run(params, n_steps=3, callback=modifying_callback)
+
+        # The final output should have the callback's replacement params
+        assert float(output.opt_params["p"]) == 999.0
+        # Step 0 gets initial params, steps 1 and 2 get the callback-modified params
+        assert float(received_params[0]["p"]) == 1.0
+        assert float(received_params[1]["p"]) == 999.0
+        assert float(received_params[2]["p"]) == 999.0
+
