@@ -123,7 +123,7 @@ class Optimizer(ABC):
                         self.logger.log_metric(f"{component}.{obs_name}", value, step=step)
 
             if not keep_going:
-                LOGGER.info(f"Early stopping optimization at step {step} based on callback signal.")
+                LOGGER.info("Early stopping optimization at step %s based on callback signal.", step)
                 break
 
             params = output.opt_params

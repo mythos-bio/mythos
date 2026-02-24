@@ -936,6 +936,14 @@ class TestOptimizerRun:
 
         assert isinstance(output, jdna_optimization.OptimizerOutput)
 
+    def test_run_with_zero_steps_errors(self):
+        """run() raises an error if n_steps is zero."""
+        opt = StubOptimizer()
+        params = {"p": jnp.array(1.0)}
+
+        with pytest.raises(ValueError, match="n_steps must be at least 1."):
+            opt.run(params, n_steps=0)
+
     def test_logs_metrics_with_qualified_names(self):
         """run() logs metrics as 'component.observable_name'."""
         logged = []
