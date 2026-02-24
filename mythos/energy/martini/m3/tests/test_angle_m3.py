@@ -8,8 +8,7 @@ import jax.numpy as jnp
 import pytest
 from jax_md import space
 from mythos.energy.martini.base import MartiniTopology
-from mythos.energy.martini.m2.angle import AngleConfiguration, triplet_angle
-from mythos.energy.martini.m3.angle import Angle
+from mythos.energy.martini.m3 import Angle, AngleConfiguration
 from mythos.simulators.gromacs.utils import read_trajectory_mdanalysis
 from mythos.simulators.io import SimulatorTrajectory
 
@@ -97,10 +96,31 @@ class TestUseG96:
             [0.0, 0.0, 0.0],
             [1.0, 0.0, 0.0],
         ])
-        triplet = jnp.array([0, 1, 2])
-        displacement_fn, _ = space.free()
 
-        energy = triplet_angle(centers, triplet, k, theta0, displacement_fn, use_G96=Angle.use_G96)
+        # Build an Angle energy function with a single angle triplet,
+        # reshaping k and theta0 to arrays so they go through the vmap mapping.
+        angle_config = AngleConfiguration(
+            angle_k_R_A_B_C=k,
+            angle_theta0_R_A_B_C=theta0,
+        )
+        angle_fn = Angle(
+            params=angle_config,
+            atom_types=("T", "T", "T"),
+            atom_names=("A", "B", "C"),
+            residue_names=("R", "R", "R"),
+            angles=jnp.array([[0, 1, 2]]),
+            bonded_neighbors=jnp.array([]),
+            unbonded_neighbors=jnp.array([]),
+            displacement_fn=lambda _: space.free()[0],
+        )
+
+        trajectory = SimulatorTrajectory(
+            center=centers,
+            orientation=None,
+            box_size=jnp.zeros(3),
+        )
+
+        energy = angle_fn.compute_energy(trajectory)
 
         # Should match 0.5 * k * (theta - theta0)^2
         expected = 0.5 * k * deviation ** 2
