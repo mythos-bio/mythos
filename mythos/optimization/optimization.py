@@ -105,19 +105,26 @@ class Optimizer(ABC):
             callback: An optional function to call at the end of each step.
         """
         state = None
+        if n_steps < 1:
+            raise ValueError("n_steps must be at least 1.")
+
         for step in range(n_steps):
             output = self.step(params, state)
 
             if callback is not None:
-                output = callback(optimizer_output=output, step=step)
-                if output is None:
-                    LOGGER.info("Callback requested early stopping at step %d.", step)
-                    break
+                cb_output, keep_going = callback(optimizer_output=output, step=step)
+                output = cb_output if cb_output is not None else output
+            else:
+                keep_going = True
 
             for component, obs in output.observables.items():
                 for obs_name, value in obs.items():
                     if (value := _try_to_float(value)) is not None:
                         self.logger.log_metric(f"{component}.{obs_name}", value, step=step)
+
+            if not keep_going:
+                LOGGER.info(f"Early stopping optimization at step {step} based on callback signal.")
+                break
 
             params = output.opt_params
             state = output.state
