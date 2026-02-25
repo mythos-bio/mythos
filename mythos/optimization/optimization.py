@@ -73,6 +73,8 @@ def _try_to_float(value: Any) -> float | None:
     with contextlib.suppress(Exception):
         return float(value)
     return None
+
+
 @chex.dataclass(frozen=True, kw_only=True)
 class Optimizer(ABC):
     """Abstract base class for optimizers."""
