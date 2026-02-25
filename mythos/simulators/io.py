@@ -7,7 +7,7 @@ from typing import Any
 import chex
 import jax.numpy as jnp
 import jax_md
-from jax import tree_map
+from jax.tree_util import tree_map
 
 from mythos.energy.utils import q_to_back_base, q_to_base_normal
 from mythos.input.trajectory import _write_state

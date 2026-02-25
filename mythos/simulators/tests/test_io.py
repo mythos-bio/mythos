@@ -88,7 +88,7 @@ def test_simulatortrajectory_with_state_metadata() -> None:
 
     traj_with_metadata = traj.with_state_metadata(force = 10.0, torque = 5.0)
 
-    assert jax.tree_util.tree_all(jax.tree_map(lambda x: x.shape[0] == n, traj_with_metadata.metadata))
+    assert jax.tree_util.tree_all(jax.tree_util.tree_map(lambda x: x.shape[0] == n, traj_with_metadata.metadata))
     for i in range(traj_with_metadata.length()):
         assert traj_with_metadata.metadata["force"][i] == 10.0
         assert traj_with_metadata.metadata["torque"][i] == 5.0
