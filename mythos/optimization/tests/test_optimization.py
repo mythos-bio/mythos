@@ -997,8 +997,8 @@ class TestOptimizerRun:
 
         def stopping_callback(optimizer_output, step):
             if step >= 2:
-                return None  # signal early stop
-            return optimizer_output
+                return None, False  # signal early stop
+            return optimizer_output, True
 
         opt = StubOptimizer(step_output_fn=step_fn)
         params = {"p": jnp.array(1.0)}
@@ -1023,7 +1023,7 @@ class TestOptimizerRun:
 
         def modifying_callback(optimizer_output, step):
             # Replace params on every step
-            return optimizer_output.replace(opt_params=replacement_params)
+            return optimizer_output.replace(opt_params=replacement_params), True
 
         received_params = []
         original_step_fn = step_fn

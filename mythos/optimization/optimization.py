@@ -96,8 +96,11 @@ class Optimizer(ABC):
 
         The callback function, if provided, is called at the end of each step
         with the signature `callback(optimizer_output: OptimizerOutput, step:
-        int)`. The callback must return either an OptimizerOutput (modified or
-        not) to continue iteration, or None to signal early stopping.
+        int)`. The callback must return a tuple of (OptimizerOutput | None,
+        bool) where the bool indicates whether to continue iteration. If False,
+        the optimization loop will stop early. If the returned OptimizerOutput
+        is not None, it will replace the output of the step function (prior to
+        logging observables).
 
         Args:
             params: The initial parameters for optimization.
