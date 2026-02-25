@@ -107,6 +107,10 @@ class Optimizer(ABC):
             params: The initial parameters for optimization.
             n_steps: The number of optimization steps to run.
             callback: An optional function to call at the end of each step.
+
+        Returns:
+            The final optimizer output after running the optimization loop,
+            potentially stopped early based on the callback signal.
         """
         state = None
         if n_steps < 1:
