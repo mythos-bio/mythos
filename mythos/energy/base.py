@@ -21,12 +21,15 @@ ERR_COMPOSED_ENERGY_FN_LEN_MISMATCH = "Weights must have the same length as ener
 ERR_COMPOSED_ENERGY_FN_TYPE_ENERGY_FNS = "energy_fns must be a list of energy functions"
 
 
+@chex.dataclass(frozen=True, kw_only=True)
 class EnergyFunction(ABC):
     """Abstract base class for energy functions.
 
     These are a class of callable-classes that take in a RigidBody and return
     the energy of the system as a scalar float.
     """
+    map_batch_size: int = 100
+    map_checkpoint: bool = True
 
     @abstractmethod
     def __call__(self, body: jax_md.rigid_body.RigidBody) -> float:
@@ -73,7 +76,8 @@ class EnergyFunction(ABC):
 
     def map(self, body_sequence: jnp.ndarray) -> jnp.ndarray:
         """Map the energy function over a sequence of rigid bodies."""
-        return jax.vmap(self.__call__)(body_sequence)
+        inner_fun = jax.checkpoint(self.__call__) if self.map_checkpoint else self.__call__
+        return jax.lax.map(inner_fun, body_sequence, batch_size=self.map_batch_size)
 
 
 @chex.dataclass(frozen=True)

@@ -411,5 +411,19 @@ def test_energy_function_info_initialized_from_topology():
         MockEnergyFunction(params=None, displacement_fn=MagicMock(), transform_fn=None)
 
 
+@pytest.mark.parametrize("map_batch_size", [None, 1, 10])
+@pytest.mark.parametrize("map_checkpoint", [False, True])
+def test_energy_function_map_computation(map_batch_size, map_checkpoint):
+    class EF(base.BaseEnergyFunction):
+        def compute_energy(self, nucleotide):
+            return nucleotide.mean()
+
+    ef = EF(params=1, displacement_fn=MagicMock(), topology=MagicMock())
+    ef = ef.with_props(map_batch_size=map_batch_size, map_checkpoint=map_checkpoint)
+    body_sequence = jnp.array([[0.0, 1.0, 2.0], [3.0, 4.0, 5.0]])
+    energy = ef.map(body_sequence)
+    assert jnp.allclose(energy, jnp.array([1.0, 4.0]))
+
+
 if __name__ == "__main__":
     pass
