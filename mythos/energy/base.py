@@ -28,7 +28,7 @@ class EnergyFunction(ABC):
     These are a class of callable-classes that take in a RigidBody and return
     the energy of the system as a scalar float.
     """
-    map_batch_size: int = 100
+    map_batch_size: int | None = 100
     map_checkpoint: bool = True
 
     @abstractmethod
