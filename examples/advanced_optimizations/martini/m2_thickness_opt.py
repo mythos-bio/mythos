@@ -2,6 +2,7 @@ import argparse
 import tempfile
 from pathlib import Path
 
+import jax
 import jax.numpy as jnp
 import MDAnalysis
 import optax
@@ -17,6 +18,8 @@ from mythos.ui.loggers.console import ConsoleLogger
 from mythos.ui.loggers.disk import FileLogger
 from mythos.ui.loggers.multilogger import MultiLogger
 from mythos.utils.helpers import run_command
+
+jax.config.update("jax_enable_x64", True)
 
 
 def parse_args():
