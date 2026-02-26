@@ -73,7 +73,8 @@ class EnergyFunction(ABC):
 
     def map(self, body_sequence: jnp.ndarray) -> jnp.ndarray:
         """Map the energy function over a sequence of rigid bodies."""
-        return jax.vmap(self.__call__)(body_sequence)
+        func_cp = jax.checkpoint(self.__call__)
+        return jax.lax.map(func_cp, body_sequence, batch_size=1000)
 
 
 @chex.dataclass(frozen=True)
