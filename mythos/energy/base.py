@@ -27,6 +27,18 @@ class EnergyFunction(ABC):
 
     These are a class of callable-classes that take in a RigidBody and return
     the energy of the system as a scalar float.
+
+    Attributes:
+        map_batch_size (int): Batch size to use when mapping the energy
+            function over a sequence of rigid bodies in :meth:`map`. Defaults
+            to ``100``. Larger values may improve throughput but increase peak
+            memory usage; smaller values reduce memory usage at the cost of
+            additional overhead.
+        map_checkpoint (bool): Whether to wrap :meth:`__call__` with
+            :func:`jax.checkpoint` inside :meth:`map`. Defaults to ``True``.
+            Enabling checkpointing can significantly reduce memory usage when
+            mapping over large sequences, at the cost of recomputing
+            intermediate values during backpropagation.
     """
     map_batch_size: int | None = 100
     map_checkpoint: bool = True
