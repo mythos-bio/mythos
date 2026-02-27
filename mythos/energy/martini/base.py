@@ -1,6 +1,5 @@
 """Common Martini Energy Utilities."""
 
-import itertools
 from pathlib import Path
 
 import chex

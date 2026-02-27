@@ -9,7 +9,7 @@ from typing_extensions import override
 
 from mythos.energy.martini.base import MartiniEnergyConfiguration, MartiniEnergyFunction
 from mythos.simulators.io import SimulatorTrajectory
-from mythos.utils.types import Arr_N, Arr_States_3, MatrixSq, Vector2D
+from mythos.utils.types import Arr_N, Arr_States_3, MatrixSq
 
 LJ_SIGMA_PREFIX = "lj_sigma_"
 LJ_EPSILON_PREFIX = "lj_epsilon_"
@@ -113,7 +113,8 @@ class LJ(MartiniEnergyFunction):
         # tuples as a concrete array, and does not have to be passed remotely.
         triu_i, triu_j = jnp.triu_indices(len(self.atom_types), k=1)
         bonded_mask = jnp.ones((len(self.atom_types), len(self.atom_types)), dtype=bool)
-        bonded_mask = bonded_mask.at[self.bonded_neighbors[:,0], self.bonded_neighbors[:,1]].set(False)
+        bn_i, bn_j = self.bonded_neighbors[:,0], self.bonded_neighbors[:,1]
+        bonded_mask = bonded_mask.at[bn_i, bn_j].set(False)  # noqa: PD008, FBT003
 
         ljmap = jax.vmap(pair_lj, in_axes=(None, 0, 0, None, None, None, None, None))
         return ljmap(
