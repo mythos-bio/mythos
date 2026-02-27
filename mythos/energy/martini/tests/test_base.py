@@ -1,5 +1,7 @@
+from unittest.mock import MagicMock
+
 import pytest
-from mythos.energy.martini.base import MartiniEnergyConfiguration, MartiniTopology
+from mythos.energy.martini.base import MartiniEnergyConfiguration, MartiniEnergyFunction, MartiniTopology
 
 
 class TestMartiniEnergyConfiguration:
@@ -67,3 +69,21 @@ class TestMartiniTopology:
         assert top.residue_names == ("DMPC",) * n_atoms
         assert top.angles.shape == (n_angles, 3)
         assert top.bonded_neighbors.shape == (n_bonds, 2)
+
+
+class TestMartiniEnergyFunction:
+    def test_energy_function_raises_on_unbonded_neighbors(self):
+        class MockEF(MartiniEnergyFunction):
+            def compute_energy(self, _positions):
+                return 0.0
+
+        with pytest.raises(ValueError, match="does not support user-input unbonded_neighbors"):
+            MockEF(
+                params=MagicMock(),
+                atom_types = ("A", "B"),
+                atom_names = ("A1", "B1"),
+                residue_names = ("RES", "RES"),
+                angles = 1,
+                bonded_neighbors = 1,
+                unbonded_neighbors = 1,
+            )
