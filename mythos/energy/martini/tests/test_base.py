@@ -67,4 +67,3 @@ class TestMartiniTopology:
         assert top.residue_names == ("DMPC",) * n_atoms
         assert top.angles.shape == (n_angles, 3)
         assert top.bonded_neighbors.shape == (n_bonds, 2)
-        assert top.unbonded_neighbors.shape == (n_atoms * (n_atoms - 1) // 2 - n_bonds, 2)  # All pairs minus bonded

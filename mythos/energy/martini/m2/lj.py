@@ -69,16 +69,15 @@ def lennard_jones(r: float, eps: float, sigma: float) -> float:
 
 def pair_lj(
         centers: Arr_States_3,
-        pair: Vector2D,
+        i: int,
+        j: int,
+        bonded_mask: MatrixSq,
         sigmas: MatrixSq,
         epsilons: MatrixSq,
         types: Arr_N,
         displacement_fn: callable,
     ) -> float:
     """Calculate LJ energy for a given pair of particles."""
-    i = pair[0]
-    j = pair[1]
-
     i_type = types[i]
     j_type = types[j]
 
@@ -86,7 +85,7 @@ def pair_lj(
     eps = epsilons[i_type, j_type]
 
     r = space.distance(displacement_fn(centers[i], centers[j]))
-    return lennard_jones(r, eps, sigma)
+    return lennard_jones(r, eps, sigma) * bonded_mask[i, j]  # Mask out bonded pairs
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -99,6 +98,7 @@ class LJ(MartiniEnergyFunction):
     def __post_init__(self, topology: None = None) -> None:
         # Cache a mapping between atom index and its type within sigma/epsilon
         # matrices
+        MartiniEnergyConfiguration.__post_init__(self)
         type_map = {t: i for i,t in enumerate(self.params.bead_types)}
         atom_type_map = jnp.array([type_map[t] for t in self.atom_types])
         object.__setattr__(self, "_atom_type_map", atom_type_map)
@@ -106,10 +106,21 @@ class LJ(MartiniEnergyFunction):
     @override
     def compute_energy(self, trajectory: SimulatorTrajectory) -> float:
         displacement_fn = self.displacement_fn(trajectory.box_size)
-        ljmap = jax.vmap(pair_lj, in_axes=(None, 0, None, None, None, None))
+
+        # Build a indicies of all non-self unordered pairs to iterate over and
+        # then construct a mask (inverted) for rejecting bonded pairs based on
+        # those indices. This method is much more efficient than building pair
+        # tuples as a concrete array, and does not have to be passed remotely.
+        triu_i, triu_j = jnp.triu_indices(len(self.atom_types), k=1)
+        bonded_mask = jnp.ones((len(self.atom_types), len(self.atom_types)), dtype=bool)
+        bonded_mask = bonded_mask.at[self.bonded_neighbors[:,0], self.bonded_neighbors[:,1]].set(False)
+
+        ljmap = jax.vmap(pair_lj, in_axes=(None, 0, 0, None, None, None, None, None))
         return ljmap(
             trajectory.center,
-            self.unbonded_neighbors,
+            triu_i,
+            triu_j,
+            bonded_mask,
             self.params.sigmas,
             self.params.epsilons,
             self._atom_type_map,
