@@ -333,6 +333,146 @@ def test_simulatortrajectory_addition_mismatched_box_size_raises() -> None:
         _ = traj_without_box + traj_with_box
 
 
+def test_simulatortrajectory_concat_multiple() -> None:
+    """Test concat with more than two trajectories, including metadata merging."""
+    n1, n2, n3 = 3, 2, 4
+    traj1 = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((n1, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((n1, 4))),
+        box_size=jnp.ones((n1, 3)) * 10,
+        metadata={
+            "a": jnp.array([1, 1, 1]),
+            "b": jnp.array([[2, 2], [2, 2], [2, 2]]),
+        },
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((n2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((n2, 4))),
+        box_size=jnp.zeros((n2, 3)),
+        metadata={
+            "a": jnp.array([5, 5]),
+        },
+    )
+    traj3 = jd_sio.SimulatorTrajectory(
+        center=jnp.full((n3, 3), 2.0),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.full((n3, 4), 0.5)),
+        box_size=jnp.ones((n3, 3)) * 5,
+        metadata={
+            "a": jnp.array([9, 9, 9, 9]),
+            "b": jnp.array([[7, 7], [7, 7], [7, 7], [7, 7]]),
+            "c": jnp.array([3, 3, 3, 3]),
+        },
+    )
+
+    combined = jd_sio.SimulatorTrajectory.concat([traj1, traj2, traj3])
+    total = n1 + n2 + n3
+
+    assert combined.length() == total
+    # Check center concatenation
+    assert jnp.allclose(combined.center[:n1], jnp.ones((n1, 3)))
+    assert jnp.allclose(combined.center[n1:n1 + n2], jnp.zeros((n2, 3)))
+    assert jnp.allclose(combined.center[n1 + n2:], jnp.full((n3, 3), 2.0))
+    # Check orientation concatenation
+    assert jnp.allclose(combined.orientation.vec[:n1], jnp.ones((n1, 4)))
+    assert jnp.allclose(combined.orientation.vec[n1:n1 + n2], jnp.zeros((n2, 4)))
+    # Check box_size concatenation
+    assert combined.box_size.shape == (total, 3)
+    assert combined.box_size[0, 0] == 10
+    assert combined.box_size[n1, 0] == 0
+    assert combined.box_size[n1 + n2, 0] == 5
+    # All metadata arrays have the right leading dimension
+    for v in combined.metadata.values():
+        assert v.shape[0] == total
+    # Key "a" present in all three
+    assert jnp.array_equal(combined.metadata["a"], jnp.array([1, 1, 1, 5, 5, 9, 9, 9, 9]))
+    # Key "b" missing in traj2 -> NaN-filled there
+    assert jnp.array_equal(combined.metadata["b"][:n1], jnp.array([[2, 2], [2, 2], [2, 2]]))
+    assert jnp.all(jnp.isnan(combined.metadata["b"][n1:n1 + n2]))
+    assert jnp.array_equal(combined.metadata["b"][n1 + n2:], jnp.array([[7, 7], [7, 7], [7, 7], [7, 7]]))
+    # Key "c" only in traj3 -> NaN-filled for traj1 and traj2
+    assert jnp.all(jnp.isnan(combined.metadata["c"][:n1 + n2]))
+    assert jnp.array_equal(combined.metadata["c"][n1 + n2:], jnp.array([3, 3, 3, 3]))
+
+
+def test_simulatortrajectory_concat_single() -> None:
+    """Test concat with a single trajectory returns it unchanged."""
+    traj = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((3, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((3, 4))),
+    )
+    result = jd_sio.SimulatorTrajectory.concat([traj])
+    assert result is traj
+
+
+def test_simulatortrajectory_concat_empty_raises() -> None:
+    """Test concat with an empty list raises ValueError."""
+    with pytest.raises(ValueError, match="Cannot concatenate an empty list"):
+        jd_sio.SimulatorTrajectory.concat([])
+
+
+def test_simulatortrajectory_concat_no_metadata() -> None:
+    """Test concat when none of the trajectories have metadata."""
+    traj1 = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((2, 4))),
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((3, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((3, 4))),
+    )
+    combined = jd_sio.SimulatorTrajectory.concat([traj1, traj2])
+    assert combined.length() == 5
+    assert combined.metadata is None
+
+
+def test_simulatortrajectory_concat_box_size_none() -> None:
+    """Test concat when all trajectories have box_size=None."""
+    traj1 = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((2, 4))),
+        box_size=None,
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((3, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((3, 4))),
+        box_size=None,
+    )
+    combined = jd_sio.SimulatorTrajectory.concat([traj1, traj2])
+    assert combined.box_size is None
+
+
+def test_simulatortrajectory_concat_incompatible_box_size_raises() -> None:
+    """Test concat raises when box_size is mixed None/non-None."""
+    traj1 = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((2, 4))),
+        box_size=jnp.ones((2, 3)),
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((3, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((3, 4))),
+        box_size=None,
+    )
+    with pytest.raises(ValueError, match="Cannot concatenate, trajectories have incompatible box sizes"):
+        jd_sio.SimulatorTrajectory.concat([traj1, traj2])
+
+
+def test_simulatortrajectory_concat_incompatible_metadata_raises() -> None:
+    """Test concat raises on metadata shape mismatch."""
+    traj1 = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((2, 4))),
+        metadata={"x": jnp.array([[1, 1], [1, 1]])},
+    )
+    traj2 = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((2, 4))),
+        metadata={"x": jnp.array([[0, 0, 0], [0, 0, 0]])},
+    )
+    with pytest.raises(ValueError, match="Metadata key 'x' has mismatched shapes"):
+        jd_sio.SimulatorTrajectory.concat([traj1, traj2])
+
+
 def test_simulatortrajectory_vmappable() -> None:
     traj = jd_sio.SimulatorTrajectory(
         center=jnp.arange(10 * 3).reshape((10, 3)),
