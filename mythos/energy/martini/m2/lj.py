@@ -110,7 +110,7 @@ class LJ(MartiniEnergyFunction):
         # tuples as a concrete array, and does not have to be passed remotely.
         triu_i, triu_j = jnp.triu_indices(len(self.atom_types), k=1)
         bonded_mask = jnp.ones((len(self.atom_types), len(self.atom_types)), dtype=bool)
-        bn_i, bn_j = self.bonded_neighbors[:,0], self.bonded_neighbors[:,1]
+        bn_i, bn_j = self.bonded_neighbors[:, 0], self.bonded_neighbors[:, 1]
         bonded_mask = bonded_mask.at[bn_i, bn_j].set(False)  # noqa: PD008, FBT003
         bonded_mask = bonded_mask.at[bn_j, bn_i].set(False)  # noqa: PD008, FBT003 ensure symmetry
         return triu_i, triu_j, bonded_mask
