@@ -83,12 +83,14 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
             key = jnp.asarray(key)
 
         metadata = None if self.metadata is None else tree_map(lambda x: x[key, ...], self.metadata)
+        box_size = None if self.box_size is None else self.box_size[key, ...]
 
         return self.replace(
             center=self.center[key, ...],
             orientation=jax_md.rigid_body.Quaternion(
                 vec=self.orientation.vec[key, ...],
             ),
+            box_size=box_size,
             metadata=metadata,
         )
 
@@ -104,23 +106,39 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
         """
         return self.center.shape[0]
 
-    def __add__(self, other: "SimulatorTrajectory") -> "SimulatorTrajectory":
-        """Concatenate two trajectories."""
-        if self.box_size is None and other.box_size is None:
+    @classmethod
+    def concat(cls, trajectories: list["SimulatorTrajectory"]) -> "SimulatorTrajectory":
+        """Concatenate a list of SimulatorTrajectory instances."""
+        if not trajectories:
+            raise ValueError("Cannot concatenate an empty list of trajectories.")
+        if len(trajectories) == 1:
+            return trajectories[0]
+
+        box_sizes = [t.box_size for t in trajectories]
+        if all(b is None for b in box_sizes):
             box_size = None
-        elif self.box_size is None or other.box_size is None:
+        elif any(b is None for b in box_sizes):
             raise ValueError("Cannot concatenate, trajectories have incompatible box sizes.")
         else:
-            box_size = jnp.concatenate([self.box_size, other.box_size], axis=0)
+            box_size = jnp.concatenate(box_sizes, axis=0)
 
-        return self.replace(
-            center=jnp.concatenate([self.center, other.center], axis=0),
+        merged_metadata = _merge_metadata(
+            [t.metadata for t in trajectories],
+            [t.length() for t in trajectories],
+        )
+
+        return trajectories[0].replace(
+            center=jnp.concatenate([t.center for t in trajectories], axis=0),
             orientation=jax_md.rigid_body.Quaternion(
-                vec=jnp.concatenate([self.orientation.vec, other.orientation.vec], axis=0)
+                vec=jnp.concatenate([t.orientation.vec for t in trajectories], axis=0)
             ),
             box_size=box_size,
-            metadata=_merge_metadata(self.metadata, self.length(), other.metadata, other.length()),
+            metadata=merged_metadata,
         )
+
+    def __add__(self, other: "SimulatorTrajectory") -> "SimulatorTrajectory":
+        """Concatenate two trajectories."""
+        return self.__class__.concat([self, other])
 
     def to_file(self, filepath: Path, box_size: Vector3D = (0, 0, 0)) -> None:
         """Write the trajectory to an oxDNA file.
@@ -150,26 +168,28 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
 
 
 def _merge_metadata(
-        left: dict[str, jnp.ndarray]|None,
-        len_left: int,
-        right: dict[str, jnp.ndarray]|None,
-        len_right: int,
+        metadata_list: list[dict[str, jnp.ndarray]|None],
+        lengths: list[int],
     ) -> dict[str, jnp.ndarray]|None:
-    """Merge two metadata dictionaries for SimulatorTrajectory concatenation.
+    """Merge a list of metadata dictionaries for SimulatorTrajectory concatenation.
 
-    If a key is missing in one of the dictionaries, it is filled with NaNs of
+    If a key is missing in some dictionaries, it is filled with NaNs of
     the same shape (excluding leading axis which is num_states) as the
-    corresponding array in the other dictionary. If a key is present in both
-    dictionaries the shapes must be consistent beyond the leading axis.
+    corresponding array in the dictionaries that do have it. If a key is
+    present in multiple dictionaries the shapes must be consistent beyond
+    the leading axis.
     """
-    if not left and not right:
+    if all(not m for m in metadata_list):
         return None
-    left, right = (left or {}, right or {})
-    for key in left.keys() | right.keys():
-        if key in left and key in right and left[key].shape[1:] != right[key].shape[1:]:
+    dicts = [m or {} for m in metadata_list]
+    all_keys: set[str] = set().union(*(d.keys() for d in dicts))
+    for key in all_keys:
+        # Collect present entries to validate shape consistency and determine fill shape
+        present = [d[key] for d in dicts if key in d]
+        shape = present[0].shape[1:]
+        if any(p.shape[1:] != shape for p in present[1:]):
             raise ValueError(f"Metadata key '{key}' has mismatched shapes when adding trajectories.")
-        shape = left.get(key, right.get(key)).shape[1:]
-        # fill with NaNs of the appropriate shape where missing.
-        left.setdefault(key, jnp.full((len_left, *shape), jnp.nan))
-        right.setdefault(key, jnp.full((len_right, *shape), jnp.nan))
-    return tree_concatenate([left, right])
+        # Fill missing entries with NaNs of the appropriate shape
+        for d, length in zip(dicts, lengths, strict=True):
+            d.setdefault(key, jnp.full((length, *shape), jnp.nan))
+    return tree_concatenate(dicts)
