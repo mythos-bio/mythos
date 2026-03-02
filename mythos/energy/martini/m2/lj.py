@@ -123,6 +123,10 @@ class LJ(MartiniEnergyFunction):
         # potential serialization.
         bonds_info = self._build_pair_info()
         def map_fn(trajectory: SimulatorTrajectory) -> float:
+            # Apply any configured transform_fn before computing energy,
+            # while still reusing the precomputed bonds_info.
+            if self.transform_fn is not None:
+                trajectory = self.transform_fn(trajectory)
             return self.compute_energy(trajectory, _bonds_info=bonds_info)
         inner_fun = jax.checkpoint(map_fn) if self.map_checkpoint else map_fn
         return jax.lax.map(inner_fun, body_sequence, batch_size=self.map_batch_size)
