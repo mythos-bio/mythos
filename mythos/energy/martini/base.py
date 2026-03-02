@@ -28,13 +28,11 @@ class MartiniTopology:
     Attributes:
         atom_types: A tuple of atom type names.
         atom_names: A tuple of atom names.
+        residue_names: A tuple of residue names.
         angles: An array of shape (n_angles, 3) containing the indices of the
             atoms involved in each angle.
         bonded_neighbors: An array of shape (n_bonds, 2) containing the indices
             of the bonded pairs of atoms.
-        unbonded_neighbors: An array of shape (n_unbonded, 2) containing the indices
-            of the unbonded pairs of atoms. If not supplied, it will be computed
-            as all pairs of atoms that are not bonded.
     """
     atom_types: tuple[str, ...]
     atom_names: tuple[str, ...]
