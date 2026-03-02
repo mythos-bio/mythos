@@ -306,9 +306,8 @@ class DiffTReObjective(Objective):
             ref_energies=reference_energies,
         )
 
-        # Check if trajectory needs to be recomputed
-        trajectory_invalid = (neff < self.min_n_eff_factor) or (opt_steps >= self.max_valid_opt_steps)
-        if trajectory_invalid:
+        # check if trajectory needs recomputation due to low effective sample size
+        if neff < self.min_n_eff_factor:
             return ObjectiveOutput(
                 is_ready=False,
                 needs_update=tuple(self.required_observables),

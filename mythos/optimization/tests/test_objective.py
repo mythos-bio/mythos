@@ -423,8 +423,6 @@ def test_difftreobjective_opt_steps_short_circuits() -> None:
     assert output.grads is None
 
 
-
-
 def test_difftreobjective_raises_when_equilibration_exceeds_trajectory() -> None:
     """Test that DiffTReObjective raises when n_equilibration_steps >= trajectory length."""
     obj = o.DiffTReObjective(
