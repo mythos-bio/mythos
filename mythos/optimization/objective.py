@@ -238,7 +238,9 @@ class DiffTReObjective(Objective):
         if self.n_equilibration_steps is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="n_equilibration_steps"))
         if self.n_equilibration_steps < 0:
-            raise ValueError("n_equilibration_steps must be >= 0.")
+            raise ValueError(
+                f"n_equilibration_steps must be non-negative, got {self.n_equilibration_steps}."
+            )
 
     def calculate(
         self,
