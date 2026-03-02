@@ -71,7 +71,7 @@ class MartiniEnergyFunction(BaseEnergyFunction):
     displacement_fn: callable = get_periodic
 
     @override
-    def __post_init__(self, _: None) -> None:
+    def __post_init__(self, topology: None = None) -> None:
         if self.unbonded_neighbors is not None:
             raise ValueError("MartiniEnergyFunction does not support user-input unbonded_neighbors.")
 

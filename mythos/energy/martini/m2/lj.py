@@ -98,16 +98,13 @@ class LJ(MartiniEnergyFunction):
     def __post_init__(self, topology: None = None) -> None:
         # Cache a mapping between atom index and its type within sigma/epsilon
         # matrices
-        MartiniEnergyConfiguration.__post_init__(self)
+        MartiniEnergyFunction.__post_init__(self)
         type_map = {t: i for i,t in enumerate(self.params.bead_types)}
         atom_type_map = jnp.array([type_map[t] for t in self.atom_types])
         object.__setattr__(self, "_atom_type_map", atom_type_map)
 
-    @override
-    def compute_energy(self, trajectory: SimulatorTrajectory) -> float:
-        displacement_fn = self.displacement_fn(trajectory.box_size)
-
-        # Build a indicies of all non-self unordered pairs to iterate over and
+    def _build_pair_info(self) -> tuple[Arr_N, Arr_N, MatrixSq]:
+        # Build indices of all non-self unordered pairs to iterate over and
         # then construct a mask (inverted) for rejecting bonded pairs based on
         # those indices. This method is much more efficient than building pair
         # tuples as a concrete array, and does not have to be passed remotely.
@@ -115,6 +112,31 @@ class LJ(MartiniEnergyFunction):
         bonded_mask = jnp.ones((len(self.atom_types), len(self.atom_types)), dtype=bool)
         bn_i, bn_j = self.bonded_neighbors[:,0], self.bonded_neighbors[:,1]
         bonded_mask = bonded_mask.at[bn_i, bn_j].set(False)  # noqa: PD008, FBT003
+        bonded_mask = bonded_mask.at[bn_j, bn_i].set(False)  # noqa: PD008, FBT003 ensure symmetry
+        return triu_i, triu_j, bonded_mask
+
+    @override
+    def map(self, body_sequence: SimulatorTrajectory) -> jnp.ndarray:
+        # override to enable pre-computation of pair info for efficiency, since
+        # it does not depend on the trajectory states. We do here instead of in
+        # __post_init__ as the data structure could be large, we want to avoid
+        # potential serialization.
+        bonds_info = self._build_pair_info()
+        def map_fn(trajectory: SimulatorTrajectory) -> float:
+            return self.compute_energy(trajectory, _bonds_info=bonds_info)
+        inner_fun = jax.checkpoint(map_fn) if self.map_checkpoint else map_fn
+        return jax.lax.map(inner_fun, body_sequence, batch_size=self.map_batch_size)
+
+    @override
+    def compute_energy(
+        self, trajectory: SimulatorTrajectory, _bonds_info: tuple[Arr_N, Arr_N, MatrixSq] | None = None
+    ) -> float:
+        displacement_fn = self.displacement_fn(trajectory.box_size)
+
+        # use precomputed pair info, or create for this state if not provided.
+        if _bonds_info is None:
+            _bonds_info = self._build_pair_info()
+        triu_i, triu_j, bonded_mask = _bonds_info
 
         ljmap = jax.vmap(pair_lj, in_axes=(None, 0, 0, None, None, None, None, None))
         return ljmap(
