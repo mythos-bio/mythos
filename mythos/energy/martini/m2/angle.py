@@ -106,6 +106,7 @@ class Angle(MartiniEnergyFunction):
 
     @override
     def __post_init__(self, topology: None = None) -> None:
+        MartiniEnergyFunction.__post_init__(self)
         # Cache parameters mapped to angles by indices. The result is arrays of
         # len(angle_neighbors) where each element corresponds to the k or theta0 for that angle.
         k = [self.params[ANGLE_K_PREFIX + name] for name in self.angle_names]
