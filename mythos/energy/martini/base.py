@@ -18,6 +18,37 @@ def get_periodic(box_size: Vector3D) -> callable:
     return space.periodic(box_size)[0]
 
 
+def derive_bond_names(
+    residue_names: tuple[str, ...],
+    atom_names: tuple[str, ...],
+    bonded_neighbors: Arr_N,
+) -> tuple[str, ...]:
+    """Derive bond names aligned with *bonded_neighbors*.
+
+    Each name has the form ``RESIDUE_BEAD1_BEAD2``, e.g. ``DMPC_GL1_GL2``.
+    """
+    return tuple(
+        f"{residue_names[b[0]]}_{atom_names[b[0]]}_{atom_names[b[1]]}"
+        for b in bonded_neighbors
+    )
+
+
+def derive_angle_names(
+    residue_names: tuple[str, ...],
+    atom_names: tuple[str, ...],
+    angles: Arr_N,
+) -> tuple[str, ...]:
+    """Derive angle names aligned with *angles*.
+
+    Each name has the form ``RESIDUE_BEAD1_BEAD2_BEAD3``,
+    e.g. ``DMPC_NC3_PO4_GL1``.
+    """
+    return tuple(
+        f"{residue_names[a[0]]}_{atom_names[a[0]]}_{atom_names[a[1]]}_{atom_names[a[2]]}"
+        for a in angles
+    )
+
+
 @chex.dataclass(frozen=True, kw_only=True)
 class MartiniTopology:
     """Class representing the topology of a Martini system.
@@ -73,6 +104,16 @@ class MartiniTopology:
         universe = MDAnalysis.Universe(tpr_file)
         return cls.from_universe(universe, unbonded_neighbors=unbonded_neighbors)
 
+    @property
+    def bond_names(self) -> tuple[str, ...]:
+        """Return bond names based on atom names and bonded neighbors."""
+        return derive_bond_names(self.residue_names, self.atom_names, self.bonded_neighbors)
+
+    @property
+    def angle_names(self) -> tuple[str, ...]:
+        """Return angle names based on atom names and angles."""
+        return derive_angle_names(self.residue_names, self.atom_names, self.angles)
+
 
 @chex.dataclass(frozen=True, kw_only=True)
 class MartiniEnergyFunction(BaseEnergyFunction):
@@ -100,18 +141,12 @@ class MartiniEnergyFunction(BaseEnergyFunction):
     @property
     def bond_names(self) -> tuple[str, ...]:
         """Return bond names based on atom names and bonded neighbors."""
-        return tuple(
-            f"{self.residue_names[b[0]]}_{self.atom_names[b[0]]}_{self.atom_names[b[1]]}"
-            for b in self.bonded_neighbors
-        )
+        return derive_bond_names(self.residue_names, self.atom_names, self.bonded_neighbors)
 
     @property
     def angle_names(self) -> tuple[str, ...]:
         """Return angle names based on atom names and angles."""
-        return tuple(
-            f"{self.residue_names[a[0]]}_{self.atom_names[a[0]]}_{self.atom_names[a[1]]}_{self.atom_names[a[2]]}"
-            for a in self.angles
-        )
+        return derive_angle_names(self.residue_names, self.atom_names, self.angles)
 
 
 class MartiniEnergyConfiguration:

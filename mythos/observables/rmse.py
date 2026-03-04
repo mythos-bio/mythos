@@ -29,7 +29,7 @@ def svd_align(ref_coords: jnp.ndarray, coords: jnp.ndarray) -> tuple[jnp.ndarray
     av2 = jnp.mean(coords[0][indexes], axis=0)
 
     # Shift the first input structure to be centered
-    coords = coords.at[0].set(coords[0] - av2)  # noqa: PD008 -- Not a pandas operation
+    coords = coords.at[0].set(coords[0] - av2)  # -- Not a pandas operation
 
     # Compute the correlation matrix between the reference and input coordinates
     a = jnp.dot(jnp.transpose(coords[0][indexes]), ref_coords - av1)
@@ -43,7 +43,7 @@ def svd_align(ref_coords: jnp.ndarray, coords: jnp.ndarray) -> tuple[jnp.ndarray
     # Check for a reflection
     found_reflection = jnp.linalg.det(rot) < 0
 
-    vt = jnp.where(found_reflection, vt.at[2].set(-vt[2]), vt)  # noqa: PD008 -- Not a pandas operation
+    vt = jnp.where(found_reflection, vt.at[2].set(-vt[2]), vt)  # -- Not a pandas operation
     rot = jnp.where(found_reflection, jnp.transpose(jnp.dot(jnp.transpose(vt), jnp.transpose(u))), rot)
 
     # Translation is trivial here as `tran` is effectively the center of reference (set to `av1`)
