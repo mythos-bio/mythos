@@ -19,10 +19,6 @@ from mythos.simulators.io import SimulatorTrajectory
 jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - common jax practice
 
 
-# ---------------------------------------------------------------------------
-# Mock observable helpers
-# ---------------------------------------------------------------------------
-
 @chex.dataclass(frozen=True, kw_only=True)
 class _MockArrayObservable(BaseObservable):
     """Observable that returns a fixed array, ignoring the trajectory."""
@@ -53,10 +49,6 @@ def _dummy_trajectory() -> SimulatorTrajectory:
         box_size=jnp.array([10.0, 10.0, 10.0]),
     )
 
-
-# ===================================================================
-# Tests for wasserstein_1d
-# ===================================================================
 
 class TestWasserstein1D:
     """Unit tests for the standalone wasserstein_1d function."""
@@ -107,10 +99,6 @@ class TestWasserstein1D:
         assert d1 == pytest.approx(d2, rel=1e-10)
 
 
-# ===================================================================
-# Tests for _compute_wasserstein_distance
-# ===================================================================
-
 class TestComputeWassersteinDistance:
     """Tests for the internal _compute_wasserstein_distance helper."""
 
@@ -140,10 +128,6 @@ class TestComputeWassersteinDistance:
         expected = float(wasserstein_1d(u, v, u_weights=weights))
         assert result == pytest.approx(expected, abs=1e-12)
 
-
-# ===================================================================
-# Tests for WassersteinDistance
-# ===================================================================
 
 class TestWassersteinDistance:
     """Tests for the WassersteinDistance callable dataclass."""
@@ -209,10 +193,6 @@ class TestWassersteinDistance:
         assert float(wd(_dummy_trajectory())) == pytest.approx(0.0, abs=1e-12)
 
 
-# ===================================================================
-# Tests for WassersteinDistanceMapped
-# ===================================================================
-
 class TestWassersteinDistanceMapped:
     """Tests for the WassersteinDistanceMapped callable dataclass."""
 
@@ -253,8 +233,8 @@ class TestWassersteinDistanceMapped:
         )
         result = wdm(_dummy_trajectory())
         assert set(result.keys()) == {"bond_AB", "bond_CD"}
-        for key in v_map:
-            expected = float(wasserstein_1d(u_map[key], v_map[key]))
+        for key, value in v_map.items():
+            expected = float(wasserstein_1d(u_map[key], value))
             assert float(result[key]) == pytest.approx(expected, abs=1e-12)
 
     def test_with_v_weights_map(self):
@@ -313,10 +293,8 @@ class TestWassersteinDistanceMapped:
             v_distribution_map=v_map,
         )
         result = wdm(_dummy_trajectory(), weights=u_w)
-        for key in v_map:
-            expected = float(_compute_wasserstein_distance(
-                u_map[key], v_map[key], weights=u_w,
-            ))
+        for key, value in v_map.items():
+            expected = float(_compute_wasserstein_distance(u_map[key], value, weights=u_w))
             assert float(result[key]) == pytest.approx(expected, abs=1e-12)
 
     def test_identical_distributions_mapped(self):
