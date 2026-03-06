@@ -35,7 +35,8 @@ dev = [
     "ruff",
     "setuptools>=61.2",
     "setuptools_scm[toml]>=8.0",
-    "tox"
+    "tox",
+    "scipy",
 ]
 docs = [
     "sphinx",
@@ -90,6 +91,8 @@ lint.ignore = [
     "S607", # https://docs.astral.sh/ruff/rules/start-process-with-partial-path/
     # There is no way to resolve the below, so no real point
     "S603", # https://docs.astral.sh/ruff/rules/subprocess-without-shell-equals-true/
+    # too many false positives
+    "PD008", # https://docs.astral.sh/ruff/rules/pandas-use-of-dot-at/
 ]
 
 exclude = [
