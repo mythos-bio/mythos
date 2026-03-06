@@ -46,7 +46,7 @@ def _dummy_trajectory() -> SimulatorTrajectory:
     return SimulatorTrajectory(
         center=centers,
         orientation=orientations,
-        box_size=jnp.array([10.0, 10.0, 10.0]),
+        box_size=jnp.array([[10.0, 10.0, 10.0]]),
     )
 
 

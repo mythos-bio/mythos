@@ -4,14 +4,13 @@ from dataclasses import field
 
 import chex
 import jax.numpy as jnp
-from typing_extensions import override
 
 from mythos.observables.base import BaseObservable
 from mythos.simulators.io import SimulatorTrajectory
-from mythos.utils.types import Arr_N
+from mythos.utils.types import Arr_N, Scalar
 
 
-def wasserstein_1d(u: Arr_N, v: Arr_N, u_weights: Arr_N | None = None, v_weights: Arr_N | None = None) -> float:
+def wasserstein_1d(u: Arr_N, v: Arr_N, u_weights: Arr_N | None = None, v_weights: Arr_N | None = None) -> Scalar:
     """Compute the 1D Wasserstein distance between two distributions u and v."""
     u = jnp.asarray(u, dtype=jnp.float64)
     v = jnp.asarray(v, dtype=jnp.float64)
@@ -52,7 +51,7 @@ def wasserstein_1d(u: Arr_N, v: Arr_N, u_weights: Arr_N | None = None, v_weights
 
 def _compute_wasserstein_distance(
         obs_values: Arr_N, v: Arr_N, weights: Arr_N | None = None, v_weights: Arr_N | None = None
-) -> float:
+) -> Scalar:
     obs_shape = obs_values.shape
     # flatten the observable output if it's not already 1D
     obs_values = obs_values.flatten()
@@ -91,8 +90,8 @@ class WassersteinDistance:
     v_distribution: Arr_N
     v_weights: Arr_N | None = None
 
-    @override
-    def __call__(self, trajectory: SimulatorTrajectory, weights: Arr_N | None = None) -> float:
+    def __call__(self, trajectory: SimulatorTrajectory, weights: Arr_N | None = None) -> Scalar:
+        """Compute the Wasserstein distance between observable and reference distributions."""
         obs_values = self.observable(trajectory)
         return _compute_wasserstein_distance(
             obs_values,
@@ -128,8 +127,8 @@ class WassersteinDistanceMapped:
     v_distribution_map: dict[str, Arr_N]
     v_weights_map: dict[str, Arr_N | None] = field(default_factory=dict)
 
-    @override
-    def __call__(self, trajectory: SimulatorTrajectory, weights: Arr_N | None = None) -> float:
+    def __call__(self, trajectory: SimulatorTrajectory, weights: Arr_N | None = None) -> dict[str, Scalar]:
+        """Compute the Wasserstein distance between all observable and reference distributions, by key."""
         obs_values = self.observable(trajectory)
         return {
             key: _compute_wasserstein_distance(
