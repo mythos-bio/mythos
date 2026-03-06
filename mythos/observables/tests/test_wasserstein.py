@@ -98,6 +98,41 @@ class TestWasserstein1D:
         d2 = float(wasserstein_1d(v, u))
         assert d1 == pytest.approx(d2, rel=1e-10)
 
+    def test_u_weights_shape_mismatch_raises(self):
+        """ValueError when u_weights shape doesn't match u shape."""
+        u = jnp.array([1.0, 2.0, 3.0])
+        v = jnp.array([4.0, 5.0])
+        u_weights = jnp.array([0.5, 0.5])  # wrong shape for u
+        with pytest.raises(ValueError, match="u_weights must have the same shape as u"):
+            wasserstein_1d(u, v, u_weights=u_weights)
+
+    def test_v_weights_shape_mismatch_raises(self):
+        """ValueError when v_weights shape doesn't match v shape."""
+        u = jnp.array([1.0, 2.0])
+        v = jnp.array([3.0, 4.0, 5.0])
+        v_weights = jnp.array([0.5, 0.5])  # wrong shape for v
+        with pytest.raises(ValueError, match="v_weights must have the same shape as v"):
+            wasserstein_1d(u, v, v_weights=v_weights)
+
+    def test_total_mass_mismatch_raises(self):
+        """ValueError when u_weights and v_weights sum to different totals."""
+        u = jnp.array([1.0, 2.0])
+        v = jnp.array([3.0, 4.0])
+        u_weights = jnp.array([0.3, 0.7])  # sums to 1.0
+        v_weights = jnp.array([0.2, 0.2])  # sums to 0.4
+        with pytest.raises(ValueError, match="must sum to the same total mass"):
+            wasserstein_1d(u, v, u_weights=u_weights, v_weights=v_weights)
+
+    def test_matching_total_mass_does_not_raise(self):
+        """No error when u_weights and v_weights sum to the same total."""
+        u = jnp.array([1.0, 2.0])
+        v = jnp.array([3.0, 4.0, 5.0])
+        u_weights = jnp.array([0.3, 0.7])
+        v_weights = jnp.array([0.4, 0.4, 0.2])
+        # Should not raise — both sum to 1.0
+        result = wasserstein_1d(u, v, u_weights=u_weights, v_weights=v_weights)
+        assert result >= 0.0
+
 
 class TestComputeWassersteinDistance:
     """Tests for the internal _compute_wasserstein_distance helper."""
