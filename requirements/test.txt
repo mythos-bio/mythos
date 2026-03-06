@@ -3,3 +3,4 @@ ruff==0.4.2
 pytest==8.2.0
 pytest-cov==5.0.0
 pytest-xdist==3.6.1
+scipy==1.17.1
