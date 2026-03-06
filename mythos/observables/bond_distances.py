@@ -74,6 +74,3 @@ class BondDistances:
             result[bond_name] = distances
 
         return result
-
-
-
