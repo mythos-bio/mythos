@@ -1,5 +1,7 @@
 """Observable for computing angles between atom triplets from a Martini trajectory."""
 
+from collections.abc import Callable
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -11,7 +13,7 @@ from mythos.utils.types import Arr_N
 
 
 def _triplet_angle(
-    centers: jnp.ndarray, triplet: jnp.ndarray, displacement_fn: callable
+    centers: jnp.ndarray, triplet: jnp.ndarray, displacement_fn: Callable
 ) -> float:
     """Compute the angle (in radians) at the central atom of a triplet.
 
@@ -51,7 +53,7 @@ class TripletAngles:
 
     topology: MartiniTopology
     angle_names: tuple[str, ...]
-    displacement_fn: callable = get_periodic
+    displacement_fn: Callable = get_periodic
 
     def _matching_triplets(self, angle_name: str) -> jnp.ndarray:
         """Return topology angle rows whose derived name matches *angle_name*.

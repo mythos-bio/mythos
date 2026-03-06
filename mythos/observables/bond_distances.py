@@ -1,5 +1,7 @@
 """Observable for computing bond distances from a Martini trajectory."""
 
+from collections.abc import Callable
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -10,7 +12,7 @@ from mythos.simulators.io import SimulatorTrajectory
 from mythos.utils.types import Arr_N
 
 
-def _bond_distance(centers: jnp.ndarray, pair: jnp.ndarray, displacement_fn: callable) -> float:
+def _bond_distance(centers: jnp.ndarray, pair: jnp.ndarray, displacement_fn: Callable) -> float:
     """Compute the distance between a bonded pair of atoms."""
     return space.distance(displacement_fn(centers[pair[0]], centers[pair[1]]))
 
@@ -34,7 +36,7 @@ class BondDistances:
 
     topology: MartiniTopology
     bond_names: tuple[str, ...]
-    displacement_fn: callable = get_periodic
+    displacement_fn: Callable = get_periodic
 
     def _matching_pairs(self, bond_name: str) -> jnp.ndarray:
         all_names = self.topology.bond_names
