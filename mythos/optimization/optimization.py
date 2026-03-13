@@ -8,6 +8,8 @@ from dataclasses import field
 from typing import Any
 
 import chex
+import jax
+import jax.numpy as jnp
 import optax
 import ray
 from ray import ObjectRef as RayRef

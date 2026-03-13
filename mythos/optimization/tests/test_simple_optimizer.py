@@ -366,7 +366,7 @@ class TestSimpleOptimizerErrorHandling:
         class NaNGradObjective(jdna_objective.Objective):
             bad_value: float
 
-            def calculate(self, observables, opt_params, **_kwargs):
+            def calculate(self, _observables, opt_params, **_kwargs):
                 grads = {k: jnp.full_like(v, self.bad_value) for k, v in opt_params.items()}
                 return jdna_objective.ObjectiveOutput(
                     is_ready=True,
