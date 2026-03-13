@@ -143,7 +143,7 @@ class Optimizer(ABC):
 
             grad_leaves = jax.tree.leaves(output.grads)
             if any(jnp.any(~jnp.isfinite(leaf)) for leaf in grad_leaves):
-                raise RuntimeError(f"NaN or Inf detected in gradients at step {step}.")
+                raise RuntimeError(f"NaN or Inf detected in gradients at step {step}. Is your learning rate too high?")
 
             params = output.opt_params
             state = output.state
