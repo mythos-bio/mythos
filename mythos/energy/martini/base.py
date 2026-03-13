@@ -1,6 +1,5 @@
 """Common Martini Energy Utilities."""
 
-import itertools
 from pathlib import Path
 
 import chex
@@ -29,34 +28,20 @@ class MartiniTopology:
     Attributes:
         atom_types: A tuple of atom type names.
         atom_names: A tuple of atom names.
+        residue_names: A tuple of residue names.
         angles: An array of shape (n_angles, 3) containing the indices of the
             atoms involved in each angle.
         bonded_neighbors: An array of shape (n_bonds, 2) containing the indices
             of the bonded pairs of atoms.
-        unbonded_neighbors: An array of shape (n_unbonded, 2) containing the indices
-            of the unbonded pairs of atoms. If not supplied, it will be computed
-            as all pairs of atoms that are not bonded.
     """
     atom_types: tuple[str, ...]
     atom_names: tuple[str, ...]
     residue_names: tuple[str, ...]
     angles: Arr_N
     bonded_neighbors: Arr_N
-    unbonded_neighbors: Arr_N | None = None
-
-    @override
-    def __post_init__(self) -> None:
-        if self.unbonded_neighbors is None:
-            n_atoms = len(self.atom_types)
-            all_pairs = set(itertools.combinations(range(n_atoms), 2))
-            bonded_pairs = {tuple(sorted(pair)) for pair in self.bonded_neighbors.tolist()}
-            unbonded_pairs = all_pairs - bonded_pairs
-            object.__setattr__(self, "unbonded_neighbors", jnp.array(list(unbonded_pairs)))
 
     @classmethod
-    def from_universe(
-        cls, universe: MDAnalysis.Universe, unbonded_neighbors: jnp.ndarray | None = None
-    ) -> "MartiniTopology":
+    def from_universe(cls, universe: MDAnalysis.Universe) -> "MartiniTopology":
         """Create a MartiniTopology from a Universe object."""
         return cls(
             atom_types = tuple(universe.atoms.types),
@@ -64,14 +49,13 @@ class MartiniTopology:
             residue_names = tuple(universe.atoms.resnames),
             angles = jnp.array(universe.angles.indices),
             bonded_neighbors = jnp.array(universe.bonds.indices),
-            unbonded_neighbors = unbonded_neighbors,
         )
 
     @classmethod
-    def from_tpr(cls, tpr_file: Path, unbonded_neighbors: jnp.ndarray | None = None) -> "MartiniTopology":
+    def from_tpr(cls, tpr_file: Path) -> "MartiniTopology":
         """Create a MartiniTopology from a TPR format topology file."""
         universe = MDAnalysis.Universe(tpr_file)
-        return cls.from_universe(universe, unbonded_neighbors=unbonded_neighbors)
+        return cls.from_universe(universe)
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -84,6 +68,11 @@ class MartiniEnergyFunction(BaseEnergyFunction):
     angles: Arr_N
     displacement_fn: callable = get_periodic
 
+    @override
+    def __post_init__(self, topology: None = None) -> None:
+        if self.unbonded_neighbors is not None:
+            raise ValueError("MartiniEnergyFunction does not support user-input unbonded_neighbors.")
+
     @classmethod
     def from_topology(cls, topology: MartiniTopology, **kwargs) -> "MartiniEnergyFunction":
         """Create an energy function from a MartiniTopology."""
@@ -93,7 +82,6 @@ class MartiniEnergyFunction(BaseEnergyFunction):
             residue_names=topology.residue_names,
             angles=topology.angles,
             bonded_neighbors=topology.bonded_neighbors,
-            unbonded_neighbors=topology.unbonded_neighbors,
             **kwargs
         )
 

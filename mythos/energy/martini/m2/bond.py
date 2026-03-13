@@ -52,6 +52,7 @@ class Bond(MartiniEnergyFunction):
 
     @override
     def __post_init__(self, topology: None = None) -> None:
+        MartiniEnergyFunction.__post_init__(self)
         # cache parameters mapped to bonds by indices. The result is arrays of
         # len(bonded_neighbors) where each element corresponds to the k or r0 for that bond.
         k = [self.params[BOND_K_PREFIX + name] for name in self.bond_names]

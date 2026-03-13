@@ -241,6 +241,8 @@ class DiffTReObjective(Objective):
             raise ValueError(
                 f"n_equilibration_steps must be non-negative, got {self.n_equilibration_steps}."
             )
+        if self.max_valid_opt_steps <= 0:
+            raise ValueError("max_valid_opt_steps must be positive or infinity.")
 
     def calculate(
         self,
@@ -253,10 +255,6 @@ class DiffTReObjective(Objective):
 
         Args:
             observables: Dictionary mapping observable names to their values.
-            metadata: State from previous calculate call containing:
-                - reference_opt_params: Optimization parameters used to compute
-                    reference energies.
-                - opt_steps: Current optimization step count
             opt_params: Current optimization parameters for energy computation.
             opt_steps: Current optimization step count.
             reference_opt_params: Optimization parameters used to compute
@@ -265,6 +263,15 @@ class DiffTReObjective(Objective):
         Returns:
             ObjectiveOutput with gradients and updated metadata.
         """
+        # Short-circuit: if we've exceeded max optimization steps, request
+        # a new trajectory immediately without any computation.
+        if opt_steps >= self.max_valid_opt_steps:
+            return ObjectiveOutput(
+                is_ready=False,
+                needs_update=tuple(self.required_observables),
+                state={"opt_steps": 0},
+            )
+
         # Check if all required observables are present
         missing = [obs for obs in self.required_observables if obs not in observables]
         if missing:
@@ -303,9 +310,8 @@ class DiffTReObjective(Objective):
             ref_energies=reference_energies,
         )
 
-        # Check if trajectory needs to be recomputed
-        trajectory_invalid = (neff < self.min_n_eff_factor) or (opt_steps >= self.max_valid_opt_steps)
-        if trajectory_invalid:
+        # check if trajectory needs recomputation due to low effective sample size
+        if neff < self.min_n_eff_factor:
             return ObjectiveOutput(
                 is_ready=False,
                 needs_update=tuple(self.required_observables),
@@ -336,7 +342,7 @@ class DiffTReObjective(Objective):
             grads=grads,
             observables=output_observables,
             state={
-                "opt_steps": opt_steps,
+                "opt_steps": opt_steps + 1,
                 "reference_opt_params": reference_opt_params,
             },
         )

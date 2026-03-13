@@ -71,6 +71,20 @@ def test_objective_init_raises(
         )
 
 
+@pytest.mark.parametrize("max_valid_opt_steps", [0, -1, -10])
+def test_difftre_objective_init_raises_when_n_opt_steps_non_positive(max_valid_opt_steps: int) -> None:
+    with pytest.raises(ValueError, match="max_valid_opt_steps must be positive or infinity."):
+        o.DiffTReObjective(
+            name="test",
+            required_observables=("a",),
+            logging_observables=(),
+            grad_or_loss_fn=lambda x: (x, []),
+            energy_fn=1,
+            beta=1.0,
+            max_valid_opt_steps=max_valid_opt_steps,
+        )
+
+
 def test_objective_required_observables() -> None:
     """Test the required_observables property of Objective."""
     obj = o.Objective(
@@ -325,6 +339,7 @@ def test_difftreobjective_compute() -> None:
     assert output.is_ready
     assert output.grads == expected_grad
     assert output.needs_update == ()
+    assert output.state["opt_steps"] == 2  # incremented from input of 1
 
 
 def test_difftreobjective_compute_returns_needs_update_when_missing() -> None:
@@ -376,10 +391,36 @@ def test_difftreobjective_state_preserved() -> None:
 
     output = obj.calculate(observables, **state, opt_params=opt_params)
 
-    # Output state should contain reference_states and reference_energies
+    # Output state should contain reference_opt_params and incremented opt_steps
     assert output.is_ready
     assert "reference_opt_params" in output.state
     assert output.state["reference_opt_params"] is not None
+    assert output.state["opt_steps"] == 2  # incremented from input of 1
+
+
+def test_difftreobjective_opt_steps_short_circuits() -> None:
+    """Test that exceeding max_valid_opt_steps returns immediately without computation."""
+    obj = o.DiffTReObjective(
+        name="test",
+        required_observables=("test",),
+        logging_observables=(),
+        grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
+        energy_fn=make_mock_energy_fn(jnp.ones(100)),
+        beta=1.0,
+        n_equilibration_steps=10,
+        max_valid_opt_steps=5,
+    )
+
+    # We don't even need valid observables — the opt_steps gate fires first
+    observables = {"test": "not_a_trajectory"}
+    opt_params = {"test": 1.0}
+
+    output = obj.calculate(observables, opt_params=opt_params, opt_steps=5)
+
+    assert not output.is_ready
+    assert output.needs_update == ("test",)
+    assert output.state["opt_steps"] == 0
+    assert output.grads is None
 
 
 def test_difftreobjective_raises_when_equilibration_exceeds_trajectory() -> None:
