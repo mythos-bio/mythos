@@ -182,7 +182,7 @@ def _merge_metadata(
     if all(not m for m in metadata_list):
         return None
     dicts = [m or {} for m in metadata_list]
-    for key in set(k for d in dicts for k in d):
+    for key in {k for d in dicts for k in d}:
         # Collect present entries to validate shape consistency and determine fill shape
         present = [d[key] for d in dicts if key in d]
         shape = present[0].shape[1:]
