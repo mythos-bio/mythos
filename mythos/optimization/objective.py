@@ -4,9 +4,7 @@ Objectives are immutable dataclasses that compute gradients from observables.
 State is passed through the compute method and returned in the ObjectiveOutput.
 """
 
-import functools
 import math
-import operator
 import types
 import typing
 from collections.abc import Callable
@@ -239,6 +237,10 @@ class DiffTReObjective(Objective):
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="beta"))
         if self.n_equilibration_steps is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="n_equilibration_steps"))
+        if self.n_equilibration_steps < 0:
+            raise ValueError(
+                f"n_equilibration_steps must be non-negative, got {self.n_equilibration_steps}."
+            )
         if self.max_valid_opt_steps <= 0:
             raise ValueError("max_valid_opt_steps must be positive or infinity.")
 
@@ -285,10 +287,12 @@ class DiffTReObjective(Objective):
         if not trajectories:
             raise ValueError("No SimulatorTrajectory observables found in observables.")
 
-        def slc_f(n: int) -> slice:
-            return slice(self.n_equilibration_steps, n, None)
+        if self.n_equilibration_steps > 0:
+            def slc_f(n: int) -> slice:
+                return slice(self.n_equilibration_steps, n, None)
+            trajectories = [obs.slice(slc_f(obs.length())) for obs in trajectories]
 
-        reference_states = functools.reduce(operator.add, [obs.slice(slc_f(obs.length())) for obs in trajectories])
+        reference_states = SimulatorTrajectory.concat(trajectories)
         if reference_states.length() == 0:
             raise ValueError(
                 "Equilibration slicing yields no states! Note slicing is in number of snapshots, not timesteps."
