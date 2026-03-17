@@ -24,7 +24,6 @@ def _make_topology(
         residue_names=residue_names,
         angles=angles,
         bonded_neighbors=jnp.zeros((0, 2), dtype=jnp.int32),
-        unbonded_neighbors=jnp.zeros((0, 2), dtype=jnp.int32),
     )
 
 
