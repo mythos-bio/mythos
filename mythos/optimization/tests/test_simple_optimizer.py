@@ -357,3 +357,39 @@ class TestSimpleOptimizerErrorHandling:
 
         with pytest.raises(ValueError, match="Objective readiness check failed"):
             simple_opt.step(params)
+
+    @pytest.mark.parametrize("bad_value", [jnp.nan, jnp.inf, -jnp.inf])
+    def test_run_raises_on_non_finite_gradients(self, bad_value):
+        """Test that run raises RuntimeError if gradients contain NaN or Inf."""
+
+        @chex.dataclass(frozen=True, kw_only=True)
+        class NaNGradObjective(jdna_objective.Objective):
+            bad_value: float
+
+            def calculate(self, _observables, opt_params, **_kwargs):
+                grads = {k: jnp.full_like(v, self.bad_value) for k, v in opt_params.items()}
+                return jdna_objective.ObjectiveOutput(
+                    is_ready=True,
+                    grads=grads,
+                    observables={"total": jnp.array(0.0)},
+                )
+
+        objective = NaNGradObjective(
+            name="test",
+            required_observables=("traj",),
+            grad_or_loss_fn=lambda x: x,
+            bad_value=bad_value,
+        )
+        simulator = MockSimulator(return_observables=[jnp.array([1.0])])
+        optimizer = optax.sgd(0.01)
+
+        simple_opt = opt.SimpleOptimizer(
+            objective=objective,
+            simulator=simulator,
+            optimizer=optimizer,
+        )
+
+        params = {"param": jnp.array(1.0)}
+
+        with pytest.raises(RuntimeError, match="NaN or Inf detected in gradients at step 0"):
+            simple_opt.run(params, n_steps=3)

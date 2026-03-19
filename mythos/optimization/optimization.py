@@ -8,6 +8,8 @@ from dataclasses import field
 from typing import Any
 
 import chex
+import jax
+import jax.numpy as jnp
 import optax
 import ray
 from ray import ObjectRef as RayRef
@@ -103,6 +105,11 @@ class Optimizer(ABC):
         is not None, it will replace the output of the step function (prior to
         logging observables).
 
+        Additionally, if at the end of a step, any gradient contains NaN or Inf
+        values, a RuntimeError is raised to prevent silent failures. Users can
+        either use the callback mechanism or compose their optimizer in such a
+        way to handle NaN/Inf values as desired.
+
         Args:
             params: The initial parameters for optimization.
             n_steps: The number of optimization steps to run.
@@ -133,6 +140,10 @@ class Optimizer(ABC):
             if not keep_going:
                 LOGGER.info("Early stopping optimization at step %s based on callback signal.", step)
                 break
+
+            grad_leaves = jax.tree.leaves(output.grads)
+            if any(jnp.any(~jnp.isfinite(leaf)) for leaf in grad_leaves):
+                raise RuntimeError(f"NaN or Inf detected in gradients at step {step}. Is your learning rate too high?")
 
             params = output.opt_params
             state = output.state
