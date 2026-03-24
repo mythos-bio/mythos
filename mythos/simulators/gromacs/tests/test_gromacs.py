@@ -224,8 +224,8 @@ class TestGromacsSimulatorRun:
         ):
             sim.run(seed=test_seed)
 
-        assert f"gen-seed = {test_seed}" not in mdp_content["before"]
-        assert f"gen-seed = {test_seed}" in mdp_content["after"]
+        assert f"gen_seed = {test_seed}" not in mdp_content["before"]
+        assert f"gen_seed = {test_seed}" in mdp_content["after"]
 
     def test_run_no_binary_raises(self, gromacs_input_dir: Path, mock_energy_fn) -> None:
         """Test that run() raises FileNotFoundError when GROMACS binary is missing."""

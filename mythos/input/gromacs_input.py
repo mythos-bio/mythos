@@ -81,6 +81,7 @@ def read_mdp(input_file: Path) -> dict[str, str | float | int | bool]:
             # Handle key = value format
             if "=" in line:
                 key, str_value = (v.strip() for v in line.split("=", 1))
+                key = key.replace("-", "_")  # equivalent in GROMACS
                 parsed[key] = _parse_value(str_value)
 
     return parsed
@@ -120,7 +121,7 @@ def update_mdp_params(mdp_file: Path, params: dict, out_file: Path | None = None
             overwrites the original file.
     """
     config = read_mdp(mdp_file)
-    config.update(params)
+    config.update({k.replace("-", "_"): v for k, v in params.items()})
     out_file = out_file or mdp_file
     write_mdp(config, out_file)
 
