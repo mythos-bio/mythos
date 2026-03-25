@@ -164,12 +164,7 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
         t_value = input_config.get("T")
         if t_value is None:
             return None
-        if isinstance(t_value, str):
-            return get_kt_from_string(t_value)
-        # Bare numeric value — the oxDNA writer appends "K", so floats
-        # coming from the parser or from input_overrides are Kelvin.
-        return float(get_kt(t_value))
-
+        return get_kt_from_string(t_value)
 
     def build(self, *, input_dir: Path, new_params: Params, input_config: dict|None = None) -> None:
         """Update the simulation.
