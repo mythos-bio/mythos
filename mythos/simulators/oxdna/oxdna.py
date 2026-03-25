@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import Any, ClassVar
 
 import chex
+import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 from typing_extensions import override
@@ -22,6 +23,7 @@ from mythos.energy.base import EnergyFunction
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.utils.helpers import run_command
 from mythos.utils.types import Params
+from mythos.utils.units import get_kt, get_kt_from_string
 
 ERR_OXDNA_NOT_FOUND = "OXDNA binary not found at: {}"
 ERR_MISSING_REQUIRED_KEYS = "Missing required keys: {}"
@@ -140,17 +142,33 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
         run_command(cmd, cwd=input_dir, log_prefix="oxdna")
         logger.info("oxDNA simulation complete")
 
-        return SimulatorOutput(observables=[self._read_trajectory(input_dir)])
+        return SimulatorOutput(observables=[self._read_trajectory(input_dir, input_config)])
 
 
-    def _read_trajectory(self, input_dir: Path) -> jd_sio.SimulatorTrajectory:
+    def _read_trajectory(self, input_dir: Path, input_config: dict) -> jd_sio.SimulatorTrajectory:
         trajectory = oxdna_utils.read_output_trajectory(input_file=input_dir / "input")
 
         logger.debug("oxDNA trajectory com size: %s", trajectory.state_rigid_body.center.shape)
 
+        kt = self._extract_kt(input_config)
+        n_states = trajectory.state_rigid_body.center.shape[0]
+        temperature = jnp.full(n_states, kt) if kt is not None else None
+
         return jd_sio.SimulatorTrajectory.from_rigid_body(
             trajectory.state_rigid_body,
+            temperature=temperature,
         )
+
+    @staticmethod
+    def _extract_kt(input_config: dict) -> float | None:
+        t_value = input_config.get("T")
+        if t_value is None:
+            return None
+        if isinstance(t_value, str):
+            return get_kt_from_string(t_value)
+        # Bare numeric value — the oxDNA writer appends "K", so floats
+        # coming from the parser or from input_overrides are Kelvin.
+        return float(get_kt(t_value))
 
 
     def build(self, *, input_dir: Path, new_params: Params, input_config: dict|None = None) -> None:

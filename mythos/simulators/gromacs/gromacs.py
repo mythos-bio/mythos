@@ -7,10 +7,11 @@ from pathlib import Path
 from typing import Any
 
 import chex
+import jax.numpy as jnp
 import numpy as np
 
 from mythos.energy.base import EnergyFunction
-from mythos.input.gromacs_input import replace_params_in_topology, update_mdp_params
+from mythos.input.gromacs_input import read_mdp, replace_params_in_topology, update_mdp_params
 from mythos.simulators import io as jd_sio
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.simulators.gromacs import utils as gromacs_utils
@@ -18,6 +19,7 @@ from mythos.utils.helpers import run_command
 
 PREPROCESSED_TOPOLOGY_FILE = "_pp_topol.top"
 OUTPUT_PREFIX = "output"
+KB = 0.0083144621  # Boltzmann constant in kJ/(mol·K)
 
 logger = logging.getLogger(__name__)
 
@@ -39,8 +41,9 @@ class GromacsSimulator(InputDirSimulator):
         topology_file: Name of the topology file (e.g., .top). Parameters from
             the energy function will be written to this file.
         trajectory_file: Name of the output trajectory file (e.g., .xtc, .trr).
-        structure_file: Name of the structure/coordinate file (e.g., .gro, .pdb).
-        binary_path: Path to the GROMACS binary. If not provided, will search
+        structure_file: Name of the structure/coordinate file (e.g., .gro,
+        .pdb). binary_path: Path to the GROMACS binary. If not provided, will
+        search
             for 'gmx' in PATH.
         input_overrides: Key-value pairs to override in the .mdp input file.
         overwrite_input: Whether to overwrite the input directory or copy it.
@@ -121,7 +124,11 @@ class GromacsSimulator(InputDirSimulator):
         )
         logger.info("GROMACS simulation complete.")
 
-        return SimulatorOutput(observables=[self._read_trajectory(input_dir)])
+        # Extract reference temperature from the production MDP (after overrides)
+        prod_mdp = read_mdp(input_dir / f"production_{self.mdp_file}")
+        ref_t = prod_mdp.get("ref-t") or prod_mdp.get("ref_t")
+
+        return SimulatorOutput(observables=[self._read_trajectory(input_dir, ref_t=ref_t)])
 
     def _run_simulation_step(
             self, structure_file: str, overrides: dict[str, Any], input_dir: Path, step: str
@@ -157,14 +164,19 @@ class GromacsSimulator(InputDirSimulator):
             )
         run_command([gmx_binary, *cmd], cwd=cwd, log_prefix=log_prefix)
 
-
-    def _read_trajectory(self, input_dir: Path) -> jd_sio.SimulatorTrajectory:
+    def _read_trajectory(self, input_dir: Path, ref_t: float | None = None) -> jd_sio.SimulatorTrajectory:
         trajectory = gromacs_utils.read_trajectory_mdanalysis(
             topology_file=input_dir / f"{OUTPUT_PREFIX}.tpr",
             trajectory_file=input_dir / f"{OUTPUT_PREFIX}.trr",
         )
 
         logger.debug("GROMACS trajectory size: %s", trajectory.length())
+
+        if ref_t is not None:
+            kt = KB * float(ref_t)
+            trajectory = trajectory.replace(
+                temperature=jnp.full(trajectory.length(), kt),
+            )
 
         return trajectory
 

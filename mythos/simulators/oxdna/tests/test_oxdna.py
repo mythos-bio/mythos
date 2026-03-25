@@ -291,7 +291,8 @@ def test_oxdna_simulator_trajectory_read(monkeypatch, tmp_path) -> None:
         energy_fn=1,
         binary_path="echo",
     )
-    traj = sim._read_trajectory(tmp_path)
+    input_config = oxdna_input.read(tmp_path / "input")
+    traj = sim._read_trajectory(tmp_path, input_config)
     assert isinstance(traj, SimulatorTrajectory)
     assert traj.center.shape == (100, 16, 3)
 
