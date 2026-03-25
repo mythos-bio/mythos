@@ -302,6 +302,42 @@ def test_oxdna_simulator_trajectory_read(monkeypatch, tmp_path) -> None:
     assert isinstance(output.observables[0], SimulatorTrajectory)
 
 
+@pytest.mark.parametrize(
+    ("t_value", "expected_kt"),
+    [
+        ("300K", 0.1),
+        ("296.15K", 0.09871666666666666),
+    ],
+)
+def test_oxdna_trajectory_has_temperature(monkeypatch, tmp_path, t_value, expected_kt) -> None:
+    """Temperature field is populated from the oxDNA input config."""
+    test_dir = importlib.resources.files("mythos").parent / "data" / "test-data" / "simple-helix"
+    shutil.copytree(test_dir, tmp_path, dirs_exist_ok=True)
+
+    # Rewrite the input file with the desired T value
+    input_path = tmp_path / "input"
+    lines = input_path.read_text().splitlines()
+    lines = [ln for ln in lines if not ln.startswith("T=")]
+    lines.append(f"T={t_value}")
+    input_path.write_text("\n".join(lines))
+
+    def copy_traj():
+        shutil.copyfile(test_dir / "output.dat", tmp_path / "output.dat")
+    monkeypatch.setattr(subprocess, "check_call", lambda *_a, **_kw: copy_traj())
+
+    sim = oxdna.oxDNASimulator(
+        input_dir=tmp_path,
+        overwrite_input=True,
+        energy_fn=1,
+        binary_path="echo",
+    )
+    output = sim.run()
+    traj = output.observables[0]
+    assert traj.temperature is not None
+    assert traj.temperature.shape == (traj.length(),)
+    np.testing.assert_allclose(float(traj.temperature[0]), expected_kt, rtol=1e-5)
+
+
 def setup_umbrella_test_dir(
         test_dir: Path, umbrella_sampling: int = 1, *, include_keys: bool = True, num_order_params: int = 1
     ) -> None:

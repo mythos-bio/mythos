@@ -36,15 +36,14 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
             run. These variables must already be defined in the input file using
             a command of the form "variable name equal value".
         temperature_variable: Name of the LAMMPS variable that holds the
-            simulation temperature in reduced units (kT). When set, the
-            variable's value is read from the ``variables`` dict and stamped
-            on the output trajectory. If ``None``, the trajectory will have
-            ``temperature=None``.
+            simulation temperature in reduced units (kT). When the corresponding
+            variable is set, it is used to populate the temperature field of the
+            output trajectory.
     """
     energy_fn: EnergyFunction
     input_file_name: str = "input"
     variables: dict[str, Any] = field(default_factory=dict)
-    temperature_variable: str | None = None
+    temperature_variable: str = "kt"
 
     @override
     def __post_init__(self) -> None:
@@ -58,10 +57,9 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
         traj = _read_lammps_output(input_dir.joinpath("trajectory.dat"))
 
         temperature = None
-        if self.temperature_variable is not None:
-            kt = float(self.variables[self.temperature_variable])
+        if (kt := self.variables.get(self.temperature_variable)) is not None:
             n_states = traj.state_rigid_body.center.shape[0]
-            temperature = jnp.full(n_states, kt)
+            temperature = jnp.full(n_states, float(kt))
 
         return SimulatorOutput(
             observables=[SimulatorTrajectory.from_rigid_body(

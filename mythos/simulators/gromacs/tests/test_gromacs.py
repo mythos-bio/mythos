@@ -4,8 +4,9 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
-from mythos.simulators.gromacs.gromacs import PREPROCESSED_TOPOLOGY_FILE, GromacsSimulator
+from mythos.simulators.gromacs.gromacs import KB, PREPROCESSED_TOPOLOGY_FILE, GromacsSimulator
 from mythos.simulators.io import SimulatorTrajectory
 
 # Test data directory
@@ -464,6 +465,30 @@ class TestGromacsSimulatorTrajectory:
         # Verify frames and atoms match
         assert center.shape[0] == orientation.shape[0]  # Same number of frames
         assert center.shape[1] == orientation.shape[1]  # Same number of atoms
+
+    @pytest.mark.parametrize("ref_t", [300.0, 350.0])
+    def test_trajectory_has_temperature_from_ref_t(self, gromacs_input_dir: Path, mock_energy_fn, ref_t) -> None:
+        """Temperature field is populated from ref-t in the MDP."""
+        shutil.copy(TEST_DATA_DIR / "output.tpr", gromacs_input_dir / "output.tpr")
+        shutil.copy(TEST_DATA_DIR / "output.trr", gromacs_input_dir / "output.trr")
+
+        sim = GromacsSimulator(input_dir=gromacs_input_dir, energy_fn=mock_energy_fn)
+        trajectory = sim._read_trajectory(gromacs_input_dir, ref_t=ref_t)
+
+        assert trajectory.temperature is not None
+        assert trajectory.temperature.shape == (trajectory.length(),)
+        expected_kt = KB * ref_t
+        np.testing.assert_allclose(trajectory.temperature, expected_kt)
+
+    def test_trajectory_temperature_none_when_no_ref_t(self, gromacs_input_dir: Path, mock_energy_fn) -> None:
+        """Temperature is None when ref_t is not provided."""
+        shutil.copy(TEST_DATA_DIR / "output.tpr", gromacs_input_dir / "output.tpr")
+        shutil.copy(TEST_DATA_DIR / "output.trr", gromacs_input_dir / "output.trr")
+
+        sim = GromacsSimulator(input_dir=gromacs_input_dir, energy_fn=mock_energy_fn)
+        trajectory = sim._read_trajectory(gromacs_input_dir)
+
+        assert trajectory.temperature is None
 
 
 class TestUpdateTopologyParams:
