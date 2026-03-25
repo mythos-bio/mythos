@@ -338,6 +338,21 @@ def test_oxdna_trajectory_has_temperature(monkeypatch, tmp_path, t_value, expect
     np.testing.assert_allclose(float(traj.temperature[0]), expected_kt, rtol=1e-5)
 
 
+@pytest.mark.parametrize(
+    ("input_config", "expected"),
+    [
+        ({}, None),
+        ({"T": "300K"}, 0.1),
+    ],
+)
+def test_extract_kt(input_config, expected):
+    result = oxdna.oxDNASimulator._extract_kt(input_config)
+    if expected is None:
+        assert result is None
+    else:
+        np.testing.assert_allclose(result, expected, rtol=1e-5)
+
+
 def setup_umbrella_test_dir(
         test_dir: Path, umbrella_sampling: int = 1, *, include_keys: bool = True, num_order_params: int = 1
     ) -> None:
