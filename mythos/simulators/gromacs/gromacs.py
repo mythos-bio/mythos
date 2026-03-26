@@ -15,7 +15,7 @@ from mythos.input.gromacs_input import read_mdp, replace_params_in_topology, upd
 from mythos.simulators import io as jd_sio
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.simulators.gromacs import utils as gromacs_utils
-from mythos.utils.helpers import run_command
+from mythos.utils.helpers import run_command, try_to_float
 
 PREPROCESSED_TOPOLOGY_FILE = "_pp_topol.top"
 OUTPUT_PREFIX = "output"
@@ -42,8 +42,8 @@ class GromacsSimulator(InputDirSimulator):
             the energy function will be written to this file.
         trajectory_file: Name of the output trajectory file (e.g., .xtc, .trr).
         structure_file: Name of the structure/coordinate file (e.g., .gro,
-        .pdb). binary_path: Path to the GROMACS binary. If not provided, will
-        search
+        .pdb).
+        binary_path: Path to the GROMACS binary. If not provided, will search
             for 'gmx' in PATH.
         input_overrides: Key-value pairs to override in the .mdp input file.
         overwrite_input: Whether to overwrite the input directory or copy it.
@@ -126,7 +126,7 @@ class GromacsSimulator(InputDirSimulator):
 
         # Extract reference temperature from the production MDP (after overrides)
         prod_mdp = read_mdp(input_dir / f"production_{self.mdp_file}")
-        ref_t = prod_mdp.get("ref-t") or prod_mdp.get("ref_t")
+        ref_t = try_to_float(prod_mdp.get("ref-t") or prod_mdp.get("ref_t"))
 
         return SimulatorOutput(observables=[self._read_trajectory(input_dir, ref_t=ref_t)])
 
@@ -173,7 +173,7 @@ class GromacsSimulator(InputDirSimulator):
         logger.debug("GROMACS trajectory size: %s", trajectory.length())
 
         if ref_t is not None:
-            kt = KB * float(ref_t)
+            kt = KB * ref_t
             trajectory = trajectory.replace(
                 temperature=jnp.full(trajectory.length(), kt),
             )

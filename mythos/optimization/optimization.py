@@ -1,6 +1,5 @@
 """Runs an optimization loop using Ray actors for objectives and simulators."""
 
-import contextlib
 import logging
 from abc import ABC, abstractmethod
 from collections.abc import Callable
@@ -18,6 +17,7 @@ from typing_extensions import override
 from mythos.optimization.objective import Objective, ObjectiveOutput
 from mythos.simulators.base import Simulator
 from mythos.ui.loggers import logger as jdna_logger
+from mythos.utils.helpers import try_to_float
 from mythos.utils.scheduler import SchedulerUnit
 from mythos.utils.types import Grads, Params
 
@@ -69,12 +69,6 @@ class OptimizerOutput:
     opt_params: Params
     state: OptimizerState
     observables: dict[str, dict[str, Any]] = field(default_factory=dict)
-
-
-def _try_to_float(value: Any) -> float | None:
-    with contextlib.suppress(Exception):
-        return float(value)
-    return None
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -134,7 +128,7 @@ class Optimizer(ABC):
 
             for component, obs in output.observables.items():
                 for obs_name, value in obs.items():
-                    if (value := _try_to_float(value)) is not None:
+                    if (value := try_to_float(value)) is not None:
                         self.logger.log_metric(f"{component}.{obs_name}", value, step=step)
 
             if not keep_going:

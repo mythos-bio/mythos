@@ -430,6 +430,48 @@ class TestGromacsSimulatorRun:
         prod_mdp = mdp_contents["production_md.mdp"]
         assert f"nsteps = {sim_steps}" in prod_mdp
 
+    @pytest.mark.parametrize(
+        ("ref_t_str", "expected_kt"),
+        [
+            ("300", KB * 300.0),
+            ("300 310", None),  # multi-group: can't convert to float
+        ],
+    )
+    def test_ref_t_temperature_parsing(
+        self,
+        gromacs_input_dir: Path,
+        mock_energy_fn,
+        mock_subprocess_and_copy_outputs,
+        ref_t_str: str,
+        expected_kt: float | None,
+    ) -> None:
+        """ref-t is parsed to kB*T when a single value, or None for space-separated multi-group values."""
+        mdp_content = f"""; MDP file
+integrator = md
+dt = 0.002
+nsteps = 100
+ref-t = {ref_t_str}
+"""
+        (gromacs_input_dir / "md.mdp").write_text(mdp_content)
+
+        sim = GromacsSimulator(
+            input_dir=gromacs_input_dir,
+            energy_fn=mock_energy_fn,
+            binary_path="gmx",
+        )
+
+        with (
+            patch("subprocess.check_call", side_effect=mock_subprocess_and_copy_outputs),
+            patch.object(GromacsSimulator, "_update_topology_params"),
+        ):
+            result = sim.run(seed=42)
+
+        trajectory = result.observables[0]
+        if expected_kt is None:
+            assert trajectory.temperature is None
+        else:
+            np.testing.assert_allclose(trajectory.temperature, expected_kt)
+
 
 class TestGromacsSimulatorTrajectory:
     """Tests for trajectory reading functionality."""

@@ -1,5 +1,6 @@
 """Helper functions for the mythos package."""
 
+import contextlib
 import itertools
 import subprocess
 import sys
@@ -86,3 +87,10 @@ def run_command(cmd: list[str], cwd: Path, log_prefix: str = "command-output", e
             f"  Last {err_tail_lines} lines of stdout:\n{out_lines}\n"
             f"  Last {err_tail_lines} lines of stderr:\n{err_lines}\n"
         ) from e
+
+
+def try_to_float(value: Any) -> float | None:
+    """Try to convert a value to float, returning None if it fails."""
+    with contextlib.suppress(Exception):
+        return float(value)
+    return None
