@@ -482,10 +482,15 @@ def test_compute_min_segment_neff_uniform_temp() -> None:
 def test_compute_min_segment_neff_multi_temp() -> None:
     """Test compute_min_segment_neff with two temperature segments returns the minimum."""
     # Segment 1: kT=1.0 (beta=1), equal energies -> neff=1.0
-    # Segment 2: kT=0.5 (beta=2), equal energies -> neff=1.0
+    # Segment 2: kT=0.5 (beta=2), varied energy diffs -> neff < 1.0
     temperature = jnp.array([1.0, 1.0, 1.0, 0.5, 0.5, 0.5])
-    new_energies = np.array([1, 2, 3, 1, 2, 3], dtype=np.float64)
+    new_energies = np.array([1, 2, 3, 1, 2, 5], dtype=np.float64)
     ref_energies = np.array([1, 2, 3, 1, 2, 3], dtype=np.float64)
 
     neff = o.compute_min_segment_neff(temperature, new_energies, ref_energies)
-    assert np.isclose(neff, 1.0)
+
+    # Segment 1 has neff=1.0, segment 2 has neff < 1.0; the min should be segment 2's
+    _, seg1_neff = o.compute_weights_and_neff(1.0, new_energies[:3], ref_energies[:3])
+    _, seg2_neff = o.compute_weights_and_neff(2.0, new_energies[3:], ref_energies[3:])
+    assert float(seg1_neff) > float(seg2_neff), "segments should have different neff values"
+    assert np.isclose(neff, float(seg2_neff))
