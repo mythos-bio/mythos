@@ -41,12 +41,11 @@ class GromacsSimulator(InputDirSimulator):
         topology_file: Name of the topology file (e.g., .top). Parameters from
             the energy function will be written to this file.
         trajectory_file: Name of the output trajectory file (e.g., .xtc, .trr).
-        structure_file: Name of the structure/coordinate file (e.g., .gro, .pdb).
+        structure_file: Name of the structure/coordinate file (e.g., .gro,
+        .pdb).
         binary_path: Path to the GROMACS binary. If not provided, will search
             for 'gmx' in PATH.
         input_overrides: Key-value pairs to override in the .mdp input file.
-            Values set here take precedence over the automatic overrides
-            derived from *temperature*.
         overwrite_input: Whether to overwrite the input directory or copy it.
     """
 
@@ -57,7 +56,6 @@ class GromacsSimulator(InputDirSimulator):
     index_file: str = "index.ndx"
     equilibration_steps: int = 0
     simulation_steps: int | None = None
-    temperature: float | None = None
     binary_path: Path | None = None
     input_overrides: dict[str, Any] = field(default_factory=dict)
 
@@ -88,20 +86,14 @@ class GromacsSimulator(InputDirSimulator):
         Returns:
             SimulatorOutput containing the trajectory.
         """
+        # Update topology file with energy function parameters and overrides
+        self._update_topology_params(input_dir, opt_params or {})
+
         seed = seed or np.random.default_rng().integers(0, 2**31)
         # If simulation_steps is not set, we don't override to accept the
         # default from the mdp file, hence the dict
         sim_steps_override = {"nsteps": self.simulation_steps} if self.simulation_steps is not None else {}
-        temp_overrides = (
-            {"ref-t": self.temperature, "gen-temp": self.temperature}
-            if self.temperature is not None else {}
-        )
-        overrides = {**temp_overrides, **self.input_overrides, "gen-seed": seed, **sim_steps_override}
-
-        # Update topology file with energy function parameters and overrides.
-        # Overrides are needed because the MDP template may contain
-        # placeholders (e.g. TEMPERATURE) that grompp cannot parse.
-        self._update_topology_params(input_dir, opt_params or {}, overrides)
+        overrides = {**self.input_overrides, "gen-seed": seed, **sim_steps_override}
 
         if self.equilibration_steps > 0:
             logger.info("Running equilibration for %d steps with seed %d", self.equilibration_steps, seed)
@@ -186,27 +178,29 @@ class GromacsSimulator(InputDirSimulator):
 
         logger.debug("GROMACS trajectory size: %s", trajectory.length())
 
+        if ref_t is not None:
+            kt = KB * ref_t
+            trajectory = trajectory.replace(
+                temperature=jnp.full(trajectory.length(), kt),
+            )
+
         return trajectory
 
-    def _update_topology_params(
-        self, input_dir: Path, params: dict[str, Any], overrides: dict[str, Any],
-    ) -> None:
-        # Write a temporary MDP with overrides applied so that grompp can
-        # parse the file even when the template contains placeholders
-        # (e.g. ``gen_temp = TEMPERATURE``).
-        pp_mdp = f"_pp_{self.mdp_file}"
-        update_mdp_params(input_dir / self.mdp_file, overrides, out_file=input_dir / pp_mdp)
-
+    def _update_topology_params(self, input_dir: Path, params: dict[str, Any]) -> None:
         # ensure we start with a preprocessed topology, so create using grompp
         # which then will be used for writing replacement parameters.
+        preproc_mdp = f"preprocess_{self.mdp_file}"
+        update_mdp_params(input_dir / self.mdp_file, self.input_overrides, out_file=input_dir / preproc_mdp)
         cmd = [
             "grompp",
             "-p",
             self.topology_file,
             "-f",
-            pp_mdp,
+            preproc_mdp,
             "-c",
             self.structure_file,
+            "-n",
+            self.index_file,
             "-pp",
             PREPROCESSED_TOPOLOGY_FILE,
         ]

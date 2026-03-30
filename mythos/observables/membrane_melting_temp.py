@@ -213,7 +213,7 @@ class MembraneMeltingTemp:
     this observable:
 
     1. Computes per-frame area-per-lipid using :class:`AreaPerLipid`.
-    2. Groups frames by temperature using ``trajectory.metadata[temp_key]``.
+    2. Groups frames by temperature using ``trajectory.temperature``.
     3. Computes the weighted expected APL at each temperature (weighted by
        optional DiffTRe importance-sampling weights).
     4. Fits a sigmoid to APL vs. temperature and returns the melting
@@ -224,8 +224,6 @@ class MembraneMeltingTemp:
         lipid_sel: MDAnalysis selection string for lipid tail atoms
             (e.g. ``"name GL1 GL2"``).
         temperatures: Tuple of simulation temperatures (Kelvin) to fit over.
-        temp_key: Metadata key on the trajectory containing per-frame
-            temperature labels.
         implicit_diff: Whether to use implicit differentiation through the
             least-squares solver.
     """
@@ -233,7 +231,6 @@ class MembraneMeltingTemp:
     topology: MDAnalysis.Universe
     lipid_sel: str
     temperatures: tuple[float, ...]
-    temp_key: str = "temp"
     implicit_diff: bool = True
 
     def __call__(
@@ -257,14 +254,13 @@ class MembraneMeltingTemp:
 
         # Segments match the order of input temperatures and identify the frames
         # of trajectory corresponding to each temperature.
-        temp_labels = trajectory.metadata[self.temp_key]
         temps_array = jnp.array(self.temperatures)
-        segment_ids = build_segment_ids(temp_labels, temps_array)
+        segment_ids = build_segment_ids(trajectory.temperature, temps_array)
 
         if weights is None:
             weights = jnp.ones(apls.shape[0])
 
-        expected_apls = compute_expected_apls(apls, weights, segment_ids, len(temps_array))
+        expected_apls = compute_expected_apls(apls, weights, segment_ids, len(self.temperatures))
 
         return compute_membrane_tm(
             expected_apls, temps_array, implicit_diff=self.implicit_diff
