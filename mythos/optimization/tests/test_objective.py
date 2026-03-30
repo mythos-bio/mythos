@@ -80,7 +80,6 @@ def test_difftre_objective_init_raises_when_n_opt_steps_non_positive(max_valid_o
             logging_observables=(),
             grad_or_loss_fn=lambda x: (x, []),
             energy_fn=1,
-            beta=1.0,
             max_valid_opt_steps=max_valid_opt_steps,
         )
 
@@ -261,16 +260,14 @@ def test_compute_loss(
 
 
 @pytest.mark.parametrize(
-    ("energy_fn", "beta", "n_equilibration_steps", "missing_arg"),
+    ("energy_fn", "n_equilibration_steps", "missing_arg"),
     [
-        (None, 1.0, 1, "energy_fn"),
-        (lambda _: mock_return_function(np.array([1, 2, 3])), None, 1, "beta"),
-        (lambda _: mock_return_function(np.array([1, 2, 3])), 1.0, None, "n_equilibration_steps"),
+        (None, 1, "energy_fn"),
+        (lambda _: mock_return_function(np.array([1, 2, 3])), None, "n_equilibration_steps"),
     ],
 )
 def test_difftreobjective_init_raises(
     energy_fn: Callable[[jdna_types.Params], Callable[[np.ndarray], np.ndarray]],
-    beta: float,
     n_equilibration_steps: int,
     missing_arg: str,
 ) -> None:
@@ -285,7 +282,6 @@ def test_difftreobjective_init_raises(
             logging_observables=logging_observables,
             grad_or_loss_fn=grad_or_loss_fn,
             energy_fn=energy_fn,
-            beta=beta,
             n_equilibration_steps=n_equilibration_steps,
         )
 
@@ -298,7 +294,6 @@ def test_difftreobjective_compute_raises_without_opt_params() -> None:
         logging_observables=(),
         grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
         energy_fn=make_mock_energy_fn(jnp.ones(100)),
-        beta=1.0,
         n_equilibration_steps=10,
     )
 
@@ -317,16 +312,16 @@ def test_difftreobjective_compute() -> None:
         logging_observables=(),
         grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
         energy_fn=make_mock_energy_fn(jnp.ones(100)),
-        beta=1.0,
         n_equilibration_steps=10,
     )
 
-    # Create a trajectory observable
+    # Create a trajectory observable with temperature
     trajectory = jdna_sio.SimulatorTrajectory(
         center=np.arange(110),
         orientation=jax_md.rigid_body.Quaternion(
             vec=np.arange(440).reshape(110, 4),
         ),
+        temperature=jnp.full(110, 0.1),
     )
 
     observables = {"test": trajectory}
@@ -350,7 +345,6 @@ def test_difftreobjective_compute_returns_needs_update_when_missing() -> None:
         logging_observables=(),
         grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
         energy_fn=make_mock_energy_fn(jnp.ones(100)),
-        beta=1.0,
         n_equilibration_steps=10,
     )
 
@@ -373,16 +367,16 @@ def test_difftreobjective_state_preserved() -> None:
         logging_observables=(),
         grad_or_loss_fn=mock_return_function((1.0, (("measured", 1.0), {}))),
         energy_fn=make_mock_energy_fn(jnp.ones(100)),
-        beta=1.0,
         n_equilibration_steps=10,
     )
 
-    # Create a trajectory observable
+    # Create a trajectory observable with temperature
     trajectory = jdna_sio.SimulatorTrajectory(
         center=np.arange(110),
         orientation=jax_md.rigid_body.Quaternion(
             vec=np.arange(440).reshape(110, 4),
         ),
+        temperature=jnp.full(110, 0.1),
     )
 
     observables = {"test": trajectory}
@@ -406,7 +400,6 @@ def test_difftreobjective_opt_steps_short_circuits() -> None:
         logging_observables=(),
         grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
         energy_fn=make_mock_energy_fn(jnp.ones(100)),
-        beta=1.0,
         n_equilibration_steps=10,
         max_valid_opt_steps=5,
     )
@@ -431,7 +424,6 @@ def test_difftreobjective_raises_when_equilibration_exceeds_trajectory() -> None
         logging_observables=(),
         grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
         energy_fn=make_mock_energy_fn(jnp.ones(100)),
-        beta=1.0,
         n_equilibration_steps=50,  # More than trajectory length
     )
 
@@ -441,9 +433,64 @@ def test_difftreobjective_raises_when_equilibration_exceeds_trajectory() -> None
         orientation=jax_md.rigid_body.Quaternion(
             vec=np.arange(40).reshape(10, 4),
         ),
+        temperature=jnp.full(10, 0.1),
     )
 
     observables = {"test": trajectory}
 
     with pytest.raises(ValueError, match="Equilibration slicing yields no states"):
         obj.calculate(observables, opt_params={})
+
+
+def test_difftreobjective_raises_when_temperature_is_none() -> None:
+    """Test that DiffTReObjective raises when trajectory temperature is None."""
+    obj = o.DiffTReObjective(
+        name="test",
+        required_observables=("test",),
+        logging_observables=(),
+        grad_or_loss_fn=mock_return_function((1.0, (("test", 1.0), {}))),
+        energy_fn=make_mock_energy_fn(jnp.ones(100)),
+        n_equilibration_steps=0,
+    )
+
+    # Create a trajectory WITHOUT temperature
+    trajectory = jdna_sio.SimulatorTrajectory(
+        center=np.arange(10),
+        orientation=jax_md.rigid_body.Quaternion(
+            vec=np.arange(40).reshape(10, 4),
+        ),
+    )
+
+    observables = {"test": trajectory}
+
+    with pytest.raises(ValueError, match="temperature is None"):
+        obj.calculate(observables, opt_params={})
+
+
+def test_compute_min_segment_neff_uniform_temp() -> None:
+    """Test compute_min_segment_neff with a single temperature returns same as scalar neff."""
+    temperature = jnp.full(3, 1.0)  # uniform kT=1.0, so beta=1.0
+    energies = np.array([1, 2, 3])
+    ref_energies = np.array([1, 2, 3])
+
+    neff = o.compute_min_segment_neff(temperature, energies, ref_energies)
+    _, expected_neff = o.compute_weights_and_neff(1.0, energies, ref_energies)
+
+    assert np.isclose(neff, float(expected_neff))
+
+
+def test_compute_min_segment_neff_multi_temp() -> None:
+    """Test compute_min_segment_neff with two temperature segments returns the minimum."""
+    # Segment 1: kT=1.0 (beta=1), equal energies -> neff=1.0
+    # Segment 2: kT=0.5 (beta=2), varied energy diffs -> neff < 1.0
+    temperature = jnp.array([1.0, 1.0, 1.0, 0.5, 0.5, 0.5])
+    new_energies = np.array([1, 2, 3, 1, 2, 5], dtype=np.float64)
+    ref_energies = np.array([1, 2, 3, 1, 2, 3], dtype=np.float64)
+
+    neff = o.compute_min_segment_neff(temperature, new_energies, ref_energies)
+
+    # Segment 1 has neff=1.0, segment 2 has neff < 1.0; the min should be segment 2's
+    _, seg1_neff = o.compute_weights_and_neff(1.0, new_energies[:3], ref_energies[:3])
+    _, seg2_neff = o.compute_weights_and_neff(2.0, new_energies[3:], ref_energies[3:])
+    assert float(seg1_neff) > float(seg2_neff), "segments should have different neff values"
+    assert np.isclose(neff, float(seg2_neff))

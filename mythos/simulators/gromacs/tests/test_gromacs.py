@@ -4,8 +4,9 @@ import shutil
 from pathlib import Path
 from unittest.mock import patch
 
+import numpy as np
 import pytest
-from mythos.simulators.gromacs.gromacs import PREPROCESSED_TOPOLOGY_FILE, GromacsSimulator
+from mythos.simulators.gromacs.gromacs import KB, PREPROCESSED_TOPOLOGY_FILE, GromacsSimulator
 from mythos.simulators.io import SimulatorTrajectory
 
 # Test data directory
@@ -429,6 +430,48 @@ class TestGromacsSimulatorRun:
         prod_mdp = mdp_contents["production_md.mdp"]
         assert f"nsteps = {sim_steps}" in prod_mdp
 
+    @pytest.mark.parametrize(
+        ("ref_t_str", "expected_kt"),
+        [
+            ("300", KB * 300.0),
+            ("300 310", None),  # multi-group: can't convert to float
+        ],
+    )
+    def test_ref_t_temperature_parsing(
+        self,
+        gromacs_input_dir: Path,
+        mock_energy_fn,
+        mock_subprocess_and_copy_outputs,
+        ref_t_str: str,
+        expected_kt: float | None,
+    ) -> None:
+        """ref-t is parsed to kB*T when a single value, or None for space-separated multi-group values."""
+        mdp_content = f"""; MDP file
+integrator = md
+dt = 0.002
+nsteps = 100
+ref-t = {ref_t_str}
+"""
+        (gromacs_input_dir / "md.mdp").write_text(mdp_content)
+
+        sim = GromacsSimulator(
+            input_dir=gromacs_input_dir,
+            energy_fn=mock_energy_fn,
+            binary_path="gmx",
+        )
+
+        with (
+            patch("subprocess.check_call", side_effect=mock_subprocess_and_copy_outputs),
+            patch.object(GromacsSimulator, "_update_topology_params"),
+        ):
+            result = sim.run(seed=42)
+
+        trajectory = result.observables[0]
+        if expected_kt is None:
+            assert trajectory.temperature is None
+        else:
+            np.testing.assert_allclose(trajectory.temperature, expected_kt)
+
 
 class TestGromacsSimulatorTrajectory:
     """Tests for trajectory reading functionality."""
@@ -464,6 +507,30 @@ class TestGromacsSimulatorTrajectory:
         # Verify frames and atoms match
         assert center.shape[0] == orientation.shape[0]  # Same number of frames
         assert center.shape[1] == orientation.shape[1]  # Same number of atoms
+
+    @pytest.mark.parametrize("ref_t", [300.0, 350.0])
+    def test_trajectory_has_temperature_from_ref_t(self, gromacs_input_dir: Path, mock_energy_fn, ref_t) -> None:
+        """Temperature field is populated from ref-t in the MDP."""
+        shutil.copy(TEST_DATA_DIR / "output.tpr", gromacs_input_dir / "output.tpr")
+        shutil.copy(TEST_DATA_DIR / "output.trr", gromacs_input_dir / "output.trr")
+
+        sim = GromacsSimulator(input_dir=gromacs_input_dir, energy_fn=mock_energy_fn)
+        trajectory = sim._read_trajectory(gromacs_input_dir, ref_t=ref_t)
+
+        assert trajectory.temperature is not None
+        assert trajectory.temperature.shape == (trajectory.length(),)
+        expected_kt = KB * ref_t
+        np.testing.assert_allclose(trajectory.temperature, expected_kt)
+
+    def test_trajectory_temperature_none_when_no_ref_t(self, gromacs_input_dir: Path, mock_energy_fn) -> None:
+        """Temperature is None when ref_t is not provided."""
+        shutil.copy(TEST_DATA_DIR / "output.tpr", gromacs_input_dir / "output.tpr")
+        shutil.copy(TEST_DATA_DIR / "output.trr", gromacs_input_dir / "output.trr")
+
+        sim = GromacsSimulator(input_dir=gromacs_input_dir, energy_fn=mock_energy_fn)
+        trajectory = sim._read_trajectory(gromacs_input_dir)
+
+        assert trajectory.temperature is None
 
 
 class TestUpdateTopologyParams:

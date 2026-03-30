@@ -139,7 +139,7 @@ class Objective(SchedulerUnit):
 
 
 def compute_weights_and_neff(
-    beta: float,
+    beta: jdna_types.Arr_N | float,
     new_energies: jdna_types.Arr_N,
     ref_energies: jdna_types.Arr_N,
 ) -> tuple[jnp.ndarray, float]:
@@ -151,7 +151,7 @@ def compute_weights_and_neff(
     See equations 4 and 5.
 
     Args:
-        beta: The inverse temperature.
+        beta: The inverse temperature. May be a scalar or a per-state array.
         new_energies: The new energies of the trajectory.
         ref_energies: The reference energies of the trajectory.
 
@@ -165,10 +165,41 @@ def compute_weights_and_neff(
     return weights, n_eff / len(weights)
 
 
+def compute_min_segment_neff(
+    temperature: jnp.ndarray,
+    new_energies: jdna_types.Arr_N,
+    ref_energies: jdna_types.Arr_N,
+) -> float:
+    """Compute the minimum normalized effective sample size across temperature segments.
+
+    For trajectories that span multiple temperatures, each temperature segment
+    has its own reweighting statistics.  This function computes the per-segment
+    ``n_eff`` and returns the minimum, which is the binding constraint for
+    deciding whether the trajectory is still valid for reweighting.
+
+    Args:
+        temperature: Per-state temperature array in kT (simulation energy
+            units), shape ``(n_states,)``.
+        new_energies: Energies under the current parameters, shape
+            ``(n_states,)``.
+        ref_energies: Energies under the reference parameters, shape
+            ``(n_states,)``.
+
+    Returns:
+        The minimum ``n_eff`` across all temperature segments.
+    """
+    def segment_neff(temp: float) -> float:
+        mask = temperature == temp
+        _, neff = compute_weights_and_neff(1.0 / temp, new_energies[mask], ref_energies[mask])
+        return float(neff)
+
+    return min(segment_neff(t) for t in jnp.unique(temperature))
+
+
 def compute_loss(
     opt_params: jdna_types.Params,
     energy_fn: EnergyFunction,
-    beta: float,
+    beta: jdna_types.Arr_N | float,
     loss_fn: Callable[
         [jax_md.rigid_body.RigidBody, jdna_types.Arr_N, EnergyFn], tuple[jnp.ndarray, tuple[str, typing.Any]]
     ],
@@ -181,7 +212,7 @@ def compute_loss(
     Args:
         opt_params: The optimization parameters.
         energy_fn: The energy function.
-        beta: The inverse temperature.
+        beta: The inverse temperature. May be a scalar or a per-state array.
         loss_fn: The loss function.
         ref_states: The reference states of the trajectory.
         ref_energies: The reference energies of the trajectory.
@@ -214,16 +245,20 @@ class DiffTReObjective(Objective):
     as reference_states, reference_energies, and opt_steps is passed through
     the metadata field of ObjectiveOutput.
 
+    Temperature is obtained from the ``SimulatorTrajectory.temperature`` field
+    (per-state kT in simulation energy units).  The inverse temperature
+    ``beta = 1 / temperature`` is used for Boltzmann reweighting.  When
+    multiple temperature segments are present the minimum per-segment
+    ``n_eff`` is used as the validity criterion.
+
     Attributes:
         energy_fn: The energy function used to compute energies.
-        beta: The inverse temperature.
         n_equilibration_steps: Number of equilibration steps (snapshot states, not timesteps) to skip.
         min_n_eff_factor: Minimum normalized effective sample size threshold.
         max_valid_opt_steps: Maximum optimization steps before requiring new trajectory.
     """
 
     energy_fn: EnergyFunction = field(repr=False)
-    beta: float
     n_equilibration_steps: int = 0
     min_n_eff_factor: float = 0.95
     max_valid_opt_steps: float = math.inf
@@ -233,8 +268,6 @@ class DiffTReObjective(Objective):
         Objective.__post_init__(self)
         if self.energy_fn is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="energy_fn"))
-        if self.beta is None:
-            raise ValueError(ERR_MISSING_ARG.format(missing_arg="beta"))
         if self.n_equilibration_steps is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="n_equilibration_steps"))
         if self.n_equilibration_steps < 0:
@@ -297,15 +330,24 @@ class DiffTReObjective(Objective):
             raise ValueError(
                 "Equilibration slicing yields no states! Note slicing is in number of snapshots, not timesteps."
             )
+
+        # Derive beta from trajectory temperature
+        if reference_states.temperature is None:
+            raise ValueError(
+                "SimulatorTrajectory.temperature is None. "
+                "DiffTRe requires per-state temperature (kT) on the trajectory."
+            )
+        beta = 1.0 / reference_states.temperature
+
         # The reference opt params will be returned in state while we are still
         # within neff tolerance (or max_valid_opt_steps). These params are then
         # used to compute reference energies.
         reference_opt_params = reference_opt_params or opt_params
         reference_energies = self.energy_fn.with_params(reference_opt_params).map(reference_states)
 
-        # Compute neff to check if trajectory is still valid
-        _, neff = compute_weights_and_neff(
-            beta=self.beta,
+        # Compute per-segment neff to check if trajectory is still valid
+        neff = compute_min_segment_neff(
+            temperature=reference_states.temperature,
             new_energies=self.energy_fn.with_params(opt_params).map(reference_states),
             ref_energies=reference_energies,
         )
@@ -323,7 +365,7 @@ class DiffTReObjective(Objective):
         (loss, (_, measured_value, new_energies)), grads = compute_loss_and_grad(
             opt_params,
             self.energy_fn,
-            self.beta,
+            beta,
             self.grad_or_loss_fn,
             reference_states,
             reference_energies,

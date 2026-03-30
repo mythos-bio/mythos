@@ -35,9 +35,14 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
         metadata: Optional metadata associated with each state in the
           trajectory. This must be a dictionary where each value is a numerical
           array whose first axis has length corresponding to number of states.
+        temperature: Optional per-state temperature in kT (thermal energy in
+          simulation units). Shape ``(n_states,)``. When present,
+          ``beta = 1 / temperature`` can be used for reweighting. ``None``
+          indicates that the simulation temperature is unknown.
     """
 
     box_size: Arr_Box|None = None
+    temperature: jnp.ndarray|None = None
     metadata: dict[str, jnp.ndarray]|None = None
 
     @classmethod
@@ -84,6 +89,7 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
 
         metadata = None if self.metadata is None else tree_map(lambda x: x[key, ...], self.metadata)
         box_size = None if self.box_size is None else self.box_size[key, ...]
+        temperature = None if self.temperature is None else self.temperature[key, ...]
 
         return self.replace(
             center=self.center[key, ...],
@@ -91,6 +97,7 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
                 vec=self.orientation.vec[key, ...],
             ),
             box_size=box_size,
+            temperature=temperature,
             metadata=metadata,
         )
 
@@ -114,13 +121,8 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
         if len(trajectories) == 1:
             return trajectories[0]
 
-        box_sizes = [t.box_size for t in trajectories]
-        if all(b is None for b in box_sizes):
-            box_size = None
-        elif any(b is None for b in box_sizes):
-            raise ValueError("Cannot concatenate, trajectories have incompatible box sizes.")
-        else:
-            box_size = jnp.concatenate(box_sizes, axis=0)
+        box_size = _concat_optional_field([t.box_size for t in trajectories], "box sizes")
+        temperature = _concat_optional_field([t.temperature for t in trajectories], "temperatures")
 
         merged_metadata = _merge_metadata(
             [t.metadata for t in trajectories],
@@ -133,6 +135,7 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
                 vec=jnp.concatenate([t.orientation.vec for t in trajectories], axis=0)
             ),
             box_size=box_size,
+            temperature=temperature,
             metadata=merged_metadata,
         )
 
@@ -165,6 +168,21 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
                 state = jnp.hstack([coms, bb_vecs, base_norms, dummy_vels_angmom])
                 box = self.box_size[i] if self.box_size is not None else box_size
                 _write_state(f, time=float(i), energies=jnp.zeros(3), state=state, box_size=box)
+
+
+def _concat_optional_field(
+    values: list[jnp.ndarray | None], label: str,
+) -> jnp.ndarray | None:
+    """Concatenate an optional per-trajectory field along axis 0.
+
+    Returns ``None`` when all entries are ``None``, raises when the entries
+    are a mix of ``None`` and non-``None``, and concatenates otherwise.
+    """
+    if all(v is None for v in values):
+        return None
+    if any(v is None for v in values):
+        raise ValueError(f"Cannot concatenate, trajectories have incompatible {label}.")
+    return jnp.concatenate(values, axis=0)
 
 
 def _merge_metadata(

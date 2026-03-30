@@ -356,6 +356,45 @@ def _check_replacement_coeff_lines(lines, expected, skiplist, shouldmatch):
             assert not isclose, f"Expected mismatch in line: {key}"
 
 
+@pytest.mark.parametrize(
+    ("temp_var", "kt_value"),
+    [
+        ("kt", 0.1),
+        ("my_temp", 0.2),
+    ],
+)
+def test_simulator_run_temperature_from_variable(
+    tmp_path,
+    dummy_input_lines,
+    dummy_trajectory_data,
+    temp_var,
+    kt_value,
+):
+    """Temperature field is populated from the named LAMMPS variable."""
+    # Add the temperature variable line to the input
+    input_lines = [f"variable {temp_var} equal 0", *dummy_input_lines]
+    input_file = tmp_path / "input"
+    input_file.write_text("\n".join(input_lines))
+    tmp_path.joinpath("trajectory.dat").write_text(dummy_trajectory_data)
+
+    sim = LAMMPSoxDNASimulator(
+        input_dir=tmp_path,
+        overwrite_input=True,
+        energy_fn=DummyFunction(),
+        variables={temp_var: kt_value},
+        temperature_variable=temp_var,
+    )
+
+    with mock.patch("subprocess.check_call") as m_call:
+        m_call.return_value = None
+        result = sim.run({}, seed=42)
+
+    traj = result.observables[0]
+    assert traj.temperature is not None
+    assert traj.temperature.shape == (traj.length(),)
+    np.testing.assert_allclose(traj.temperature, kt_value)
+
+
 def test_check_dna1_default_energy_fn_replacements(dummy_input_dir):
     # Expected comes from https://docs.lammps.org/pair_oxdna.html - which has
     # the default energy function parameters frozen in for oxdna model in

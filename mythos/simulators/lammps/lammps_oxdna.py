@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 import chex
+import jax.numpy as jnp
 import numpy as np
 from typing_extensions import override
 
@@ -34,10 +35,15 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
         variables: Additional variables to set in the LAMMPS input file before
             run. These variables must already be defined in the input file using
             a command of the form "variable name equal value".
+        temperature_variable: Name of the LAMMPS variable that holds the
+            simulation temperature in reduced units (kT). When the corresponding
+            variable is set, it is used to populate the temperature field of the
+            output trajectory.
     """
     energy_fn: EnergyFunction
     input_file_name: str = "input"
     variables: dict[str, Any] = field(default_factory=dict)
+    temperature_variable: str = "kt"
 
     @override
     def __post_init__(self) -> None:
@@ -50,8 +56,16 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
         run_command(["lmp", "-in", self.input_file_name], cwd=input_dir, log_prefix="lammps")
         traj = _read_lammps_output(input_dir.joinpath("trajectory.dat"))
 
+        temperature = None
+        if (kt := self.variables.get(self.temperature_variable)) is not None:
+            n_states = traj.state_rigid_body.center.shape[0]
+            temperature = jnp.full(n_states, float(kt))
+
         return SimulatorOutput(
-            observables=[SimulatorTrajectory.from_rigid_body(traj.state_rigid_body)]
+            observables=[SimulatorTrajectory.from_rigid_body(
+                traj.state_rigid_body,
+                temperature=temperature,
+            )]
         )
 
     def _replace_parameters(self, input_dir: Path, params: Params, seed: int | None) -> None:

@@ -491,3 +491,74 @@ def test_simulatortrajectory_vmappable() -> None:
     with_md_result = jax.vmap(with_md_fn)(traj_with_md)
     assert jnp.allclose(with_md_result, jnp.arange(10*3).reshape((10, 3)).mean(axis=1) + 100)
 
+
+def test_simulatortrajectory_slice_with_temperature() -> None:
+    """Test that slicing preserves the temperature field."""
+    n = 10
+    traj = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((n, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((n, 4))),
+        temperature=jnp.linspace(0.08, 0.12, n),
+    )
+    sliced = traj.slice(slice(2, 5))
+    assert sliced.length() == 3
+    assert jnp.allclose(sliced.temperature, jnp.linspace(0.08, 0.12, n)[2:5])
+
+
+def test_simulatortrajectory_slice_temperature_none() -> None:
+    """Test that slicing with temperature=None keeps it None."""
+    traj = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((5, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((5, 4))),
+    )
+    sliced = traj.slice(slice(1, 3))
+    assert sliced.temperature is None
+
+
+def test_simulatortrajectory_concat_with_temperature() -> None:
+    """Test that concat merges temperature arrays."""
+    t1 = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((3, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((3, 4))),
+        temperature=jnp.full(3, 0.1),
+    )
+    t2 = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((2, 4))),
+        temperature=jnp.full(2, 0.12),
+    )
+    combined = jd_sio.SimulatorTrajectory.concat([t1, t2])
+    assert combined.length() == 5
+    assert jnp.allclose(combined.temperature, jnp.array([0.1, 0.1, 0.1, 0.12, 0.12]))
+
+
+def test_simulatortrajectory_concat_temperature_all_none() -> None:
+    """Test concat when all trajectories have temperature=None."""
+    t1 = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((2, 4))),
+    )
+    t2 = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((3, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((3, 4))),
+    )
+    combined = jd_sio.SimulatorTrajectory.concat([t1, t2])
+    assert combined.temperature is None
+
+
+def test_simulatortrajectory_concat_mixed_temperature_raises() -> None:
+    """Test concat raises when temperature is mixed None/non-None."""
+    t_with = jd_sio.SimulatorTrajectory(
+        center=jnp.ones((2, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.ones((2, 4))),
+        temperature=jnp.full(2, 0.1),
+    )
+    t_without = jd_sio.SimulatorTrajectory(
+        center=jnp.zeros((3, 3)),
+        orientation=jax_md.rigid_body.Quaternion(vec=jnp.zeros((3, 4))),
+    )
+    with pytest.raises(ValueError, match="incompatible temperatures"):
+        jd_sio.SimulatorTrajectory.concat([t_with, t_without])
+    with pytest.raises(ValueError, match="incompatible temperatures"):
+        jd_sio.SimulatorTrajectory.concat([t_without, t_with])
+

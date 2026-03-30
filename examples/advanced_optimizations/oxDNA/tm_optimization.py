@@ -192,7 +192,6 @@ def main(
         energy_fn=energy_fn,
         opt_params=opt_params,
         min_n_eff_factor=0.95,
-        beta=jnp.array(1 / kT, dtype=jnp.float64),
         n_equilibration_steps=0,
     )
 
