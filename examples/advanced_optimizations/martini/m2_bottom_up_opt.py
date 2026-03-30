@@ -88,7 +88,7 @@ def parse_args():
     parser.add_argument("--learning-rate", type=float, default=5e-4,
                         help="Adam optimizer learning rate (default: 5e-4)")
     parser.add_argument("--temperature", type=float, default=273.0,
-                        help="Temperature in Kelvin for beta calculation (default: 273)")
+                        help="Temperature in Kelvin for the simulation (default: 273)")
     parser.add_argument("--gromacs-binary", type=Path, default=None,
                         help="Path to GROMACS binary (default: search in PATH)")
     parser.add_argument("--metrics-file", type=Path, default=None,
@@ -215,13 +215,11 @@ if __name__ == "__main__":
         loss = jnp.sqrt(total / n_total)
         return loss, (("wasserstein_mean", loss), ())
 
-    beta = 1 / (0.0083144621 * args.temperature)
     wasserstein_obj = DiffTReObjective(
         energy_fn=energy_fn,
         grad_or_loss_fn=wasserstein_loss,
         required_observables=[i for s in simulator for i in s.exposes()],
         name="WassersteinBottomUp",
-        beta=beta,
     )
 
     loggers = [ConsoleLogger()]
