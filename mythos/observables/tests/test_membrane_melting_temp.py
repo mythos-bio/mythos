@@ -1,16 +1,16 @@
 """Tests for the membrane melting temperature observable."""
 
+from unittest.mock import patch
+
 import jax
 import jax.numpy as jnp
 import jax_md
 import numpy as np
-import pytest
 
 from mythos.observables.membrane_melting_temp import (
+    MembraneMeltingTemp,
     apl_residual,
-    build_segment_ids,
     calculate_apl,
-    compute_expected_apls,
     compute_membrane_tm,
     fit_apl_sigmoid,
     get_initial_guess,
@@ -52,6 +52,7 @@ def _make_trajectory(
         center=centers,
         orientation=jax_md.rigid_body.Quaternion(vec=quats),
         box_size=box_size,
+        temperature=temp_labels,
         metadata={"temp": temp_labels},
     )
 
@@ -148,147 +149,100 @@ class TestComputeMembraneTm:
         assert jnp.all(jnp.isfinite(grads))
 
 
-class TestBuildSegmentIds:
-    """Tests for temperature-to-segment-id mapping."""
+class TestMembraneMeltingTempBatched:
+    """Tests for the batched-by-temperature __call__ path.
 
-    def test_exact_match(self):
-        """Exact temperature values should map to the correct index."""
-        temps = jnp.array([300.0, 310.0, 320.0])
-        labels = jnp.array([310.0, 300.0, 320.0, 310.0])
-        ids = build_segment_ids(labels, temps)
-        np.testing.assert_array_equal(ids, jnp.array([1, 0, 2, 1]))
-
-    def test_closest_match(self):
-        """Labels near a temperature should round to the closest index."""
-        temps = jnp.array([300.0, 320.0])
-        labels = jnp.array([299.9, 320.1])
-        ids = build_segment_ids(labels, temps)
-        np.testing.assert_array_equal(ids, jnp.array([0, 1]))
-
-    def test_rejects_unmatched_temperatures(self):
-        """Labels far from any temperature should raise ValueError."""
-        temps = jnp.array([300.0, 320.0, 340.0])
-        labels = jnp.array([300.0, 315.0, 340.0])  # 315 is 5K from nearest
-        with pytest.raises(ValueError, match="do not match"):
-            build_segment_ids(labels, temps)
-
-    def test_custom_atol(self):
-        """Custom atol allows larger deviations when appropriate."""
-        temps = jnp.array([300.0, 320.0])
-        labels = jnp.array([302.0, 318.0])  # 2K off
-        # Default atol=1.0 should reject
-        with pytest.raises(ValueError):
-            build_segment_ids(labels, temps)
-        # Larger atol should accept
-        ids = build_segment_ids(labels, temps, atol=3.0)
-        np.testing.assert_array_equal(ids, jnp.array([0, 1]))
-
-
-class TestComputeExpectedApls:
-    """Tests for segment-sum weighted expected APL."""
-
-    def test_uniform_weights_gives_mean(self):
-        """With uniform weights, expected APL equals arithmetic mean per group."""
-        apls = jnp.array([1.0, 2.0, 3.0, 10.0, 20.0, 30.0])
-        weights = jnp.ones(6)
-        segment_ids = jnp.array([0, 0, 0, 1, 1, 1])
-        result = compute_expected_apls(apls, weights, segment_ids, n_segments=2)
-        np.testing.assert_allclose(result, jnp.array([2.0, 20.0]))
-
-    def test_weighted(self):
-        """Non-uniform weights should shift the expected APL."""
-        apls = jnp.array([1.0, 3.0])
-        weights = jnp.array([0.75, 0.25])
-        segment_ids = jnp.array([0, 0])
-        result = compute_expected_apls(apls, weights, segment_ids, n_segments=1)
-        expected = (0.75 * 1.0 + 0.25 * 3.0) / (0.75 + 0.25)
-        np.testing.assert_allclose(result[0], expected)
-
-    def test_differentiable_wrt_weights(self):
-        """Gradient with respect to weights should be finite."""
-        apls = jnp.array([1.0, 3.0, 5.0, 7.0])
-        segment_ids = jnp.array([0, 0, 1, 1])
-
-        def fn(w):
-            return jnp.sum(compute_expected_apls(apls, w, segment_ids, n_segments=2))
-
-        grads = jax.grad(fn)(jnp.ones(4))
-        assert jnp.all(jnp.isfinite(grads))
-
-
-class TestMembraneMeltingTempObservable:
-    """Tests for the full observable class (module-function path only).
-
-    These tests exercise the segment/fitting pipeline with synthetic data
-    rather than calling the AreaPerLipid observable (which requires a real
-    GROMACS topology).  They verify the class wiring via
-    ``compute_expected_apls`` → ``compute_membrane_tm``.
+    These mock AreaPerLipid to avoid requiring a real GROMACS topology while
+    verifying that the per-temperature batching produces correct results.
     """
 
-    def test_compute_pipeline_uniform_weights(self):
-        """End-to-end: synthetic per-frame APLs with uniform weights."""
+    def _build_trajectory_and_apls(self, n_per_temp, temps):
+        """Build a trajectory and matching per-frame APL values."""
+        temps_arr = jnp.asarray(temps)
+        true_apls = calculate_apl(
+            temps_arr, TRUE_APL0, TRUE_C_P_G, TRUE_DAPL, TRUE_K, TRUE_TM,
+        )
+        # Each temperature gets n_per_temp identical frames
+        trajectories = [_make_trajectory(n_per_temp, (float(t),)) for t in temps_arr]
+        combined = SimulatorTrajectory.concat(trajectories)
+        per_frame_apls = jnp.repeat(true_apls, n_per_temp)
+        return combined, per_frame_apls
+
+    def test_batched_call_uniform_weights(self):
+        """Batched __call__ recovers Tm with uniform weights."""
+        temps = TEMPS
         n_per_temp = 5
-        temps = tuple(float(t) for t in TEMPS)
+        combined, per_frame_apls = self._build_trajectory_and_apls(n_per_temp, temps)
+
+        # Mock AreaPerLipid.__call__ to return the correct slice of APLs.
+        # The observable calls apl_fn(trajectory.slice(indices)) once per
+        # temperature; we return the matching APLs by tracking a call counter.
+        call_count = [0]
         n_temps = len(temps)
-        temps_arr = jnp.array(temps)
 
-        # Simulate per-frame APLs: each frame at a temperature gets the
-        # sigmoid value (no noise)
-        per_frame_apls = jnp.repeat(TRUE_APLS, n_per_temp)
-        temp_labels = jnp.repeat(temps_arr, n_per_temp)
-        weights = jnp.ones(n_per_temp * n_temps)
+        def fake_apl_call(self_apl, traj):
+            idx = call_count[0]
+            start = idx * n_per_temp
+            end = start + n_per_temp
+            call_count[0] += 1
+            return per_frame_apls[start:end]
 
-        segment_ids = build_segment_ids(temp_labels, temps_arr)
-        expected_apls = compute_expected_apls(per_frame_apls, weights, segment_ids, n_temps)
-        tm = compute_membrane_tm(expected_apls, temps_arr)
+        obs = MembraneMeltingTemp(
+            topology=None,  # not used by mock
+            lipid_sel="",
+            temperatures=temps,
+        )
+
+        with patch(
+            "mythos.observables.membrane_melting_temp.AreaPerLipid.__call__",
+            fake_apl_call,
+        ):
+            tm = obs(combined)
+
         np.testing.assert_allclose(tm, TRUE_TM, atol=0.5)
+        assert call_count[0] == n_temps
 
-    def test_compute_pipeline_nonuniform_weights(self):
-        """Weighted APLs shift the effective curve and thus Tm."""
-        temps = (300.0, 310.0, 320.0, 330.0, 340.0)
-        temps_arr = jnp.array(temps)
-        true_apls = calculate_apl(temps_arr, TRUE_APL0, TRUE_C_P_G, TRUE_DAPL, TRUE_K, TRUE_TM)
-
-        # Two frames per temperature; second frame has APL + 2.0
+    def test_batched_call_nonuniform_weights(self):
+        """Batched __call__ correctly applies per-frame weights."""
+        temps = jnp.array([300.0, 310.0, 320.0, 330.0, 340.0])
+        temps_arr = temps
+        true_apls = calculate_apl(
+            temps_arr, TRUE_APL0, TRUE_C_P_G, TRUE_DAPL, TRUE_K, TRUE_TM,
+        )
         n_per_temp = 2
-        per_frame_apls = []
+
+        # Two frames per temp: first = true APL, second = true APL + 2
+        all_apls = []
         for apl_val in true_apls:
-            per_frame_apls.extend([apl_val, apl_val + 2.0])
-        per_frame_apls = jnp.array(per_frame_apls)
-        temp_labels = jnp.repeat(temps_arr, n_per_temp)
+            all_apls.extend([float(apl_val), float(apl_val) + 2.0])
+        all_apls = jnp.array(all_apls)
 
-        # Uniform weights → expected APL = mean = apl_val + 1.0
-        weights_uniform = jnp.ones(len(per_frame_apls))
-        segment_ids = build_segment_ids(temp_labels, temps_arr)
-        expected_uniform = compute_expected_apls(
-            per_frame_apls, weights_uniform, segment_ids, len(temps)
+        trajectories = [_make_trajectory(n_per_temp, (float(t),)) for t in temps]
+        combined = SimulatorTrajectory.concat(trajectories)
+
+        # Weight toward first frame → should recover original APLs
+        weights = jnp.tile(jnp.array([1.0, 1e-12]), len(temps))
+
+        call_count = [0]
+
+        def fake_apl_call(self_apl, traj):
+            idx = call_count[0]
+            start = idx * n_per_temp
+            end = start + n_per_temp
+            call_count[0] += 1
+            return all_apls[start:end]
+
+        obs = MembraneMeltingTemp(
+            topology=None,
+            lipid_sel="",
+            temperatures=temps,
         )
-        np.testing.assert_allclose(expected_uniform, true_apls + 1.0, atol=1e-10)
 
-        # Fully weight toward the first frame of each pair → should recover original
-        weights_first = jnp.tile(jnp.array([1.0, 0.0]), len(temps))
-        # Need to handle zero weights: add tiny epsilon
-        weights_first = weights_first + 1e-12
-        expected_first = compute_expected_apls(
-            per_frame_apls, weights_first, segment_ids, len(temps)
-        )
-        np.testing.assert_allclose(expected_first, true_apls, atol=1e-4)
+        with patch(
+            "mythos.observables.membrane_melting_temp.AreaPerLipid.__call__",
+            fake_apl_call,
+        ):
+            tm = obs(combined, weights=weights)
 
-    def test_metadata_preserved_through_concat(self):
-        """Temperature metadata survives SimulatorTrajectory.concat."""
-        traj1 = _make_trajectory(3, (300.0,))
-        traj2 = _make_trajectory(3, (320.0,))
-        combined = SimulatorTrajectory.concat([traj1, traj2])
-
-        expected_labels = jnp.array([300.0, 300.0, 300.0, 320.0, 320.0, 320.0])
-        np.testing.assert_allclose(combined.metadata["temp"], expected_labels)
-
-    def test_segment_ids_from_concat(self):
-        """Segment ids correctly map concatenated trajectory frames."""
-        traj1 = _make_trajectory(2, (300.0,))
-        traj2 = _make_trajectory(2, (320.0,))
-        combined = SimulatorTrajectory.concat([traj1, traj2])
-
-        temps_arr = jnp.array([300.0, 320.0])
-        ids = build_segment_ids(combined.metadata["temp"].squeeze(), temps_arr)
-        np.testing.assert_array_equal(ids, jnp.array([0, 0, 1, 1]))
+        # Weighting toward the "true" frames should recover~TRUE_TM
+        np.testing.assert_allclose(tm, TRUE_TM, atol=0.5)

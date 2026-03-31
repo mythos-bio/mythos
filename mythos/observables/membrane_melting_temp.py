@@ -17,7 +17,6 @@ The module provides both standalone functions for sigmoid fitting and a
 
 import chex
 import jax.numpy as jnp
-import jax.ops
 import MDAnalysis
 from jaxopt import LevenbergMarquardt
 
@@ -144,66 +143,6 @@ def compute_membrane_tm(
     return params[4]
 
 
-def compute_expected_apls(
-    apls: jnp.ndarray,
-    weights: jnp.ndarray,
-    segment_ids: jnp.ndarray,
-    n_segments: int,
-) -> jnp.ndarray:
-    """Compute per-temperature weighted expected APL using segment sums.
-
-    This function is fully JAX-traceable and differentiable w.r.t. *weights*.
-
-    Args:
-        apls: Per-frame APL values, shape ``(N,)``.
-        weights: Per-frame importance-sampling weights, shape ``(N,)``.
-        segment_ids: Integer array mapping each frame to a temperature index,
-            shape ``(N,)``.  Values must be in ``[0, n_segments)``.
-        n_segments: Number of distinct temperatures.
-
-    Returns:
-        Expected APL per temperature, shape ``(n_segments,)``.
-    """
-    weighted_apls = weights * apls
-    sum_weighted_apls = jax.ops.segment_sum(weighted_apls, segment_ids, num_segments=n_segments)
-    sum_weights = jax.ops.segment_sum(weights, segment_ids, num_segments=n_segments)
-    return sum_weighted_apls / sum_weights
-
-
-def build_segment_ids(
-    temp_labels: jnp.ndarray,
-    temperatures: jnp.ndarray,
-    *,
-    atol: float = 1.0,
-) -> jnp.ndarray:
-    """Map per-frame temperature labels to integer segment indices.
-
-    For each frame, the segment id is the index into *temperatures* whose
-    value is closest to the frame's temperature label.
-
-    Args:
-        temp_labels: Per-frame temperature values, shape ``(N,)``.
-        temperatures: Ordered array of distinct temperatures, shape ``(T,)``.
-        atol: Maximum allowed absolute difference (in Kelvin) between a
-            frame's temperature label and its nearest entry in
-            *temperatures*.  Raises ``ValueError`` when any frame exceeds
-            this tolerance.
-
-    Returns:
-        Integer segment ids, shape ``(N,)``.
-
-    Raises:
-        ValueError: If any frame's temperature label is farther than *atol*
-            from every entry in *temperatures*.
-    """
-    # (N, T) distance matrix; argmin along T axis gives the closest temp index
-    diffs = jnp.abs(temp_labels[:, None] - temperatures[None, :])
-    min_diffs = jnp.min(diffs, axis=1)
-    if jnp.any(min_diffs > atol):
-        raise ValueError("Trajectory temperature labels and provided temperatures do not match!")
-    return jnp.argmin(diffs, axis=1)
-
-
 @chex.dataclass(frozen=True, kw_only=True)
 class MembraneMeltingTemp:
     """Observable that computes lipid membrane melting temperature.
@@ -223,15 +162,20 @@ class MembraneMeltingTemp:
         topology: MDAnalysis Universe describing the system topology.
         lipid_sel: MDAnalysis selection string for lipid tail atoms
             (e.g. ``"name GL1 GL2"``).
-        temperatures: Tuple of simulation temperatures (Kelvin) to fit over.
+        temperatures: Array of simulation temperatures in simulation units to
+            fit over.
         implicit_diff: Whether to use implicit differentiation through the
             least-squares solver.
+        temp_rtol: Relative tolerance for grouping frames by temperature.
+            Frames with temperature within this relative tolerance are considered
+            to belong to the same temperature group.  Default is 1e-3 (0.1%).
     """
 
     topology: MDAnalysis.Universe
     lipid_sel: str
-    temperatures: tuple[float, ...]
+    temperatures: jnp.ndarray
     implicit_diff: bool = True
+    temp_rtol: float = 1e-3
 
     def __call__(
         self,
@@ -248,20 +192,25 @@ class MembraneMeltingTemp:
                 to an unweighted mean per temperature).
 
         Returns:
-            Melting temperature in Kelvin.
+            Melting temperature in simulation units.
         """
-        apls = AreaPerLipid(topology=self.topology, lipid_sel=self.lipid_sel)(trajectory)
-
-        # Segments match the order of input temperatures and identify the frames
-        # of trajectory corresponding to each temperature.
-        temps_array = jnp.array(self.temperatures)
-        segment_ids = build_segment_ids(trajectory.temperature, temps_array)
-
+        # Group frames by temperature and compute APL one temperature at a
+        # time so that only one temperature's worth of frames is in memory.
         if weights is None:
-            weights = jnp.ones(apls.shape[0])
+            weights = jnp.ones(trajectory.length())
 
-        expected_apls = compute_expected_apls(apls, weights, segment_ids, len(self.temperatures))
+        apl_fn = AreaPerLipid(topology=self.topology, lipid_sel=self.lipid_sel)
+        expected_apls = []
+        for temp in self.temperatures:
+            indices = jnp.where(jnp.abs(trajectory.temperature - temp) < self.temp_rtol * jnp.abs(temp))[0]
+            batch_apls = apl_fn(trajectory.slice(indices))
+            batch_weights = weights[indices]
+            expected_apls.append(
+                jnp.sum(batch_weights * batch_apls) / jnp.sum(batch_weights),
+            )
+
+        expected_apls = jnp.stack(expected_apls)
 
         return compute_membrane_tm(
-            expected_apls, temps_array, implicit_diff=self.implicit_diff
+            expected_apls, self.temperatures, implicit_diff=self.implicit_diff
         )
