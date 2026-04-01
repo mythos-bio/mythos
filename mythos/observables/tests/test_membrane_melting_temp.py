@@ -140,7 +140,7 @@ class TestComputeMembraneTm:
     def test_differentiable_wrt_apls(self):
         """jax.grad should work through the solver (implicit diff)."""
         def loss_fn(apls):
-            return compute_membrane_tm(apls, TEMPS)
+            return compute_membrane_tm(apls, TEMPS, implicit_diff=True)
 
         grad_fn = jax.grad(loss_fn)
         grads = grad_fn(TRUE_APLS)

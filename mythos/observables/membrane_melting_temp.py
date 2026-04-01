@@ -16,10 +16,9 @@ The module provides both standalone functions for sigmoid fitting and a
 """
 
 import chex
-import jax
 import jax.numpy as jnp
 import MDAnalysis
-import optimistix as optx
+from jaxopt import LevenbergMarquardt
 
 from mythos.observables.area_per_lipid import AreaPerLipid
 from mythos.simulators.io import SimulatorTrajectory
@@ -96,37 +95,37 @@ def fit_apl_sigmoid(
     sim_apls: jnp.ndarray,
     sim_temps: jnp.ndarray,
     *,
-    max_steps: int = 5000,
+    implicit_diff: bool = True,
+    maxiter: int = 5000,
 ) -> jnp.ndarray:
     """Fit the sigmoid model to APL-vs-temperature data via nonlinear least squares.
 
-    Uses Levenberg-Marquardt via optimistix, which is JIT-compatible and
-    natively differentiable through JAX transformations.
+    Uses Levenberg-Marquardt, which is more robust than Gauss-Newton for the
+    strongly nonlinear sigmoid model.
 
     Args:
         sim_apls: Observed (or reweighted) APL values, shape ``(n_temps,)``.
         sim_temps: Corresponding temperatures in Kelvin, shape ``(n_temps,)``.
-        max_steps: Maximum number of solver iterations.
+        implicit_diff: Whether to use implicit differentiation through the
+            solver, allowing JAX to back-propagate gradients.
+        maxiter: Maximum number of solver iterations.
 
     Returns:
         Fitted parameter vector ``[apl0, c_p_g, dAPL, k, Tm]``.
     """
     init_guess = get_initial_guess(sim_apls, sim_temps)
-    solver = optx.LevenbergMarquardt(rtol=1e-3, atol=1e-3)
-    soln = optx.least_squares(
-        apl_residual,
-        solver,
-        init_guess,
-        args=(sim_apls, sim_temps),
-        max_steps=max_steps,
+    lm = LevenbergMarquardt(
+        residual_fun=apl_residual, implicit_diff=implicit_diff, maxiter=maxiter,
     )
-    return soln.value
+    res = lm.run(init_guess, (sim_apls, sim_temps))
+    return res.params
 
 
-@jax.jit
 def compute_membrane_tm(
     sim_apls: jnp.ndarray,
     sim_temps: jnp.ndarray,
+    *,
+    implicit_diff: bool = True,
 ) -> float:
     """Compute the membrane melting temperature from APL-vs-temperature data.
 
@@ -135,11 +134,12 @@ def compute_membrane_tm(
     Args:
         sim_apls: Observed (or reweighted) APL values, shape ``(n_temps,)``.
         sim_temps: Temperatures in Kelvin, shape ``(n_temps,)``.
+        implicit_diff: Whether to use implicit differentiation.
 
     Returns:
         Melting temperature in Kelvin.
     """
-    params = fit_apl_sigmoid(sim_apls, sim_temps)
+    params = fit_apl_sigmoid(sim_apls, sim_temps, implicit_diff=implicit_diff)
     return params[4]
 
 
@@ -164,6 +164,8 @@ class MembraneMeltingTemp:
             (e.g. ``"name GL1 GL2"``).
         temperatures: Array of simulation temperatures in simulation units to
             fit over.
+        implicit_diff: Whether to use implicit differentiation through the
+            least-squares solver.
         temp_rtol: Relative tolerance for grouping frames by temperature.
             Frames with temperature within this relative tolerance are considered
             to belong to the same temperature group.  Default is 1e-3 (0.1%).
@@ -172,6 +174,7 @@ class MembraneMeltingTemp:
     topology: MDAnalysis.Universe
     lipid_sel: str
     temperatures: jnp.ndarray
+    implicit_diff: bool = True
     temp_rtol: float = 1e-3
 
     def __call__(
@@ -208,4 +211,6 @@ class MembraneMeltingTemp:
 
         expected_apls = jnp.stack(expected_apls)
 
-        return compute_membrane_tm(expected_apls, self.temperatures)
+        return compute_membrane_tm(
+            expected_apls, self.temperatures, implicit_diff=self.implicit_diff
+        )
