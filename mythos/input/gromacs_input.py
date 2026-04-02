@@ -97,6 +97,7 @@ def write_mdp_to(input_config: dict, f: io.TextIOWrapper) -> None:
     for key, value in input_config.items():
         # GROMACS uses yes/no for booleans
         parsed_value = ("yes" if value else "no") if isinstance(value, bool) else str(value)
+        key = key.replace("-", "_")  # equivalent in GROMACS
         f.write(f"{key} = {parsed_value}\n")
 
 
@@ -121,7 +122,7 @@ def update_mdp_params(mdp_file: Path, params: dict, out_file: Path | None = None
             overwrites the original file.
     """
     config = read_mdp(mdp_file)
-    config.update({k.replace("-", "_"): v for k, v in params.items()})
+    config.update(params)
     out_file = out_file or mdp_file
     write_mdp(config, out_file)
 

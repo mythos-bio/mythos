@@ -2,7 +2,7 @@ r"""Membrane melting temperature observable.
 
 Computes the melting temperature (Tm) of a lipid membrane by fitting a sigmoid
 to area-per-lipid (APL) vs. temperature data, following the approach from
-jax-martini (Pastor et al.).  The sigmoid model is:
+jax-martini. The sigmoid model is:
 
 .. math::
     \text{APL}(T) = \text{apl}_0 + c_{pg} \cdot T
@@ -40,7 +40,7 @@ def calculate_apl(
         c_p_g: Linear temperature coefficient.
         dAPL: APL jump across the transition.
         k: Steepness of the sigmoid.
-        Tm: Melting temperature.
+        Tm: Melting temperature in Kelvin.
 
     Returns:
         Predicted APL value(s).
@@ -162,7 +162,7 @@ class MembraneMeltingTemp:
         topology: MDAnalysis Universe describing the system topology.
         lipid_sel: MDAnalysis selection string for lipid tail atoms
             (e.g. ``"name GL1 GL2"``).
-        temperatures: Array of simulation temperatures in simulation units to
+        temperatures: Array of simulation temperatures in Kelvin to
             fit over.
         implicit_diff: Whether to use implicit differentiation through the
             least-squares solver.
@@ -186,13 +186,12 @@ class MembraneMeltingTemp:
 
         Args:
             trajectory: Concatenated trajectory with per-frame temperature
-                metadata under ``self.temp_key``.
             weights: Optional per-frame importance-sampling weights, shape
                 ``(N,)``.  When ``None``, uniform weights are used (equivalent
                 to an unweighted mean per temperature).
 
         Returns:
-            Melting temperature in simulation units.
+            Melting temperature in Kelvin.
         """
         # Group frames by temperature and compute APL one temperature at a
         # time so that only one temperature's worth of frames is in memory.
@@ -203,10 +202,15 @@ class MembraneMeltingTemp:
         expected_apls = []
         for temp in self.temperatures:
             indices = jnp.where(jnp.abs(trajectory.temperature - temp) < self.temp_rtol * jnp.abs(temp))[0]
+            if indices.size == 0:
+                raise ValueError(f"No frames found for temperature {temp} within relative tolerance {self.temp_rtol}.")
             batch_apls = apl_fn(trajectory.slice(indices))
             batch_weights = weights[indices]
+            weight_sum = jnp.sum(batch_weights)
+            if weight_sum == 0:
+                raise ValueError(f"Sum of weights is zero for temperature {temp}. Cannot compute weighted average APL.")
             expected_apls.append(
-                jnp.sum(batch_weights * batch_apls) / jnp.sum(batch_weights),
+                jnp.sum(batch_weights * batch_apls) / weight_sum,
             )
 
         expected_apls = jnp.stack(expected_apls)
