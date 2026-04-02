@@ -219,7 +219,7 @@ class TestWriteTo:
             "gen-vel": True,
             "pcoupl": False,
         }
-        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen-vel = yes\npcoupl = no\n"
+        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen_vel = yes\npcoupl = no\n"
 
         text_stream = io.StringIO()
         gi.write_mdp_to(input_dict, text_stream)
@@ -239,7 +239,7 @@ class TestWrite:
             "pcoupl": False,
         }
 
-        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen-vel = yes\npcoupl = no\n"
+        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen_vel = yes\npcoupl = no\n"
 
         output_file = tmp_path / "test.mdp"
         gi.write_mdp(in_config, output_file)

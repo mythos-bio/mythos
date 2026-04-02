@@ -97,8 +97,8 @@ def write_mdp_to(input_config: dict, f: io.TextIOWrapper) -> None:
     for key, value in input_config.items():
         # GROMACS uses yes/no for booleans
         parsed_value = ("yes" if value else "no") if isinstance(value, bool) else str(value)
-        key = key.replace("-", "_")  # equivalent in GROMACS
-        f.write(f"{key} = {parsed_value}\n")
+        _key = key.replace("-", "_")  # equivalent in GROMACS
+        f.write(f"{_key} = {parsed_value}\n")
 
 
 def write_mdp(input_config: dict, input_file: Path) -> None:
