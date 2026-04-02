@@ -18,6 +18,7 @@ jax.config.update("jax_enable_x64", True)  # noqa: FBT003 - common jax practice
 TEST_DATA_DIR = Path("data/test-data/martini/energy/m2/angle")
 USE_G96 = True
 
+
 def load_angle_params() -> dict:
     """Load angle parameters from the JSON configuration file."""
     with (TEST_DATA_DIR / "angle_params.json").open() as f:
@@ -174,11 +175,13 @@ class TestTripletAnglePotential:
         theta0 = jnp.pi / 2  # 90 degrees
 
         # Create three particles at right angle
-        centers = jnp.array([
-            [1.0, 0.0, 0.0],  # i
-            [0.0, 0.0, 0.0],  # j (central)
-            [0.0, 1.0, 0.0],  # k
-        ])
+        centers = jnp.array(
+            [
+                [1.0, 0.0, 0.0],  # i
+                [0.0, 0.0, 0.0],  # j (central)
+                [0.0, 1.0, 0.0],  # k
+            ]
+        )
         triplet = jnp.array([0, 1, 2])
         displacement_fn, _ = space.free()
 
@@ -193,19 +196,23 @@ class TestTripletAnglePotential:
 
         # Angle slightly less than 90 degrees
         angle_minus = jnp.pi / 2 - 0.1
-        centers_minus = jnp.array([
-            [jnp.cos(angle_minus), jnp.sin(angle_minus), 0.0],
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-        ])
+        centers_minus = jnp.array(
+            [
+                [jnp.cos(angle_minus), jnp.sin(angle_minus), 0.0],
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+            ]
+        )
 
         # Angle slightly more than 90 degrees
         angle_plus = jnp.pi / 2 + 0.1
-        centers_plus = jnp.array([
-            [jnp.cos(angle_plus), jnp.sin(angle_plus), 0.0],
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-        ])
+        centers_plus = jnp.array(
+            [
+                [jnp.cos(angle_plus), jnp.sin(angle_plus), 0.0],
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+            ]
+        )
 
         triplet = jnp.array([0, 1, 2])
         energy_minus = triplet_angle(centers_minus, triplet, k, theta0, displacement_fn, USE_G96)
@@ -221,25 +228,31 @@ class TestTripletAnglePotential:
         triplet = jnp.array([0, 1, 2])
 
         # At equilibrium
-        centers_eq = jnp.array([
-            [1.0, 0.0, 0.0],
-            [0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ])
+        centers_eq = jnp.array(
+            [
+                [1.0, 0.0, 0.0],
+                [0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ]
+        )
 
         # Small deviation
-        centers_small = jnp.array([
-            [1.0, 0.1, 0.0],  # Slight deviation
-            [0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ])
+        centers_small = jnp.array(
+            [
+                [1.0, 0.1, 0.0],  # Slight deviation
+                [0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ]
+        )
 
         # Larger deviation
-        centers_large = jnp.array([
-            [1.0, 0.5, 0.0],  # Larger deviation
-            [0.0, 0.0, 0.0],
-            [0.0, 1.0, 0.0],
-        ])
+        centers_large = jnp.array(
+            [
+                [1.0, 0.5, 0.0],  # Larger deviation
+                [0.0, 0.0, 0.0],
+                [0.0, 1.0, 0.0],
+            ]
+        )
 
         energy_eq = triplet_angle(centers_eq, triplet, k, theta0, displacement_fn, USE_G96)
         energy_small = triplet_angle(centers_small, triplet, k, theta0, displacement_fn, USE_G96)

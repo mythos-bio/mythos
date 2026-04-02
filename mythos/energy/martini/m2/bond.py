@@ -1,4 +1,5 @@
 """Bond potential energy function for Martini 2."""
+
 import chex
 import jax
 import jax.numpy as jnp
@@ -11,6 +12,7 @@ from mythos.utils.types import Arr_States_3, Vector2D
 
 BOND_K_PREFIX = "bond_k_"
 BOND_R0_PREFIX = "bond_r0_"
+
 
 class BondConfiguration(MartiniEnergyConfiguration):
     """Configuration for Martini bond energy function.
@@ -29,13 +31,7 @@ class BondConfiguration(MartiniEnergyConfiguration):
             raise ValueError("BondConfiguration requires pairs of k and r0 parameters")
 
 
-def pair_bond(
-        centers: Arr_States_3,
-        pair: Vector2D,
-        k_bond: float,
-        r0_bond: float,
-        displacement_fn: callable
-    ) -> float:
+def pair_bond(centers: Arr_States_3, pair: Vector2D, k_bond: float, r0_bond: float, displacement_fn: callable) -> float:
     """Calculate bond energy for a given pair of particles."""
     i = pair[0]
     j = pair[1]

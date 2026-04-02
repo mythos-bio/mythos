@@ -86,7 +86,7 @@ def test_simulatortrajectory_with_state_metadata() -> None:
         ),
     )
 
-    traj_with_metadata = traj.with_state_metadata(force = 10.0, torque = 5.0)
+    traj_with_metadata = traj.with_state_metadata(force=10.0, torque=5.0)
 
     assert jax.tree_util.tree_all(jax.tree_util.tree_map(lambda x: x.shape[0] == n, traj_with_metadata.metadata))
     for i in range(traj_with_metadata.length()):
@@ -102,7 +102,7 @@ def test_simulatortrajectory_filter_basic() -> None:
         orientation=jax_md.rigid_body.Quaternion(
             vec=jnp.zeros((n, 4)),
         ),
-        metadata={"value": jnp.arange(n)}
+        metadata={"value": jnp.arange(n)},
     )
 
     # Filter for even values only
@@ -202,7 +202,7 @@ def test_simulatortrajectory_addition() -> None:
             "value2": jnp.array([2, 2, 2]),  # one dimensional NaN fill
             "value3": jnp.array([[3, 3], [3, 3], [3, 3]]),  # multi-dimensional concat
             "value4": jnp.array([[4, 4], [4, 4], [4, 4]]),  # multi-dimensional NaN fill
-        }
+        },
     )
     traj2 = jd_sio.SimulatorTrajectory(
         center=jnp.zeros((n2, 3)),
@@ -213,7 +213,7 @@ def test_simulatortrajectory_addition() -> None:
         metadata={
             "value": jnp.array([0, 0]),
             "value3": jnp.array([[0, 0], [0, 0]]),
-        }
+        },
     )
 
     combined_traj = traj1 + traj2
@@ -224,10 +224,7 @@ def test_simulatortrajectory_addition() -> None:
     assert jnp.array_equal(combined_traj.metadata["value"], jnp.array([1, 1, 1, 0, 0]))
     assert jnp.array_equal(combined_traj.metadata["value2"][:3], jnp.array([2, 2, 2]))
     assert jnp.all(jnp.isnan(combined_traj.metadata["value2"][3:]))
-    assert jnp.array_equal(
-        combined_traj.metadata["value3"],
-        jnp.array([[3, 3], [3, 3], [3, 3], [0, 0], [0, 0]])
-    )
+    assert jnp.array_equal(combined_traj.metadata["value3"], jnp.array([[3, 3], [3, 3], [3, 3], [0, 0], [0, 0]]))
     assert combined_traj.metadata["value3"].shape == (5, 2)
     assert jnp.array_equal(combined_traj.metadata["value4"][:3], jnp.array([[4, 4], [4, 4], [4, 4]]))
     assert jnp.all(jnp.isnan(combined_traj.metadata["value4"][3:]))
@@ -255,6 +252,7 @@ def test_simulatortrajectory_addition_no_metadata() -> None:
     assert combined_traj.length() == n1 + n2
     assert combined_traj.metadata is None
 
+
 def test_simulatortrajectory_addition_raises_on_incompatible_md() -> None:
     n1 = 2
     n2 = 2
@@ -265,7 +263,7 @@ def test_simulatortrajectory_addition_raises_on_incompatible_md() -> None:
         ),
         metadata={
             "value": jnp.array([[1, 1], [1, 1]]),  # shape (2,2)
-        }
+        },
     )
     traj2 = jd_sio.SimulatorTrajectory(
         center=jnp.zeros((n2, 3)),
@@ -274,7 +272,7 @@ def test_simulatortrajectory_addition_raises_on_incompatible_md() -> None:
         ),
         metadata={
             "value": jnp.array([[0, 0, 0], [0, 0, 0]]),  # shape (2,3) incompatible
-        }
+        },
     )
 
     with pytest.raises(ValueError, match="Metadata key 'value' has mismatched shapes"):
@@ -370,11 +368,11 @@ def test_simulatortrajectory_concat_multiple() -> None:
     assert combined.length() == total
     # Check center concatenation
     assert jnp.allclose(combined.center[:n1], jnp.ones((n1, 3)))
-    assert jnp.allclose(combined.center[n1:n1 + n2], jnp.zeros((n2, 3)))
-    assert jnp.allclose(combined.center[n1 + n2:], jnp.full((n3, 3), 2.0))
+    assert jnp.allclose(combined.center[n1 : n1 + n2], jnp.zeros((n2, 3)))
+    assert jnp.allclose(combined.center[n1 + n2 :], jnp.full((n3, 3), 2.0))
     # Check orientation concatenation
     assert jnp.allclose(combined.orientation.vec[:n1], jnp.ones((n1, 4)))
-    assert jnp.allclose(combined.orientation.vec[n1:n1 + n2], jnp.zeros((n2, 4)))
+    assert jnp.allclose(combined.orientation.vec[n1 : n1 + n2], jnp.zeros((n2, 4)))
     # Check box_size concatenation
     assert combined.box_size.shape == (total, 3)
     assert combined.box_size[0, 0] == 10
@@ -387,11 +385,11 @@ def test_simulatortrajectory_concat_multiple() -> None:
     assert jnp.array_equal(combined.metadata["a"], jnp.array([1, 1, 1, 5, 5, 9, 9, 9, 9]))
     # Key "b" missing in traj2 -> NaN-filled there
     assert jnp.array_equal(combined.metadata["b"][:n1], jnp.array([[2, 2], [2, 2], [2, 2]]))
-    assert jnp.all(jnp.isnan(combined.metadata["b"][n1:n1 + n2]))
-    assert jnp.array_equal(combined.metadata["b"][n1 + n2:], jnp.array([[7, 7], [7, 7], [7, 7], [7, 7]]))
+    assert jnp.all(jnp.isnan(combined.metadata["b"][n1 : n1 + n2]))
+    assert jnp.array_equal(combined.metadata["b"][n1 + n2 :], jnp.array([[7, 7], [7, 7], [7, 7], [7, 7]]))
     # Key "c" only in traj3 -> NaN-filled for traj1 and traj2
-    assert jnp.all(jnp.isnan(combined.metadata["c"][:n1 + n2]))
-    assert jnp.array_equal(combined.metadata["c"][n1 + n2:], jnp.array([3, 3, 3, 3]))
+    assert jnp.all(jnp.isnan(combined.metadata["c"][: n1 + n2]))
+    assert jnp.array_equal(combined.metadata["c"][n1 + n2 :], jnp.array([3, 3, 3, 3]))
 
 
 def test_simulatortrajectory_concat_single() -> None:
@@ -480,16 +478,19 @@ def test_simulatortrajectory_vmappable() -> None:
             vec=jnp.zeros((10, 4)),
         ),
     )
+
     def center_fn(t: jd_sio.SimulatorTrajectory):
         return jnp.mean(t.center, axis=0)
+
     center_result = jax.vmap(center_fn)(traj)
-    assert jnp.allclose(center_result, jnp.arange(10*3).reshape((10, 3)).mean(axis=1))
+    assert jnp.allclose(center_result, jnp.arange(10 * 3).reshape((10, 3)).mean(axis=1))
 
     def with_md_fn(t: jd_sio.SimulatorTrajectory):
         return jnp.mean(t.center, axis=0) + t.metadata["offset"]
+
     traj_with_md = traj.with_state_metadata(offset=100)
     with_md_result = jax.vmap(with_md_fn)(traj_with_md)
-    assert jnp.allclose(with_md_result, jnp.arange(10*3).reshape((10, 3)).mean(axis=1) + 100)
+    assert jnp.allclose(with_md_result, jnp.arange(10 * 3).reshape((10, 3)).mean(axis=1) + 100)
 
 
 def test_simulatortrajectory_slice_with_temperature() -> None:
@@ -561,4 +562,3 @@ def test_simulatortrajectory_concat_mixed_temperature_raises() -> None:
         jd_sio.SimulatorTrajectory.concat([t_with, t_without])
     with pytest.raises(ValueError, match="incompatible temperatures"):
         jd_sio.SimulatorTrajectory.concat([t_without, t_with])
-

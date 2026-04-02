@@ -40,6 +40,7 @@ class EnergyFunction(ABC):
             mapping over large sequences, at the cost of recomputing
             intermediate values during backpropagation.
     """
+
     map_batch_size: int | None = 100
     map_checkpoint: bool = True
 
@@ -296,7 +297,8 @@ class ComposedEnergyFunction(EnergyFunction):
         params = {}
         for fn in self.energy_fns:
             fn_params = fn.params_dict(
-                include_dependent=include_dependent, exclude_non_optimizable=exclude_non_optimizable,
+                include_dependent=include_dependent,
+                exclude_non_optimizable=exclude_non_optimizable,
             )
             params.update({self._rename_param_from_fn(k, fn): v for k, v in fn_params.items()})
         return params
@@ -310,7 +312,7 @@ class ComposedEnergyFunction(EnergyFunction):
         energy_vals = self.compute_terms(body)
         return jnp.sum(energy_vals) if self.weights is None else jnp.dot(self.weights, energy_vals)
 
-    def without_terms(self, *terms: list[str|type]) -> "ComposedEnergyFunction":
+    def without_terms(self, *terms: list[str | type]) -> "ComposedEnergyFunction":
         """Create a new ComposedEnergyFunction without the specified terms.
 
         Args:
@@ -352,7 +354,6 @@ class ComposedEnergyFunction(EnergyFunction):
             energy_fns=[*self.energy_fns, energy_fn],
             weights=weights,
         )
-
 
     def add_composable_energy_fn(self, energy_fn: "ComposedEnergyFunction") -> "ComposedEnergyFunction":
         """Add a ComposedEnergyFunction to the list of energy functions.
@@ -453,4 +454,3 @@ class QualifiedComposedEnergyFunction(ComposedEnergyFunction):
     @override
     def _rename_param_from_fn(self, param: str, fn: BaseEnergyFunction) -> str:
         return f"{fn.__class__.__qualname__}.{param}"
-

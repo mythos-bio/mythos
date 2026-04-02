@@ -1,4 +1,5 @@
 """Wasserstein distance observables."""
+
 import math
 from dataclasses import field
 
@@ -26,14 +27,10 @@ def wasserstein_1d(u: Arr_N, v: Arr_N, u_weights: Arr_N | None = None, v_weights
         v_weights = jnp.asarray(v_weights, dtype=jnp.float64)
 
     if u_weights.shape != u.shape:
-        raise ValueError(
-            f"u_weights must have the same shape as u; got {u_weights.shape} and {u.shape}."
-        )
+        raise ValueError(f"u_weights must have the same shape as u; got {u_weights.shape} and {u.shape}.")
 
     if v_weights.shape != v.shape:
-        raise ValueError(
-            f"v_weights must have the same shape as v; got {v_weights.shape} and {v.shape}."
-        )
+        raise ValueError(f"v_weights must have the same shape as v; got {v_weights.shape} and {v.shape}.")
 
     # Validate that total masses match (within numerical tolerance)
     if not jnp.isclose(jnp.sum(u_weights), jnp.sum(v_weights), rtol=1e-9, atol=1e-12):
@@ -103,6 +100,7 @@ class WassersteinDistance:
         v_distribution: The fixed reference distribution V to compare against.
         v_weights: Optional weights for the V distribution (should sum to 1).
     """
+
     observable: BaseObservable
     v_distribution: Arr_N
     v_weights: Arr_N | None = None
@@ -110,12 +108,7 @@ class WassersteinDistance:
     def __call__(self, trajectory: SimulatorTrajectory, weights: Arr_N | None = None) -> Scalar:
         """Compute the Wasserstein distance between observable and reference distributions."""
         obs_values = self.observable(trajectory)
-        return _compute_wasserstein_distance(
-            obs_values,
-            self.v_distribution,
-            weights=weights,
-            v_weights=self.v_weights
-        )
+        return _compute_wasserstein_distance(obs_values, self.v_distribution, weights=weights, v_weights=self.v_weights)
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -140,6 +133,7 @@ class WassersteinDistanceMapped:
         v_weights_map: Optional dictionary mapping keys to weights for the V
             distributions.
     """
+
     observable: BaseObservable
     v_distribution_map: dict[str, Arr_N]
     v_weights_map: dict[str, Arr_N | None] = field(default_factory=dict)
@@ -149,10 +143,7 @@ class WassersteinDistanceMapped:
         obs_values = self.observable(trajectory)
         return {
             key: _compute_wasserstein_distance(
-                obs_values[key],
-                self.v_distribution_map[key],
-                weights=weights,
-                v_weights=self.v_weights_map.get(key)
+                obs_values[key], self.v_distribution_map[key], weights=weights, v_weights=self.v_weights_map.get(key)
             )
             for key in self.v_distribution_map
         }

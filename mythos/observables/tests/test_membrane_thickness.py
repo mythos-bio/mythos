@@ -42,10 +42,20 @@ class TestMembraneThickness:
         gromacs_trajectory: SimulatorTrajectory,
     ):
         """Test membrane thickness calculation against known reference values."""
-        expected = np.array([
-            37.21121013, 36.94640994, 37.31411836, 37.03461868, 36.75582552,
-            36.76741627, 37.21104291, 36.92698368, 36.80011913, 36.98599377,
-        ])
+        expected = np.array(
+            [
+                37.21121013,
+                36.94640994,
+                37.31411836,
+                37.03461868,
+                36.75582552,
+                36.76741627,
+                37.21104291,
+                36.92698368,
+                36.80011913,
+                36.98599377,
+            ]
+        )
 
         observable = MembraneThickness(
             topology=topology,

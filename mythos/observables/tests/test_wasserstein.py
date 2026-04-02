@@ -77,8 +77,10 @@ class TestWasserstein1D:
         expected = scipy_wasserstein(u, v, u_weights=u_w, v_weights=v_w)
         result = float(
             wasserstein_1d(
-                jnp.array(u), jnp.array(v),
-                u_weights=jnp.array(u_w), v_weights=jnp.array(v_w),
+                jnp.array(u),
+                jnp.array(v),
+                u_weights=jnp.array(u_w),
+                v_weights=jnp.array(v_w),
             )
         )
         assert result == pytest.approx(expected, rel=1e-6)
@@ -298,10 +300,13 @@ class TestWassersteinDistanceMapped:
         result = wdm(_dummy_trajectory())
 
         # angle_X: explicit v-weights
-        exp_x = float(wasserstein_1d(
-            u_map["angle_X"], v_map["angle_X"],
-            v_weights=v_w_map["angle_X"],
-        ))
+        exp_x = float(
+            wasserstein_1d(
+                u_map["angle_X"],
+                v_map["angle_X"],
+                v_weights=v_w_map["angle_X"],
+            )
+        )
         assert float(result["angle_X"]) == pytest.approx(exp_x, abs=1e-12)
 
         # angle_Y: uniform v-weights (not in v_weights_map)

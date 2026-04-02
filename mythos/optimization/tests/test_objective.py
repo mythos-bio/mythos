@@ -27,7 +27,7 @@ def mock_return_function(should_return: typing.Any) -> Callable:
     return mock_function
 
 
-def make_mock_energy_fn(return_value = None) -> EnergyFunction:
+def make_mock_energy_fn(return_value=None) -> EnergyFunction:
     class MockEF:
         def __call__(self, n):
             return n.sum()
@@ -41,6 +41,7 @@ def make_mock_energy_fn(return_value = None) -> EnergyFunction:
             return self
 
     return MockEF()
+
 
 @pytest.fixture
 def mock_energy_fn():

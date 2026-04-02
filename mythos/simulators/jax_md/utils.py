@@ -159,7 +159,6 @@ class StaticSimulatorParams:
         return {}
 
 
-
 def split_and_stack(x: jnp.ndarray, n: int) -> jnp.ndarray:
     """Split `xs` into `n` pieces and stack them."""
     return jax.tree.map(lambda y: jnp.stack(jnp.split(y, n)), x)

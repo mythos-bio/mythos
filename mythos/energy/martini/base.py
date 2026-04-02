@@ -26,10 +26,7 @@ def derive_bond_names(
 
     Each name has the form ``RESIDUE_BEAD1_BEAD2``, e.g. ``DMPC_GL1_GL2``.
     """
-    return tuple(
-        f"{residue_names[b[0]]}_{atom_names[b[0]]}_{atom_names[b[1]]}"
-        for b in bonded_neighbors
-    )
+    return tuple(f"{residue_names[b[0]]}_{atom_names[b[0]]}_{atom_names[b[1]]}" for b in bonded_neighbors)
 
 
 def derive_angle_names(
@@ -42,10 +39,7 @@ def derive_angle_names(
     Each name has the form ``RESIDUE_BEAD1_BEAD2_BEAD3``,
     e.g. ``DMPC_NC3_PO4_GL1``.
     """
-    return tuple(
-        f"{residue_names[a[0]]}_{atom_names[a[0]]}_{atom_names[a[1]]}_{atom_names[a[2]]}"
-        for a in angles
-    )
+    return tuple(f"{residue_names[a[0]]}_{atom_names[a[0]]}_{atom_names[a[1]]}_{atom_names[a[2]]}" for a in angles)
 
 
 @chex.dataclass(frozen=True, kw_only=True)
@@ -65,6 +59,7 @@ class MartiniTopology:
         bonded_neighbors: An array of shape (n_bonds, 2) containing the indices
             of the bonded pairs of atoms.
     """
+
     atom_types: tuple[str, ...]
     atom_names: tuple[str, ...]
     residue_names: tuple[str, ...]
@@ -75,11 +70,11 @@ class MartiniTopology:
     def from_universe(cls, universe: MDAnalysis.Universe) -> "MartiniTopology":
         """Create a MartiniTopology from a Universe object."""
         return cls(
-            atom_types = tuple(universe.atoms.types),
-            atom_names = tuple(universe.atoms.names),
-            residue_names = tuple(universe.atoms.resnames),
-            angles = jnp.array(universe.angles.indices),
-            bonded_neighbors = jnp.array(universe.bonds.indices),
+            atom_types=tuple(universe.atoms.types),
+            atom_names=tuple(universe.atoms.names),
+            residue_names=tuple(universe.atoms.resnames),
+            angles=jnp.array(universe.angles.indices),
+            bonded_neighbors=jnp.array(universe.bonds.indices),
         )
 
     @classmethod
@@ -123,7 +118,7 @@ class MartiniEnergyFunction(BaseEnergyFunction):
             residue_names=topology.residue_names,
             angles=topology.angles,
             bonded_neighbors=topology.bonded_neighbors,
-            **kwargs
+            **kwargs,
         )
 
     @property
@@ -153,7 +148,8 @@ class MartiniEnergyConfiguration:
     Subclasses can override `__post_init__` for additional initialization logic.
     Parameters will be available in `self.params` after initialization.
     """
-    def __init__(self, couplings: dict[str, list[str]]|None = None, **kwargs):
+
+    def __init__(self, couplings: dict[str, list[str]] | None = None, **kwargs):
         self.couplings = couplings or {}
         # ensure that targets for coupling are unique
         all_targets = [v for vals in self.couplings.values() for v in vals]

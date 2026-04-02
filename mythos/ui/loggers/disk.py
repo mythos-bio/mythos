@@ -10,13 +10,16 @@ from mythos.ui.loggers.logger import Logger, Status, StatusKind
 
 MISSING_LOGDIR_WARNING = "`log_dir` not results might not be saved to disk."
 
+
 def convert_to_fname(name: str) -> str:
     """Convert a metric name to a valid filename."""
     return name.replace("/", "_").replace(" ", "_") + ".csv"
 
+
 def tsnow() -> str:
     """Get the current timestamp as a string."""
     return datetime.now(tz=UTC).isoformat()
+
 
 class FileLogger:
     """Logger that writes all data to a single file."""

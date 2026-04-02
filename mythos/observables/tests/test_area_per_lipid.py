@@ -42,10 +42,9 @@ class TestAreaPerLipid:
         gromacs_trajectory: SimulatorTrajectory,
     ):
         """Test area per lipid calculation against known reference values."""
-        expected = np.array([
-            51.189245, 51.382128, 50.695458, 51.42874 , 51.178519,
-            51.148737, 50.517493, 51.3376  , 51.586332, 51.005933
-        ])
+        expected = np.array(
+            [51.189245, 51.382128, 50.695458, 51.42874, 51.178519, 51.148737, 50.517493, 51.3376, 51.586332, 51.005933]
+        )
 
         observable = AreaPerLipid(
             topology=topology,

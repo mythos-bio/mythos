@@ -41,9 +41,9 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
           indicates that the simulation temperature is unknown.
     """
 
-    box_size: Arr_Box|None = None
-    temperature: jnp.ndarray|None = None
-    metadata: dict[str, jnp.ndarray]|None = None
+    box_size: Arr_Box | None = None
+    temperature: jnp.ndarray | None = None
+    metadata: dict[str, jnp.ndarray] | None = None
 
     @classmethod
     def from_rigid_body(cls, rigid_body: jax_md.rigid_body.RigidBody, **kwargs: Any) -> "SimulatorTrajectory":
@@ -171,7 +171,8 @@ class SimulatorTrajectory(jax_md.rigid_body.RigidBody):
 
 
 def _concat_optional_field(
-    values: list[jnp.ndarray | None], label: str,
+    values: list[jnp.ndarray | None],
+    label: str,
 ) -> jnp.ndarray | None:
     """Concatenate an optional per-trajectory field along axis 0.
 
@@ -186,9 +187,9 @@ def _concat_optional_field(
 
 
 def _merge_metadata(
-        metadata_list: list[dict[str, jnp.ndarray]|None],
-        lengths: list[int],
-    ) -> dict[str, jnp.ndarray]|None:
+    metadata_list: list[dict[str, jnp.ndarray] | None],
+    lengths: list[int],
+) -> dict[str, jnp.ndarray] | None:
     """Merge a list of metadata dictionaries for SimulatorTrajectory concatenation.
 
     If a key is missing in some dictionaries, it is filled with NaNs of

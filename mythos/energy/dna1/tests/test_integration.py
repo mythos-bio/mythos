@@ -198,7 +198,7 @@ def test_fene(base_dir: str):
         ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True, "generated.top"),
         ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", False, "generated-new.top"),
         ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True, "generated-new.top"),
-    ]
+    ],
 )
 def test_hydrogen_bonding(base_dir: str, weights_file: str, *, use_pseq: bool, top_file: str):
     (
@@ -225,9 +225,7 @@ def test_hydrogen_bonding(base_dir: str, weights_file: str, *, use_pseq: bool, t
         transform_fn=transform_fn,
         topology=topology,
         params=energy_config.init_params(),
-    ).with_params(
-        **ss_params
-    )
+    ).with_params(**ss_params)
 
     if use_pseq:  # create a probabilistic sequence, one-hot encoded matching the discrete sequence
         sc = from_bps(topology.n_nucleotides, bps=jnp.zeros((0, 2), dtype=jnp.int32))
@@ -241,12 +239,15 @@ def test_hydrogen_bonding(base_dir: str, weights_file: str, *, use_pseq: bool, t
 
 
 # mismatch 1/100
-@pytest.mark.parametrize(("base_dir", "weights_file", "use_pseq"), [
-    ("data/test-data/dna1/simple-helix", None, False),
-    ("data/test-data/dna1/simple-helix", None, True),
-    ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", False),
-    ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True),
-])
+@pytest.mark.parametrize(
+    ("base_dir", "weights_file", "use_pseq"),
+    [
+        ("data/test-data/dna1/simple-helix", None, False),
+        ("data/test-data/dna1/simple-helix", None, True),
+        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", False),
+        ("data/test-data/dna1/simple-helix-seq-dep", "seq_dep.dat", True),
+    ],
+)
 def test_stacking(base_dir: str, weights_file: str, *, use_pseq: bool):
     (
         topology,
@@ -278,9 +279,7 @@ def test_stacking(base_dir: str, weights_file: str, *, use_pseq: bool):
         transform_fn=transform_fn,
         topology=topology,
         params=energy_config.init_params(),
-    ).with_params(
-        **ss_params
-    )
+    ).with_params(**ss_params)
 
     if use_pseq:  # create a probabilistic sequence, one-hot encoded matching the discrete sequence
         sc = from_bps(topology.n_nucleotides, bps=jnp.zeros((0, 2), dtype=jnp.int32))

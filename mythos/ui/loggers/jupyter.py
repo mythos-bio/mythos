@@ -86,7 +86,7 @@ def setup_figure_layout(
         ):
             fig.add_trace(scatter_f(x=[], y=[], name=name), row=row, col=col)
 
-        legend_name = f"legend{i+2}"
+        legend_name = f"legend{i + 2}"
         axis_num = str(i) if i > 1 else ""
         fig.update_traces(row=row, col=col, legend=legend_name)
         fig.update_layout(
@@ -217,9 +217,9 @@ class JupyterLogger(logger.Logger):
         self.obj_btns = [btn_f(description=obj) for obj in objectives]
 
         self.btn_map = {
-            StatusKind.SIMULATOR: { btn.description: btn for btn in self.sim_btns },
-            StatusKind.OBJECTIVE: { btn.description: btn for btn in self.obj_btns },
-            StatusKind.OBSERVABLE: { btn.description: btn for btn in self.obs_btns },
+            StatusKind.SIMULATOR: {btn.description: btn for btn in self.sim_btns},
+            StatusKind.OBJECTIVE: {btn.description: btn for btn in self.obj_btns},
+            StatusKind.OBSERVABLE: {btn.description: btn for btn in self.obs_btns},
         }
 
         nrows, ncols = plots_nrows_ncols if plots_nrows_ncols else (None, None)

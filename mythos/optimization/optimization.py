@@ -65,6 +65,7 @@ class OptimizerOutput:
             are keyed by component name (e.g. objective) and each value should
             itself be a dict of observable name to value.
     """
+
     grads: Grads
     opt_params: Params
     state: OptimizerState
@@ -74,6 +75,7 @@ class OptimizerOutput:
 @chex.dataclass(frozen=True, kw_only=True)
 class Optimizer(ABC):
     """Abstract base class for optimizers."""
+
     logger: jdna_logger.Logger = field(default_factory=jdna_logger.NullLogger)
 
     @abstractmethod
@@ -179,13 +181,15 @@ class RayOptimizer(Optimizer):
             raise ValueError(ERR_MISSING_OPTIMIZER)
 
         # Check for conflicts in global namespaces that we use for coordination
-        all_names = [obj.name for obj in self.objectives] \
-            + [sim.name for sim in self.simulators] \
+        all_names = (
+            [obj.name for obj in self.objectives]
+            + [sim.name for sim in self.simulators]
             + [exp for sim in self.simulators for exp in sim.exposes()]
+        )
         if len(all_names) != len(set(all_names)):
             raise ValueError("All objective, simulator, and exposes names must be unique")
 
-    def _create_and_run_remote(self, fun: callable, ray_options: dict, *args) -> RayRef|list[RayRef]:
+    def _create_and_run_remote(self, fun: callable, ray_options: dict, *args) -> RayRef | list[RayRef]:
         remote_fun = ray.remote(fun).options(**ray_options)
         return remote_fun.remote(*args)
 
@@ -197,9 +201,7 @@ class RayOptimizer(Optimizer):
                 options["memory"] = int(options["memory"] * 1024 * 1024)  # Ray expects bytes
         return {**self.remote_options_default, **options}
 
-    def _run_simulator(
-            self, simulator: Simulator, params: Params, **state
-        ) -> tuple[list[RayRef], RayRef]:
+    def _run_simulator(self, simulator: Simulator, params: Params, **state) -> tuple[list[RayRef], RayRef]:
         def simulator_run_fn(params: Params, state: dict[str, Any]) -> tuple[list[RayRef], RayRef]:
             output = simulator.run(opt_params=params, **state)
             return *output.observables, output.state
@@ -212,9 +214,7 @@ class RayOptimizer(Optimizer):
         refs = self._create_and_run_remote(simulator_run_fn, ray_opts, params, state)
         return refs[:-1], refs[-1]  # observables as a list, state
 
-    def _run_objective(
-            self, objective: Objective, observables: dict[str, RayRef], params: Params, **state
-        ) -> RayRef:
+    def _run_objective(self, objective: Objective, observables: dict[str, RayRef], params: Params, **state) -> RayRef:
         def objective_compute_fn(obs: dict[str, RayRef], params: Params, state: dict[str, Any]) -> ObjectiveOutput:
             obs = {k: ray.get(v) for k, v in obs.items()}
             return objective.calculate(observables=obs, opt_params=params, **state)
@@ -226,15 +226,15 @@ class RayOptimizer(Optimizer):
         return self._create_and_run_remote(objective_compute_fn, ray_opts, observables, params, state)
 
     def _wait_remotes(self, refs: list[RayRef]) -> list[RayRef]:
-            ref_list = list(refs)
-            ray.wait(ref_list, fetch_local=False, num_returns=1)
-            # The below is to maximize our chance of getting multiple at once
-            # (for example multiple observables and state from a simulator)
-            ready, _ = ray.wait(ref_list, fetch_local=False, timeout=0.1)
-            return ready
+        ref_list = list(refs)
+        ray.wait(ref_list, fetch_local=False, num_returns=1)
+        # The below is to maximize our chance of getting multiple at once
+        # (for example multiple observables and state from a simulator)
+        ready, _ = ray.wait(ref_list, fetch_local=False, timeout=0.1)
+        return ready
 
     @override
-    def step(self, params: Params, state: OptimizerState|None = None) -> OptimizerOutput:  # noqa: C901, PLR0912
+    def step(self, params: Params, state: OptimizerState | None = None) -> OptimizerOutput:  # noqa: C901, PLR0912
         state = state or OptimizerState()
         state_observables, component_state = state.observables.copy(), state.component_state.copy()
 
@@ -375,11 +375,10 @@ class SimpleOptimizer(Optimizer):
                 optimizer_state=opt_state,
                 component_state={
                     **state.component_state,
-                        self.objective.name: obj_state,
-                        self.simulator.name: sim_state,
-                    },
+                    self.objective.name: obj_state,
+                    self.simulator.name: sim_state,
+                },
             ),
             grads=grads,
-            observables=output_observables
+            observables=output_observables,
         )
-

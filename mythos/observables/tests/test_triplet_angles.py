@@ -86,9 +86,7 @@ class TestTripletAngles:
             residue_names=("MOL", "MOL", "MOL"),
             angles=jnp.array([[0, 1, 2]]),
         )
-        centers = jnp.array([
-            [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.5, jnp.sqrt(3.0) / 2, 0.0]]
-        ])
+        centers = jnp.array([[[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.5, jnp.sqrt(3.0) / 2, 0.0]]])
         box_size = jnp.array([[20.0, 20.0, 20.0]])
         traj = _make_trajectory(centers, box_size)
 
@@ -104,14 +102,18 @@ class TestTripletAngles:
             residue_names=("MOL", "MOL", "MOL"),
             angles=jnp.array([[0, 1, 2]]),
         )
-        centers = jnp.array([
-            [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
-            [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [-1.0, 0.0, 0.0]],
-        ])
-        box_size = jnp.array([
-            [20.0, 20.0, 20.0],
-            [20.0, 20.0, 20.0],
-        ])
+        centers = jnp.array(
+            [
+                [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0]],
+                [[1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [-1.0, 0.0, 0.0]],
+            ]
+        )
+        box_size = jnp.array(
+            [
+                [20.0, 20.0, 20.0],
+                [20.0, 20.0, 20.0],
+            ]
+        )
         traj = _make_trajectory(centers, box_size)
 
         obs = TripletAngles(topology=topology, angle_name="MOL_A_B_C")
@@ -127,12 +129,18 @@ class TestTripletAngles:
             residue_names=("MOL", "MOL", "MOL", "MOL", "MOL", "MOL"),
             angles=jnp.array([[0, 1, 2], [3, 4, 5]]),
         )
-        centers = jnp.array([
+        centers = jnp.array(
             [
-                [1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0],    # 90°
-                [1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [-1.0, 0.0, 0.0],   # 180°
-            ],
-        ])
+                [
+                    [1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],  # 90°
+                    [1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],  # 180°
+                ],
+            ]
+        )
         box_size = jnp.array([[20.0, 20.0, 20.0]])
         traj = _make_trajectory(centers, box_size)
 
@@ -204,12 +212,18 @@ class TestTripletAnglesMapped:
             residue_names=("R1", "R1", "R1", "R2", "R2", "R2"),
             angles=jnp.array([[0, 1, 2], [3, 4, 5]]),
         )
-        centers = jnp.array([
+        centers = jnp.array(
             [
-                [1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [0.0, 1.0, 0.0],
-                [1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [-1.0, 0.0, 0.0],
-            ],
-        ])
+                [
+                    [1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [0.0, 1.0, 0.0],
+                    [1.0, 0.0, 0.0],
+                    [0.0, 0.0, 0.0],
+                    [-1.0, 0.0, 0.0],
+                ],
+            ]
+        )
         box_size = jnp.array([[20.0, 20.0, 20.0]])
         traj = _make_trajectory(centers, box_size)
 

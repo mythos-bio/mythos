@@ -503,4 +503,3 @@ def test_from_oxdna_file(file_path: str, expected: jdt.Topology):
 def test_from_oxdna_file_format_only(file_path, expected_format):
     _, detected_format = jdt.from_oxdna_file(file_path, return_format=True)
     assert detected_format == expected_format
-

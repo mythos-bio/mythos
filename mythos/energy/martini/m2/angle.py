@@ -33,8 +33,8 @@ class AngleConfiguration(MartiniEnergyConfiguration):
 
 
 def compute_angle(
-        r_ij: Vector3D,
-        r_kj: Vector3D,
+    r_ij: Vector3D,
+    r_kj: Vector3D,
 ) -> float:
     """Compute the angle between three particles (angle at j).
 
@@ -49,7 +49,6 @@ def compute_angle(
     r_ij_norm = r_ij / jnp.linalg.norm(r_ij)
     r_kj_norm = r_kj / jnp.linalg.norm(r_kj)
 
-
     # calculating the cross and dot products
     cross_prod = jnp.cross(r_ij_norm, r_kj_norm)
     dot_prod = jnp.dot(r_ij_norm, r_kj_norm)
@@ -60,12 +59,12 @@ def compute_angle(
 
 
 def triplet_angle(
-        centers: Arr_States_3,
-        triplet: Vector3D,
-        k_angle: float,
-        theta0_angle: float,
-        displacement_fn: callable,
-        use_G96: bool,  # noqa: FBT001, N803
+    centers: Arr_States_3,
+    triplet: Vector3D,
+    k_angle: float,
+    theta0_angle: float,
+    displacement_fn: callable,
+    use_G96: bool,  # noqa: FBT001, N803
 ) -> float:
     """Calculate angle energy for a given triplet of particles.
 
@@ -91,7 +90,7 @@ def triplet_angle(
 
     theta = compute_angle(r_ij, r_kj)
     theta_term = (jnp.cos(theta) - jnp.cos(theta0_angle)) if use_G96 else (theta - theta0_angle)
-    return 0.5 * k_angle * theta_term ** 2
+    return 0.5 * k_angle * theta_term**2
 
 
 @chex.dataclass(frozen=True, kw_only=True)

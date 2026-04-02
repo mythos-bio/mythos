@@ -218,7 +218,7 @@ class TestWriteTo:
             "gen-vel": True,
             "pcoupl": False,
         }
-        expected = "integrator = md\n" "dt = 0.002\n" "nsteps = 50000\n" "gen-vel = yes\n" "pcoupl = no\n"
+        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen-vel = yes\npcoupl = no\n"
 
         text_stream = io.StringIO()
         gi.write_mdp_to(input_dict, text_stream)
@@ -238,7 +238,7 @@ class TestWrite:
             "pcoupl": False,
         }
 
-        expected = "integrator = md\n" "dt = 0.002\n" "nsteps = 50000\n" "gen-vel = yes\n" "pcoupl = no\n"
+        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen-vel = yes\npcoupl = no\n"
 
         output_file = tmp_path / "test.mdp"
         gi.write_mdp(in_config, output_file)
@@ -387,6 +387,7 @@ class TestGromacsParamsParser:
 
     def test_replace_in_place(self, tmp_path):
         import shutil
+
         topology_copy = tmp_path / "topology.top"
         shutil.copy(GROMACS_TEST_DATA / "preprocessed_topology.top", topology_copy)
         parser = gi.GromacsParamsParser(topology_copy)

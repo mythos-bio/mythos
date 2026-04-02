@@ -6,19 +6,19 @@ from mythos.energy.martini.base import MartiniEnergyConfiguration, MartiniEnergy
 
 class TestMartiniEnergyConfiguration:
     def test_parameter_loading(self):
-        conf = MartiniEnergyConfiguration(param_1 = 1.0, **{"param-2": 2.0})
+        conf = MartiniEnergyConfiguration(param_1=1.0, **{"param-2": 2.0})
         assert conf["param_1"] == 1.0
         assert conf["param-2"] == 2.0
 
     def test_opt_params(self):
-        conf = MartiniEnergyConfiguration(param_1 = 1.0, **{"param-2": 2.0})
+        conf = MartiniEnergyConfiguration(param_1=1.0, **{"param-2": 2.0})
         assert conf.opt_params == {"param_1": 1.0, "param-2": 2.0}
 
     def test_coupling_parameters(self):
         conf = MartiniEnergyConfiguration(
             couplings={"proxy_param": ["param_a", "param_b"]},
-            proxy_param = 3.0,
-            param_c = 4.0,
+            proxy_param=3.0,
+            param_c=4.0,
         )
         assert "proxy_param" in conf
         assert "proxy_param" not in conf.params
@@ -32,31 +32,32 @@ class TestMartiniEnergyConfiguration:
         with pytest.raises(ValueError, match="more than one coupling"):
             MartiniEnergyConfiguration(
                 couplings={"proxy_param": ["param_a", "param_b"], "other_proxy": ["param_b"]},
-                proxy_param = 3.0,
-                other_proxy = 4.0,
+                proxy_param=3.0,
+                other_proxy=4.0,
             )
 
     def test_keyerror_on_missing_param(self):
-        conf = MartiniEnergyConfiguration(param_1 = 1.0)
+        conf = MartiniEnergyConfiguration(param_1=1.0)
         with pytest.raises(KeyError, match="Parameter 'param_2' not found"):
             _ = conf["param_2"]
 
     def test_init_params_returns_self(self):
-        conf = MartiniEnergyConfiguration(param_1 = 1.0)
+        conf = MartiniEnergyConfiguration(param_1=1.0)
         assert conf.init_params() == conf
 
     def test_configuration_concatenate_with_config(self):
-        conf1 = MartiniEnergyConfiguration(param_1 = 1.0)
-        conf2 = MartiniEnergyConfiguration(param_2 = 2.0)
+        conf1 = MartiniEnergyConfiguration(param_1=1.0)
+        conf2 = MartiniEnergyConfiguration(param_2=2.0)
         combined = conf1 | conf2
         assert combined["param_1"] == 1.0
         assert combined["param_2"] == 2.0
 
     def test_configuration_concatenate_with_dict(self):
-        conf = MartiniEnergyConfiguration(param_1 = 1.0)
+        conf = MartiniEnergyConfiguration(param_1=1.0)
         combined = conf | {"param_2": 2.0}
         assert combined["param_1"] == 1.0
         assert combined["param_2"] == 2.0
+
 
 class TestMartiniTopology:
     def test_topology_from_tpr(self):
@@ -80,10 +81,10 @@ class TestMartiniEnergyFunction:
         with pytest.raises(ValueError, match="does not support user-input unbonded_neighbors"):
             MockEF(
                 params=MagicMock(),
-                atom_types = ("A", "B"),
-                atom_names = ("A1", "B1"),
-                residue_names = ("RES", "RES"),
-                angles = 1,
-                bonded_neighbors = 1,
-                unbonded_neighbors = 1,
+                atom_types=("A", "B"),
+                atom_names=("A1", "B1"),
+                residue_names=("RES", "RES"),
+                angles=1,
+                bonded_neighbors=1,
+                unbonded_neighbors=1,
             )

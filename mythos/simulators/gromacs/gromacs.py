@@ -130,28 +130,34 @@ class GromacsSimulator(InputDirSimulator):
 
         return SimulatorOutput(observables=[self._read_trajectory(input_dir, ref_t=ref_t)])
 
-    def _run_simulation_step(
-            self, structure_file: str, overrides: dict[str, Any], input_dir: Path, step: str
-        ) -> None:
+    def _run_simulation_step(self, structure_file: str, overrides: dict[str, Any], input_dir: Path, step: str) -> None:
         step_mdp = f"{step}_{self.mdp_file}"
         update_mdp_params(input_dir / self.mdp_file, overrides, out_file=input_dir / step_mdp)
         # prepare the run
         cmd = [
             "grompp",
-            "-f", step_mdp,
-            "-c", structure_file,
-            "-p", PREPROCESSED_TOPOLOGY_FILE,  # created in _update_topology_params
-            "-n", self.index_file,
-            "-o", f"{OUTPUT_PREFIX}.tpr",
+            "-f",
+            step_mdp,
+            "-c",
+            structure_file,
+            "-p",
+            PREPROCESSED_TOPOLOGY_FILE,  # created in _update_topology_params
+            "-n",
+            self.index_file,
+            "-o",
+            f"{OUTPUT_PREFIX}.tpr",
         ]
         self._run_gromacs(cmd, cwd=input_dir, log_prefix=f"{step}_grompp")
 
         # run the simulation
         cmd = [
             "mdrun",
-            "-deffnm", OUTPUT_PREFIX,
-            "-ntmpi", "1",
-            "-rdd", "1.5",
+            "-deffnm",
+            OUTPUT_PREFIX,
+            "-ntmpi",
+            "1",
+            "-rdd",
+            "1.5",
         ]
         self._run_gromacs(cmd, cwd=input_dir, log_prefix=f"{step}_mdrun")
 
@@ -185,10 +191,14 @@ class GromacsSimulator(InputDirSimulator):
         # which then will be used for writing replacement parameters.
         cmd = [
             "grompp",
-            "-p", self.topology_file,
-            "-f", self.mdp_file,
-            "-c", self.structure_file,
-            "-pp", PREPROCESSED_TOPOLOGY_FILE
+            "-p",
+            self.topology_file,
+            "-f",
+            self.mdp_file,
+            "-c",
+            self.structure_file,
+            "-pp",
+            PREPROCESSED_TOPOLOGY_FILE,
         ]
         self._run_gromacs(cmd, cwd=input_dir, log_prefix="topology_pp")
         topo_pp = input_dir / PREPROCESSED_TOPOLOGY_FILE
@@ -197,4 +207,3 @@ class GromacsSimulator(InputDirSimulator):
             raise FileNotFoundError(f"Preprocessed topology file not found after grompp: {topo_pp}")
 
         replace_params_in_topology(topo_pp, params, topo_pp)
-

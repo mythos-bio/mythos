@@ -446,6 +446,7 @@ def test_write_state_helper():
     assert "b = 10.0 10.0 10.0" in block
     assert "E = 0.0 1.0 2.0" in block
 
+
 def test_trajectory_from_file_raises_file_not_found():
     regx_pat = "^[" + re.escape(jdt.ERR_TRAJECTORY_FILE_NOT_FOUND.format("")) + "]"
     with pytest.raises(FileNotFoundError, match=regx_pat):

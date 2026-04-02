@@ -36,7 +36,7 @@ class MockObjective(jdna_objective.Objective):
 
     def calculate(self, observables, opt_params, call_count=0, **_kwargs):
         obs = next(iter(observables.values()))
-        grads = {k: v*0.1 for k, v in opt_params.items()}
+        grads = {k: v * 0.1 for k, v in opt_params.items()}
         return jdna_objective.ObjectiveOutput(
             is_ready=self.readiness_function(call_count),
             state={"call_count": call_count + 1},
@@ -276,6 +276,7 @@ class TestSimpleOptimizerStatePassing:
 
         # call_count should be 2 after second step
         assert output2.state.component_state["counter_objective"]["call_count"] == 2
+
 
 class TestSimpleOptimizerOptimizerState:
     """Tests for optimizer state management."""

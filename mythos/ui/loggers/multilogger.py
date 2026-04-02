@@ -1,6 +1,5 @@
 """MultiLogger: Logger that routes logs to multiple other loggers."""
 
-
 from typing_extensions import override
 
 from .logger import Logger, Status, StatusKind

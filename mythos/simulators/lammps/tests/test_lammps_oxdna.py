@@ -1,4 +1,3 @@
-
 import importlib
 from pathlib import Path
 from unittest import mock
@@ -52,7 +51,8 @@ class DummyFunction:
 @pytest.fixture
 def dummy_input_lines():
     def dummy_params(num):
-        return " ".join([f"{i+1}.0" for i in range(num)])
+        return " ".join([f"{i + 1}.0" for i in range(num)])
+
     return [
         "variable myvar equal 0",
         "variable another_var equal 42",
@@ -82,7 +82,8 @@ def dummy_input_dir(tmp_path, dummy_input_lines):
 @pytest.fixture
 def dummy_input_lines_dna2():
     def dummy_params(num):
-        return " ".join([f"{i+1}.0" for i in range(num)])
+        return " ".join([f"{i + 1}.0" for i in range(num)])
+
     return [
         "variable seed equal 123",
         "dump unusable all custom 1 unusable.dat id x y z",
@@ -242,14 +243,11 @@ def test_simulator_fails_on_no_input_file(tmp_path, dummy_input_lines):
 
 
 @pytest.mark.parametrize(
-        ("variables_arg", "expected_lines"),
-        [
-            ({}, ["variable myvar equal 0", "variable another_var equal 42"]),
-            (
-                {"variables": {"myvar": 10, "another_var": 99}},
-                ["variable myvar equal 10", "variable another_var equal 99"]
-            ),
-        ]
+    ("variables_arg", "expected_lines"),
+    [
+        ({}, ["variable myvar equal 0", "variable another_var equal 42"]),
+        ({"variables": {"myvar": 10, "another_var": 99}}, ["variable myvar equal 10", "variable another_var equal 99"]),
+    ],
 )
 def test_simulator_run_mocks_subprocess(
     tmp_path,
@@ -270,6 +268,7 @@ def test_simulator_run_mocks_subprocess(
         **variables_arg,  # use args unpacking here to ensure we test default (iso None input)
     )
     params = {"eps_backbone": 1.1, "delta_backbone": 2.2, "r0_backbone": 3.3}
+
     def get_fene_line(file):
         lines = file.read_text().splitlines()
         fene_line = next(line for line in lines if line.startswith("bond_coeff * "))
@@ -309,18 +308,48 @@ def test_lammps_read_trajectory_missing_state_fields(tmp_path, dummy_trajectory_
 @pytest.mark.parametrize("nstates", [1, 3])
 def test_read_lammps_output(tmp_path, nstates, dummy_trajectory_data, dummy_trajectory_timestep1):
     # Create a minimal trajectory.dat file
-    expected_states = np.array([
-        np.array([
-            -0.6126401, -0.65733242,  0.36297099,  0.99070266, -0.1356765 ,
-            -0.01000662, 0.02384375,  0.10074864,  0.99462615,  0.13535469,
-            0.01485072,  0.36949023,  0.31555816, -0.33903703, -0.52266142
-        ]),
-        np.array([
-            -0.45299467, -1.00036686,  0.72385708,  0.78077153,  0.62251237,
-            -0.05361124,  0.19713474, -0.16401073,  0.96656007, -0.07243678,
-            0.47758235,  -0.38516829, -0.24535349, -0.10238513,  0.05274903
-        ]),
-    ])
+    expected_states = np.array(
+        [
+            np.array(
+                [
+                    -0.6126401,
+                    -0.65733242,
+                    0.36297099,
+                    0.99070266,
+                    -0.1356765,
+                    -0.01000662,
+                    0.02384375,
+                    0.10074864,
+                    0.99462615,
+                    0.13535469,
+                    0.01485072,
+                    0.36949023,
+                    0.31555816,
+                    -0.33903703,
+                    -0.52266142,
+                ]
+            ),
+            np.array(
+                [
+                    -0.45299467,
+                    -1.00036686,
+                    0.72385708,
+                    0.78077153,
+                    0.62251237,
+                    -0.05361124,
+                    0.19713474,
+                    -0.16401073,
+                    0.96656007,
+                    -0.07243678,
+                    0.47758235,
+                    -0.38516829,
+                    -0.24535349,
+                    -0.10238513,
+                    0.05274903,
+                ]
+            ),
+        ]
+    )
 
     file = tmp_path / "trajectory.dat"
     file.write_text(dummy_trajectory_data + dummy_trajectory_timestep1 * (nstates - 1))
@@ -402,22 +431,24 @@ def test_check_dna1_default_energy_fn_replacements(dummy_input_dir):
     # parameter from the first hbond is also not included.
     expected = {
         "pair_coeff * * oxdna/excv": "2.0 0.7 0.675 2.0 0.515 0.5 2.0 0.33 0.32",
-        "pair_coeff * * oxdna/stk":
-            "1.3448 2.6568 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65",
+        "pair_coeff * * oxdna/stk": "1.3448 2.6568 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65",
         "pair_coeff * * oxdna/hbond": (
             "8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46"
-            " 3.141592653589793 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+            " 3.141592653589793 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"
+        ),
         "pair_coeff 1 4 oxdna/hbond": (
             "1.077 8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46 3.141592653589793"
-            " 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+            " 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"
+        ),
         "pair_coeff 2 3 oxdna/hbond": (
             "1.077 8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46 3.141592653589793"
-            " 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+            " 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"
+        ),
         "pair_coeff * * oxdna/xstk": (
             "47.5 0.575 0.675 0.495 0.655 2.25 0.791592653589793 0.58 1.7 1.0 0.68 1.7 1.0 0.68"
-            " 1.5 0 0.65 1.7 0.875 0.68 1.7 0.875 0.68"),
-        "pair_coeff * * oxdna/coaxstk":
-            "46.0 0.4 0.6 0.22 0.58 2.0 2.541592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 -0.65 2.0 -0.65"
+            " 1.5 0 0.65 1.7 0.875 0.68 1.7 0.875 0.68"
+        ),
+        "pair_coeff * * oxdna/coaxstk": "46.0 0.4 0.6 0.22 0.58 2.0 2.541592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 -0.65 2.0 -0.65",
     }
 
     skiplist = {
@@ -440,6 +471,7 @@ def test_check_dna1_default_energy_fn_replacements(dummy_input_dir):
         sim.input_dir.joinpath("input").read_text().splitlines(), expected, skiplist, shouldmatch=True
     )
 
+
 def test_check_dna2_default_energy_fn_replacements(dummy_input_dir_dna2):
     # Expected comes from https://docs.lammps.org/pair_oxdna2.html - which has
     # the default energy function parameters frozen in for oxdna model in
@@ -447,22 +479,24 @@ def test_check_dna2_default_energy_fn_replacements(dummy_input_dir_dna2):
     # parameter from the first hbond is also not included.
     expected = {
         "pair_coeff * * oxdna2/excv": "2.0 0.7 0.675 2.0 0.515 0.5 2.0 0.33 0.32",
-        "pair_coeff * * oxdna2/stk":
-            "1.3523 2.6717 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65",
+        "pair_coeff * * oxdna2/stk": "1.3523 2.6717 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65",
         "pair_coeff * * oxdna2/hbond": (
             "8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46 3.141592653589793 0.7 4.0 "
-            "1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+            "1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"
+        ),
         "pair_coeff 1 4 oxdna2/hbond": (
             "1.0678 8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46 3.141592653589793 0.7 4.0 "
-            "1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+            "1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"
+        ),
         "pair_coeff 2 3 oxdna2/hbond": (
             "1.0678 8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46 3.141592653589793 0.7 4.0 "
-            "1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"),
+            "1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"
+        ),
         "pair_coeff * * oxdna2/xstk": (
             "47.5 0.575 0.675 0.495 0.655 2.25 0.791592653589793 0.58 1.7 1.0 0.68 1.7 1.0 0.68 1.5 0 "
-            "0.65 1.7 0.875 0.68 1.7 0.875 0.68"),
-        "pair_coeff * * oxdna2/coaxstk":
-            "58.5 0.4 0.6 0.22 0.58 2.0 2.891592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 40.0 3.116592653589793",
+            "0.65 1.7 0.875 0.68 1.7 0.875 0.68"
+        ),
+        "pair_coeff * * oxdna2/coaxstk": "58.5 0.4 0.6 0.22 0.58 2.0 2.891592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 40.0 3.116592653589793",
         "pair_coeff * * oxdna2/dh": "0.5 0.815",
     }
 
@@ -495,7 +529,7 @@ def _read_lammps_energies(output_file: Path, read_num) -> np.ndarray:
     with Path(output_file).open("r") as f:
         for line in f:
             if line.startswith("   Step         PotEng"):
-                f.readline() # skip first state (this is init state which we don't use)
+                f.readline()  # skip first state (this is init state which we don't use)
                 energies_str = [f.readline().strip().split()[1] for _ in range(read_num)]
                 return np.float64(energies_str)
         return None
@@ -514,11 +548,13 @@ def test_lammps_energy():
     sim_traj = SimulatorTrajectory.from_rigid_body(traj.state_rigid_body)
 
     # box and kT match the box from lammps init conf, and temp for lammps input
-    energy_fn = create_default_energy_fn(
-        topology=topology,
-        displacement_fn=jax_md.space.periodic(200)[0]
-    ).without_terms("BondedExcludedVolume"  # lammps doesn't do this term
-    ).with_params(kt = 0.1)
+    energy_fn = (
+        create_default_energy_fn(topology=topology, displacement_fn=jax_md.space.periodic(200)[0])
+        .without_terms(
+            "BondedExcludedVolume"  # lammps doesn't do this term
+        )
+        .with_params(kt=0.1)
+    )
     energy = energy_fn.map(sim_traj)
 
     # lammps will report per-nucleotide energy
@@ -535,14 +571,19 @@ def test_lammps_energy_dna2():
     sim_traj = SimulatorTrajectory.from_rigid_body(traj.state_rigid_body)
 
     # box and kT match the box from lammps init conf, and temp for lammps input
-    energy_fn = dna2.create_default_energy_fn(
-        topology=topology,
-        displacement_fn=jax_md.space.periodic(200)[0]
-    ).without_terms("BondedExcludedVolume"  # lammps doesn't do this term
-    ).with_params(
-        # To be explicit. half_charged_ends is False in LAMMPS, and unsure if it
-        # is configurable there.
-        kt = 0.1, salt_conc=0.5, q_eff=0.815, half_charged_ends=False
+    energy_fn = (
+        dna2.create_default_energy_fn(topology=topology, displacement_fn=jax_md.space.periodic(200)[0])
+        .without_terms(
+            "BondedExcludedVolume"  # lammps doesn't do this term
+        )
+        .with_params(
+            # To be explicit. half_charged_ends is False in LAMMPS, and unsure if it
+            # is configurable there.
+            kt=0.1,
+            salt_conc=0.5,
+            q_eff=0.815,
+            half_charged_ends=False,
+        )
     )
     energy = energy_fn.map(sim_traj)
 

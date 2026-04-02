@@ -1,4 +1,5 @@
 """Functions for handling sequence-dependent inputs."""
+
 from pathlib import Path
 
 import jax.numpy as jnp
@@ -26,20 +27,20 @@ def read_ss_weights(file: str) -> dict[str, jnp.ndarray]:
     param_map = {}
     with Path(file).open("r") as f:
         for line in f:
-            if kv := line.strip().replace(" ",""):
+            if kv := line.strip().replace(" ", ""):
                 key, val = kv.split("=")
                 param_map[key] = float(val.replace("f", ""))
 
-    stack_weights = np.zeros((4,4), dtype=jnp.float64)
+    stack_weights = np.zeros((4, 4), dtype=jnp.float64)
     for i, row in enumerate(DNA_ALPHA):
         for j, col in enumerate(DNA_ALPHA):
-            stack_weights[i,j] = param_map[f"STCK_{row}_{col}"]
+            stack_weights[i, j] = param_map[f"STCK_{row}_{col}"]
 
     # in oxDNA the bonding pair mirrors are always set the the same value, read
     # from only one of them
     hb_a_t = param_map.get("HYDR_A_T", param_map["HYDR_T_A"])
     hb_g_c = param_map.get("HYDR_G_C", param_map["HYDR_C_G"])
-    hb_weights = np.zeros((4,4), dtype=jnp.float64)
+    hb_weights = np.zeros((4, 4), dtype=jnp.float64)
     hb_weights[N_IDX["A"], N_IDX["T"]] = hb_weights[N_IDX["T"], N_IDX["A"]] = hb_a_t
     hb_weights[N_IDX["G"], N_IDX["C"]] = hb_weights[N_IDX["C"], N_IDX["G"]] = hb_g_c
 

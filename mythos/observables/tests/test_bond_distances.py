@@ -92,16 +92,20 @@ class TestBondDistances:
             residue_names=("MOL", "MOL"),
             bonded_neighbors=jnp.array([[0, 1]]),
         )
-        centers = jnp.array([
-            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
-            [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
-            [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
-        ])
-        box_size = jnp.array([
-            [20.0, 20.0, 20.0],
-            [20.0, 20.0, 20.0],
-            [20.0, 20.0, 20.0],
-        ])
+        centers = jnp.array(
+            [
+                [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0]],
+                [[0.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
+                [[0.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
+            ]
+        )
+        box_size = jnp.array(
+            [
+                [20.0, 20.0, 20.0],
+                [20.0, 20.0, 20.0],
+                [20.0, 20.0, 20.0],
+            ]
+        )
         traj = _make_trajectory(centers, box_size)
 
         obs = BondDistances(topology=topology, bond_name="MOL_A_B")
@@ -117,9 +121,11 @@ class TestBondDistances:
             residue_names=("MOL", "MOL", "MOL", "MOL"),
             bonded_neighbors=jnp.array([[0, 1], [2, 3]]),
         )
-        centers = jnp.array([
-            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
-        ])
+        centers = jnp.array(
+            [
+                [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [2.0, 0.0, 0.0]],
+            ]
+        )
         box_size = jnp.array([[20.0, 20.0, 20.0]])
         traj = _make_trajectory(centers, box_size)
 
@@ -207,9 +213,11 @@ class TestBondDistancesMapped:
             residue_names=("R1", "R1", "R2", "R2"),
             bonded_neighbors=jnp.array([[0, 1], [2, 3]]),
         )
-        centers = jnp.array([
-            [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
-        ])
+        centers = jnp.array(
+            [
+                [[0.0, 0.0, 0.0], [1.0, 0.0, 0.0], [0.0, 0.0, 0.0], [3.0, 0.0, 0.0]],
+            ]
+        )
         box_size = jnp.array([[20.0, 20.0, 20.0]])
         traj = _make_trajectory(centers, box_size)
 

@@ -35,6 +35,7 @@ def default_configs() -> tuple[PyTree, PyTree]:
     """Return the default simulation and energy configurations for dna2."""
     return default_configs_for("dna2")
 
+
 def default_energy_configs(
     overrides: dict = MappingProxyType({}), opts: dict = MappingProxyType({})
 ) -> list[BaseConfiguration]:
@@ -104,10 +105,7 @@ def default_transform_fn() -> callable:
     )
 
 
-def create_default_energy_fn(
-        topology: Topology,
-        displacement_fn: callable = DEFAULT_DISPLACEMENT
-    ) -> EnergyFunction:
+def create_default_energy_fn(topology: Topology, displacement_fn: callable = DEFAULT_DISPLACEMENT) -> EnergyFunction:
     """Create the default oxDNA2 energy function.
 
     This creates the composed energy function from the default set of function

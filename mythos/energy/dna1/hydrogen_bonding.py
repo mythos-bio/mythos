@@ -1,6 +1,5 @@
 """Hydrogen bonding energy function for DNA1 model."""
 
-
 import chex
 import jax.numpy as jnp
 import numpy as np

@@ -1,4 +1,5 @@
 """General utility functions for working with Martini observables."""
+
 import MDAnalysis
 import numpy as np
 from MDAnalysis.coordinates.memory import MemoryReader

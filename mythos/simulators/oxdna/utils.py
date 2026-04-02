@@ -347,11 +347,7 @@ def update_params(src_h: Path, new_params: jd_types.Params | list[jd_types.Param
 
 def _get_order_parameter_names(op_file: Path) -> list[str]:
     with op_file.open("r") as f:
-        return [
-            line.strip().split("=")[1].strip()
-            for line in f
-            if line.strip().startswith("order_parameter")
-        ]
+        return [line.strip().split("=")[1].strip() for line in f if line.strip().startswith("order_parameter")]
 
 
 def read_energy(simulation_dir: Path) -> pd.DataFrame:
@@ -371,9 +367,7 @@ def read_energy(simulation_dir: Path) -> pd.DataFrame:
     """
     inputs = oxdna_input.read(simulation_dir / "input")
     energy_file = simulation_dir / inputs["energy_file"]
-    energy_df_columns_base = [
-        "time", "potential_energy", "acc_ratio_trans", "acc_ratio_rot", "acc_ratio_vol"
-    ]
+    energy_df_columns_base = ["time", "potential_energy", "acc_ratio_trans", "acc_ratio_rot", "acc_ratio_vol"]
 
     # This is a space separated file, no header and the first row corresponds to
     # the 0th step, which does not match the trajectory file, so we skip it. The

@@ -33,7 +33,7 @@ class SchedulerHints:
     max_retries: int | None = None
     custom: dict[str, dict[str, Any]] = field(default_factory=dict)
 
-    def to_dict(self, engine: str, rewrite_options: dict[str, str]|None = None) -> dict[str, Any]:
+    def to_dict(self, engine: str, rewrite_options: dict[str, str] | None = None) -> dict[str, Any]:
         """Convert SchedulerHints to a dictionary.
 
         Args:
@@ -42,12 +42,12 @@ class SchedulerHints:
                 options for the target engine.
         """
         rewrite_options = rewrite_options or {}
+
         def translate(name: str) -> str:
             return rewrite_options.get(name, name)
+
         option_dict = {
-            translate(option): value
-            for option, value in self.items()
-            if value is not None and option != "custom"
+            translate(option): value for option, value in self.items() if value is not None and option != "custom"
         }
         return {
             **option_dict,

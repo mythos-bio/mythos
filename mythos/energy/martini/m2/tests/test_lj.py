@@ -37,9 +37,8 @@ def lj_config() -> LJConfiguration:
     params = load_lj_params()
     assert len(params) > 703  # 37 bead types, self-pairings no directionality -> 37*38/2 = 703 pairs
     # unpack into dict for config
-    return LJConfiguration(
-        **params
-    )
+    return LJConfiguration(**params)
+
 
 @pytest.fixture
 def energies() -> jnp.ndarray:
@@ -99,7 +98,7 @@ class TestLJConfiguration:
             {"lj_epsilon_A_A": 5.0},  # Missing sigma
             {"lj_sigma_A_B": 0.5, "lj_epsilon_A_B": 4.5},  # Missing A_A and B_B
             {"lj_sigma_A_B": 0.5, "lj_sigma_A_A": 0.47, "lj_epsilon_A_B": 4.5},  # partial missing
-        ]
+        ],
     )
     def test_missing_bead_type_pairing_raises_error(self, incomplete_params):
         with pytest.raises(ValueError, match="Missing LJ"):
@@ -204,6 +203,7 @@ class TestLJConfiguration:
         assert config.params["lj_epsilon_A_A"] == 5.0
         assert config.params["lj_epsilon_B_B"] == 5.0
         assert config.params["lj_epsilon_A_B"] == 4.0
+
 
 class TestLJEnergy:
     """Tests for LJ energy computation."""

@@ -122,7 +122,6 @@ class Trajectory:
                 )
 
 
-
 @chex.dataclass(frozen=True)
 class NucleotideState:
     """State information for the nucleotides in a single state."""
@@ -322,11 +321,7 @@ def _read_file(file_path: Path, start: int, end: int, strand_lengths: list[int],
 
 
 def _write_state(
-    file: TextIO,
-    time: float,
-    energies: typ.Vector3D,
-    state: typ.Arr_Nucleotide_15,
-    box_size: typ.Vector3D = (0, 0, 0)
+    file: TextIO, time: float, energies: typ.Vector3D, state: typ.Arr_Nucleotide_15, box_size: typ.Vector3D = (0, 0, 0)
 ) -> None:
     file.write(f"t = {time}\n")
     file.write(f"b = {box_size[0]} {box_size[1]} {box_size[2]}\n")
