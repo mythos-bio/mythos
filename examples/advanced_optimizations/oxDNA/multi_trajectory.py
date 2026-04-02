@@ -8,10 +8,11 @@ repository. i.e. this file was invoked using:
 import functools
 import logging
 import os
-from pathlib import Path
 import shutil
 import typing
 import warnings
+from pathlib import Path
+
 import jax
 import jax.numpy as jnp
 import jax_md
@@ -26,14 +27,13 @@ import mythos.input.topology as jdna_top
 import mythos.input.trajectory as jdna_traj
 import mythos.input.tree as jdna_tree
 import mythos.observables as jd_obs
-import mythos.optimization.simulator as jdna_simulator
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
-import mythos.simulators.oxdna as oxdna
+import mythos.optimization.simulator as jdna_simulator
 import mythos.simulators.io as jdna_sio
-import mythos.utils.types as jdna_types
+import mythos.simulators.oxdna as oxdna
 import mythos.ui.loggers.console as console_logger
-
+import mythos.utils.types as jdna_types
 
 jax.config.update("jax_enable_x64", True)
 

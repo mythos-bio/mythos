@@ -6,9 +6,11 @@ import jax
 import jax.numpy as jnp
 import MDAnalysis
 import optax
+
 from mythos.energy.base import ComposedEnergyFunction
 from mythos.energy.martini.base import MartiniTopology
-from mythos.energy.martini.m2 import LJ, Angle, AngleConfiguration, Bond, BondConfiguration, LJConfiguration
+from mythos.energy.martini.m2 import (LJ, Angle, AngleConfiguration, Bond,
+                                      BondConfiguration, LJConfiguration)
 from mythos.input.gromacs_input import read_params_from_topology
 from mythos.observables.membrane_thickness import MembraneThickness
 from mythos.optimization.objective import DiffTReObjective

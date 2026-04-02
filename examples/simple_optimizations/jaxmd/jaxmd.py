@@ -14,15 +14,15 @@ import jax.numpy as jnp
 import jax_md
 import optax
 
-from mythos.energy.base import ComposedEnergyFunction
 import mythos.energy.dna1 as jdna_energy
-from mythos.energy.dna1.stacking import Stacking
 import mythos.input.topology as jdna_top
 import mythos.input.trajectory as jdna_traj
 import mythos.losses.observable_wrappers as jdna_losses
 import mythos.observables as jdna_obs
 import mythos.simulators.jax_md as jdna_jaxmd
 import mythos.utils.types as jdna_types
+from mythos.energy.base import ComposedEnergyFunction
+from mythos.energy.dna1.stacking import Stacking
 
 jax.config.update("jax_enable_x64", True)
 

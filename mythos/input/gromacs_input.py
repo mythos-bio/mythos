@@ -46,7 +46,7 @@ def _parse_boolean(value: str) -> tuple[bool, bool]:
 def _parse_value(value: str) -> str | float | int | bool:
     """Parse a value string, handling comments and type inference."""
     # Remove potential comment from end of line (GROMACS uses ; for comments)
-    value = value.split(";")[0].strip()
+    value = value.split(";", maxsplit=1)[0].strip()
 
     if not value:
         return ""

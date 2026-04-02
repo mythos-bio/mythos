@@ -7,8 +7,8 @@ repository. i.e. this file was invoked using:
 """
 from pathlib import Path
 
-import mythos.input.trajectory as jdna_traj
 import mythos.input.topology as jdna_top
+import mythos.input.trajectory as jdna_traj
 import mythos.simulators.oxdna as jdna_oxdna
 import mythos.utils.types as jdna_types
 

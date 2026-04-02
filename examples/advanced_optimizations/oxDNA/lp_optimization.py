@@ -7,15 +7,17 @@ from pathlib import Path
 import fire
 import jax
 import jax.numpy as jnp
+import jax_md
+import optax
+import ray
+from tqdm import tqdm
+
 import mythos.energy as jdna_energy
 import mythos.energy.dna1 as dna1_energy
 import mythos.input.topology as jdna_top
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
 import mythos.utils.types as jdna_types
-import jax_md
-import optax
-import ray
 from mythos.input import oxdna_input
 from mythos.observables import base
 from mythos.observables.persistence_length import PersistenceLength
@@ -24,7 +26,6 @@ from mythos.ui.loggers.console import ConsoleLogger
 from mythos.ui.loggers.logger import NullLogger
 from mythos.ui.loggers.multilogger import MultiLogger
 from mythos.utils.units import get_kt_from_string
-from tqdm import tqdm
 
 jax.config.update("jax_enable_x64", True)
 

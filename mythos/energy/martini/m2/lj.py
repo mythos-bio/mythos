@@ -111,8 +111,8 @@ class LJ(MartiniEnergyFunction):
         triu_i, triu_j = jnp.triu_indices(len(self.atom_types), k=1)
         bonded_mask = jnp.ones((len(self.atom_types), len(self.atom_types)), dtype=bool)
         bn_i, bn_j = self.bonded_neighbors[:, 0], self.bonded_neighbors[:, 1]
-        bonded_mask = bonded_mask.at[bn_i, bn_j].set(False)  # noqa: FBT003
-        bonded_mask = bonded_mask.at[bn_j, bn_i].set(False)  # noqa: FBT003 ensure symmetry
+        bonded_mask = bonded_mask.at[bn_i, bn_j].set(False)
+        bonded_mask = bonded_mask.at[bn_j, bn_i].set(False)
         return triu_i, triu_j, bonded_mask
 
     @override

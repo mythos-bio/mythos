@@ -52,10 +52,10 @@ def calc_rows_and_columns(
         is_valid_ncols = is_valid_nrows = False
 
     if not is_valid_nrows and not is_valid_ncols:
-        nrows = ncols = int(math.ceil(math.sqrt(n_plots)))
+        nrows = ncols = math.ceil(math.sqrt(n_plots))
     else:
-        nrows = nrows if is_valid_nrows else int(math.ceil(n_plots / ncols))
-        ncols = ncols if is_valid_ncols else int(math.ceil(n_plots / nrows))
+        nrows = nrows if is_valid_nrows else math.ceil(n_plots / ncols)
+        ncols = ncols if is_valid_ncols else math.ceil(n_plots / nrows)
 
     return nrows, ncols
 
@@ -222,8 +222,8 @@ class JupyterLogger(logger.Logger):
             StatusKind.OBSERVABLE: {btn.description: btn for btn in self.obs_btns},
         }
 
-        nrows, ncols = plots_nrows_ncols if plots_nrows_ncols else (None, None)
-        width_px, height_px = plots_size_px if plots_size_px else (None, None)
+        nrows, ncols = plots_nrows_ncols or (None, None)
+        width_px, height_px = plots_size_px or (None, None)
 
         self.plots = PlotlyLogger(
             metrics_to_log,

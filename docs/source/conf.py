@@ -1,5 +1,6 @@
 # Configuration file for the Sphinx documentation builder.
 import datetime
+
 # -- Project information
 from mythos import __project__, __version__
 
@@ -63,6 +64,7 @@ epub_show_urls = "footnote"
 
 import os
 import sys
+
 sys.path.insert(0, os.path.abspath("../mythos"))
 
 def skip_irrelevant(app, what, name, obj, skip, options):

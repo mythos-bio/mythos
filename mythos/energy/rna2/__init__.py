@@ -7,7 +7,7 @@ from mythos.energy.rna2.stacking import Stacking, StackingConfiguration
 __all__ = [
     "CrossStacking",
     "CrossStackingConfiguration",
+    "Nucleotide",
     "Stacking",
     "StackingConfiguration",
-    "Nucleotide",
 ]
