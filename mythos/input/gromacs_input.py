@@ -94,11 +94,11 @@ def write_mdp_to(input_config: dict, f: io.TextIOWrapper) -> None:
         input_config: Dictionary of configuration key-value pairs.
         f: File handle to write to.
     """
+    input_config = {k.replace("-", "_"): v for k, v in input_config.items()}
     for key, value in input_config.items():
         # GROMACS uses yes/no for booleans
         parsed_value = ("yes" if value else "no") if isinstance(value, bool) else str(value)
-        _key = key.replace("-", "_")  # equivalent in GROMACS
-        f.write(f"{_key} = {parsed_value}\n")
+        f.write(f"{key} = {parsed_value}\n")
 
 
 def write_mdp(input_config: dict, input_file: Path) -> None:
