@@ -168,7 +168,7 @@ def flatten_n(x: jnp.ndarray, n: int) -> jnp.ndarray:
     """Flatten `x` by `n` levels."""
     # setting n <= 1 does not achieve the desired effect
     chex.assert_scalar_positive(n - 1)
-    return jax.tree.map(lambda y: jnp.reshape(y, (-1,) + y.shape[n:]), x)
+    return jax.tree.map(lambda y: jnp.reshape(y, (-1, *y.shape[n:])), x)
 
 
 def checkpoint_scan(

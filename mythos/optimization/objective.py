@@ -228,7 +228,7 @@ def compute_loss(
         new_energies,
         ref_energies,
     )
-    loss, (measured_value, meta) = loss_fn(ref_states, weights, energy_fn, opt_params, observables)
+    loss, (measured_value, _) = loss_fn(ref_states, weights, energy_fn, opt_params, observables)
     return loss, (neff, measured_value, new_energies)
 
 
@@ -361,7 +361,7 @@ class DiffTReObjective(Objective):
             )
 
         # Compute gradients
-        (loss, (_, measured_value, new_energies)), grads = compute_loss_and_grad(
+        (loss, (_, measured_value, _)), grads = compute_loss_and_grad(
             opt_params,
             self.energy_fn,
             beta,

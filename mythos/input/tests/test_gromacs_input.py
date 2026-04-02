@@ -2,6 +2,7 @@
 
 import importlib
 import io
+import shutil
 from pathlib import Path
 
 import numpy as np
@@ -120,7 +121,7 @@ class TestParseValue:
             ("; just a comment", ""),
         ],
     )
-    def test_parse_value(self, value: str, expected: str | float | bool) -> None:
+    def test_parse_value(self, value: str, expected: str | float | bool) -> None: # noqa: FBT001 args can be non bool
         """Test _parse_value function with various inputs."""
         assert gi._parse_value(value) == expected
 
@@ -386,8 +387,6 @@ class TestGromacsParamsParser:
         assert "DMPC            64" in content
 
     def test_replace_in_place(self, tmp_path):
-        import shutil
-
         topology_copy = tmp_path / "topology.top"
         shutil.copy(GROMACS_TEST_DATA / "preprocessed_topology.top", topology_copy)
         parser = gi.GromacsParamsParser(topology_copy)

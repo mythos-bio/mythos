@@ -15,7 +15,7 @@ LJ_EPSILON_PREFIX = "lj_epsilon_"
 
 
 class LJConfiguration(MartiniEnergyConfiguration):
-    """ "Configuration for Martini Lennard-Jones energy function.
+    """Configuration for Martini Lennard-Jones energy function.
 
     All parameters provided must be of the form "lj_sigma_A_B" or "lj_epsilon_A_B",
     where A and B are bead types. Pair order is ignored unless both orderings

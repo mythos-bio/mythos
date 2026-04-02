@@ -431,7 +431,7 @@ def test_check_dna1_default_energy_fn_replacements(dummy_input_dir):
     # parameter from the first hbond is also not included.
     expected = {
         "pair_coeff * * oxdna/excv": "2.0 0.7 0.675 2.0 0.515 0.5 2.0 0.33 0.32",
-        "pair_coeff * * oxdna/stk": "1.3448 2.6568 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65",
+        "pair_coeff * * oxdna/stk": "1.3448 2.6568 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65", # noqa:E501 test code
         "pair_coeff * * oxdna/hbond": (
             "8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46"
             " 3.141592653589793 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"

@@ -65,7 +65,7 @@ def tear_down_test_dir(test_dir: str):
     """Tear down the test directory."""
     shutil.rmtree(test_dir)
 
-    if len(os.listdir(Path(test_dir).parent)) == 0:
+    if len(Path(test_dir).parent.iterdir()) == 0:
         test_dir.parent.rmdir()
 
 

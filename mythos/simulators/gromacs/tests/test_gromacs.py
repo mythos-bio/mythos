@@ -68,7 +68,7 @@ class TestGromacsSimulatorInstantiation:
 
     def test_init_raises_for_missing_files(self, tmp_path: Path, mock_energy_fn):
         """Test that initialization raises FileNotFoundError when required files are missing."""
-        with pytest.raises(FileNotFoundError, match="Required input file .* not found"):
+        with pytest.raises(FileNotFoundError, match=r"Required input file .* not found"):
             GromacsSimulator(
                 input_dir=tmp_path,
                 energy_fn=mock_energy_fn,

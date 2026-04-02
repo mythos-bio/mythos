@@ -76,7 +76,7 @@ def energy_info():
 
 @pytest.fixture
 def melting_temp_fn(energy_info):
-    energy_fn, energy_config, transform_fn = energy_info
+    energy_fn, _, transform_fn = energy_info
     melting_temp = MeltingTemp(
         rigid_body_transform_fn=transform_fn,
         sim_temperature=KT,

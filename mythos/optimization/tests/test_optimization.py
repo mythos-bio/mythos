@@ -904,7 +904,7 @@ class TestOptimizerRun:
         opt = StubOptimizer()
         params = {"p": jnp.array(1.0)}
 
-        with pytest.raises(ValueError, match="n_steps must be at least 1."):
+        with pytest.raises(ValueError, match=r"n_steps must be at least 1."):
             opt.run(params, n_steps=0)
 
     def test_logs_metrics_with_qualified_names(self):
