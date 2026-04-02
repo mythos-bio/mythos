@@ -12,7 +12,8 @@ license = {file = "LICENSE"}
 
 requires-python = ">=3.11"
 dependencies = [
-    "jax_md @ git+https://github.com/jax-md/jax-md@c451353f6ddcab031f660befda256d8a4f657855",
+    #"jax_md @ git+https://github.com/jax-md/jax-md@ce693733f1df66d79eb9aa69cbcfa9d50d11630f",
+    "jax_md",
     "jax",
     "jaxlib",
     "jaxopt",
