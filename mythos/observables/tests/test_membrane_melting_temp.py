@@ -139,6 +139,7 @@ class TestComputeMembraneTm:
 
     def test_differentiable_wrt_apls(self):
         """jax.grad should work through the solver (implicit diff)."""
+
         def loss_fn(apls):
             return compute_membrane_tm(apls, TEMPS, implicit_diff=True)
 
@@ -160,7 +161,12 @@ class TestMembraneMeltingTempBatched:
         """Build a trajectory and matching per-frame APL values."""
         temps_arr = jnp.asarray(temps)
         true_apls = calculate_apl(
-            temps_arr, TRUE_APL0, TRUE_C_P_G, TRUE_DAPL, TRUE_K, TRUE_TM,
+            temps_arr,
+            TRUE_APL0,
+            TRUE_C_P_G,
+            TRUE_DAPL,
+            TRUE_K,
+            TRUE_TM,
         )
         # Each temperature gets n_per_temp identical frames
         trajectories = [_make_trajectory(n_per_temp, (float(t),)) for t in temps_arr]
@@ -207,7 +213,12 @@ class TestMembraneMeltingTempBatched:
         temps = jnp.array([300.0, 310.0, 320.0, 330.0, 340.0])
         temps_arr = temps
         true_apls = calculate_apl(
-            temps_arr, TRUE_APL0, TRUE_C_P_G, TRUE_DAPL, TRUE_K, TRUE_TM,
+            temps_arr,
+            TRUE_APL0,
+            TRUE_C_P_G,
+            TRUE_DAPL,
+            TRUE_K,
+            TRUE_TM,
         )
         n_per_temp = 2
 

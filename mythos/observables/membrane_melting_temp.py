@@ -115,7 +115,9 @@ def fit_apl_sigmoid(
     """
     init_guess = get_initial_guess(sim_apls, sim_temps)
     lm = LevenbergMarquardt(
-        residual_fun=apl_residual, implicit_diff=implicit_diff, maxiter=maxiter,
+        residual_fun=apl_residual,
+        implicit_diff=implicit_diff,
+        maxiter=maxiter,
     )
     res = lm.run(init_guess, (sim_apls, sim_temps))
     return res.params
@@ -215,6 +217,4 @@ class MembraneMeltingTemp:
 
         expected_apls = jnp.stack(expected_apls)
 
-        return compute_membrane_tm(
-            expected_apls, self.temperatures, implicit_diff=self.implicit_diff
-        )
+        return compute_membrane_tm(expected_apls, self.temperatures, implicit_diff=self.implicit_diff)
