@@ -121,7 +121,7 @@ class TestParseValue:
             ("; just a comment", ""),
         ],
     )
-    def test_parse_value(self, value: str, expected: str | float | bool) -> None: # noqa: FBT001 args can be non bool
+    def test_parse_value(self, value: str, expected: str | float | bool) -> None:  # noqa: FBT001 args can be non bool
         """Test _parse_value function with various inputs."""
         assert gi._parse_value(value) == expected
 

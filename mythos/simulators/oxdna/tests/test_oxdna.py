@@ -41,7 +41,7 @@ def test_guess_binary_location() -> None:
         oxdna._guess_binary_location("zamboomafoo", "MAKE_BIN_PATH")
 
 
-def setup_test_dir(test_dir: Path | None = None, add_input: bool = True):  # noqa: FBT001,FBT002
+def setup_test_dir(test_dir: Path | None = None, add_input: bool = True) -> Path:  # noqa: FBT001,FBT002
     """Setup the test directory."""
     if not test_dir:
         test_dir = file_dir / f"test_data/{uuid.uuid4()}"
@@ -61,11 +61,11 @@ def setup_test_dir(test_dir: Path | None = None, add_input: bool = True):  # noq
     return test_dir
 
 
-def tear_down_test_dir(test_dir: str):
+def tear_down_test_dir(test_dir: Path):
     """Tear down the test directory."""
     shutil.rmtree(test_dir)
 
-    if len(list(Path(test_dir).parent.iterdir())) == 0:
+    if len(list(test_dir.parent.iterdir())) == 0:
         test_dir.parent.rmdir()
 
 

@@ -431,7 +431,7 @@ def test_check_dna1_default_energy_fn_replacements(dummy_input_dir):
     # parameter from the first hbond is also not included.
     expected = {
         "pair_coeff * * oxdna/excv": "2.0 0.7 0.675 2.0 0.515 0.5 2.0 0.33 0.32",
-        "pair_coeff * * oxdna/stk": "1.3448 2.6568 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65", # noqa:E501 test code
+        "pair_coeff * * oxdna/stk": "1.3448 2.6568 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65",  # noqa:E501 test code
         "pair_coeff * * oxdna/hbond": (
             "8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46"
             " 3.141592653589793 0.7 4.0 1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"
@@ -448,7 +448,7 @@ def test_check_dna1_default_energy_fn_replacements(dummy_input_dir):
             "47.5 0.575 0.675 0.495 0.655 2.25 0.791592653589793 0.58 1.7 1.0 0.68 1.7 1.0 0.68"
             " 1.5 0 0.65 1.7 0.875 0.68 1.7 0.875 0.68"
         ),
-        "pair_coeff * * oxdna/coaxstk": "46.0 0.4 0.6 0.22 0.58 2.0 2.541592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 -0.65 2.0 -0.65", # noqa:E501 test code
+        "pair_coeff * * oxdna/coaxstk": "46.0 0.4 0.6 0.22 0.58 2.0 2.541592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 -0.65 2.0 -0.65",  # noqa:E501 test code
     }
 
     skiplist = {
@@ -479,7 +479,7 @@ def test_check_dna2_default_energy_fn_replacements(dummy_input_dir_dna2):
     # parameter from the first hbond is also not included.
     expected = {
         "pair_coeff * * oxdna2/excv": "2.0 0.7 0.675 2.0 0.515 0.5 2.0 0.33 0.32",
-        "pair_coeff * * oxdna2/stk": "1.3523 2.6717 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65", # noqa:E501 test code
+        "pair_coeff * * oxdna2/stk": "1.3523 2.6717 6.0 0.4 0.9 0.32 0.75 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 2.0 0.65 2.0 0.65",  # noqa:E501 test code
         "pair_coeff * * oxdna2/hbond": (
             "8.0 0.4 0.75 0.34 0.7 1.5 0 0.7 1.5 0 0.7 1.5 0 0.7 0.46 3.141592653589793 0.7 4.0 "
             "1.5707963267948966 0.45 4.0 1.5707963267948966 0.45"
@@ -496,7 +496,7 @@ def test_check_dna2_default_energy_fn_replacements(dummy_input_dir_dna2):
             "47.5 0.575 0.675 0.495 0.655 2.25 0.791592653589793 0.58 1.7 1.0 0.68 1.7 1.0 0.68 1.5 0 "
             "0.65 1.7 0.875 0.68 1.7 0.875 0.68"
         ),
-        "pair_coeff * * oxdna2/coaxstk": "58.5 0.4 0.6 0.22 0.58 2.0 2.891592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 40.0 3.116592653589793", # noqa:E501 test code
+        "pair_coeff * * oxdna2/coaxstk": "58.5 0.4 0.6 0.22 0.58 2.0 2.891592653589793 0.65 1.3 0 0.8 0.9 0 0.95 0.9 0 0.95 40.0 3.116592653589793",  # noqa:E501 test code
         "pair_coeff * * oxdna2/dh": "0.5 0.815",
     }
 

@@ -49,7 +49,7 @@ def test_parse_boolean(value: str, expected: tuple[bool, bool]) -> None:
         ("1-numString", "1-numString"),
     ],
 )
-def test_parse_value(value: str, expected: str | float | bool) -> None: # noqa: FBT001 args can be non bool
+def test_parse_value(value: str, expected: str | float | bool) -> None:  # noqa: FBT001 args can be non bool
     """Test _parse_value function."""
     assert oi._parse_value(value) == expected
 

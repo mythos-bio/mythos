@@ -281,7 +281,7 @@ class RayOptimizer(Optimizer):
                         sim_state = component_state.get(sim.name, {})
                         refs, md_ref = self._run_simulator(sim, params, **sim_state)
                         for r, exp in zip(refs, sim.exposes(), strict=True):
-                            ref_map[r] = exp # noqa: PERF403 dict is instantiated and used elswhere
+                            ref_map[r] = exp  # noqa: PERF403 dict is instantiated and used elsewhere
                         ref_map[md_ref] = sim.name
 
             # wait for anything to finish. We do a second wait without num
