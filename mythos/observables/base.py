@@ -22,8 +22,8 @@ class BaseObservable:
 
 
 def local_helical_axis_with_norm(
-        quartet: jnp.ndarray, base_sites: jnp.ndarray, displacement_fn: Callable
-    ) -> jnp.ndarray:
+    quartet: jnp.ndarray, base_sites: jnp.ndarray, displacement_fn: Callable
+) -> jnp.ndarray:
     """Computes the norm and normalized local helical axis defined by two base pairs."""
     # Extract the two base pairs. a1 is h-bonded to b1, a2 is h-bonded to b2
     bp1, bp2 = quartet

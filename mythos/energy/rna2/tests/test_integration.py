@@ -140,7 +140,7 @@ def test_bonded_excluded_volume(base_dir: str):
         ("data/test-data/rna2/simple-helix-12bp", 296.15, None, False),
         ("data/test-data/rna2/simple-helix-12bp", 296.15, jnp.zeros((4, 4)), False),
         ("data/test-data/rna2/simple-helix-12bp", 296.15, None, True),
-    ]
+    ],
 )
 def test_stacking(base_dir: str, t_kelvin: float, weights: jnp.ndarray, *, use_pseq: bool):
     (
@@ -311,10 +311,7 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
     # compute energy terms
     kt = t_kelvin * 0.1 / 300.0
     energy_config = jd_energy2.DebyeConfiguration(
-        **(
-            default_params["debye"]
-            | {"kt": kt, "salt_conc": salt_conc, "half_charged_ends": half_charged_ends}
-        )
+        **(default_params["debye"] | {"kt": kt, "salt_conc": salt_conc, "half_charged_ends": half_charged_ends})
     )
     energy_fn = jd_energy2.Debye(
         displacement_fn=displacement_fn,

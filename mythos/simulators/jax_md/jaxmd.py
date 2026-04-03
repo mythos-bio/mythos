@@ -63,6 +63,7 @@ def build_run_fn(
         # The  energy function configuration init calls need to happen inside the function
         # so that if the gradient is calculated for this run it will be tracked
         updated_energy_fn = energy_fn.with_params(opt_params)
+
         def _energy_fn(body: jax_md.rigid_body.RigidBody, unbonded_neighbors: jnp.ndarray) -> float:
             return updated_energy_fn.with_props(unbonded_neighbors=unbonded_neighbors)(body)
 

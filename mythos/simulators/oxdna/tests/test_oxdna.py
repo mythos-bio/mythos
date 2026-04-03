@@ -20,13 +20,16 @@ from mythos.simulators.io import SimulatorTrajectory
 
 file_dir = Path(os.path.realpath(__file__)).parent
 
+
 @pytest.fixture
 def mock_energy_fn():
     class MockEF:
         def __call__(self, n):
             return n.sum()
+
         def params_dict(self, **_kwargs):
             return {}
+
     return MockEF()
 
 
@@ -38,7 +41,7 @@ def test_guess_binary_location() -> None:
         oxdna._guess_binary_location("zamboomafoo", "MAKE_BIN_PATH")
 
 
-def setup_test_dir(test_dir: Path | None = None, add_input: bool = True):  # noqa: FBT001,FBT002
+def setup_test_dir(test_dir: Path | None = None, add_input: bool = True) -> Path:  # noqa: FBT001,FBT002
     """Setup the test directory."""
     if not test_dir:
         test_dir = file_dir / f"test_data/{uuid.uuid4()}"
@@ -58,11 +61,11 @@ def setup_test_dir(test_dir: Path | None = None, add_input: bool = True):  # noq
     return test_dir
 
 
-def tear_down_test_dir(test_dir: str):
+def tear_down_test_dir(test_dir: Path):
     """Tear down the test directory."""
     shutil.rmtree(test_dir)
 
-    if len(os.listdir(Path(test_dir).parent)) == 0:
+    if len(list(test_dir.parent.iterdir())) == 0:
         test_dir.parent.rmdir()
 
 
@@ -125,6 +128,7 @@ def test_oxdna_binary_mode_ignore_params(tmp_path, mock_energy_fn, monkeypatch):
         ignore_params=True,
     )
     sim.run(opt_params=[{"some_param": 1.0}])
+
 
 def test_oxdna_override_input(tmp_path, mock_energy_fn, monkeypatch):
     """Test that the oxDNA simulator ignores params when configured."""
@@ -191,12 +195,15 @@ def test_oxdna_run_and_build_from_source(monkeypatch, tmp_path, opt_params) -> N
     # mock for the simulation function to "write" a trajectory file
     monkeypatch.setattr(subprocess, "check_call", lambda *_args, **_kwargs: None)
     monkeypatch.setattr(oxdna.oxDNASimulator, "_read_trajectory", MagicMock())
+
     @dataclass
     class MockEF:
         params: dict = field(default_factory=dict)
+
         def with_params(self, new_params):
             new_params = {**self.params, **new_params}
             return dataclasses.replace(self, params=new_params)
+
         def params_dict(self, **_kwargs):
             return self.params
 
@@ -224,7 +231,6 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
     (tmp_src_dir / "model.h").write_text(model_h.read_text())
     tmp_path.joinpath("input").write_text("backend = CPU\n")
 
-
     monkeypatch.setenv(oxdna.CMAKE_BIN_ENV_VAR, "echo")
     monkeypatch.setenv(oxdna.MAKE_BIN_ENV_VAR, "echo")
 
@@ -238,7 +244,6 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
         def with_params(self, new_params):
             return MockEnergyFunction(new_params)
 
-
     sim = oxdna.oxDNASimulator(
         input_dir=tmp_path,
         energy_fn=MockEnergyFunction({}),
@@ -248,11 +253,11 @@ def test_oxdna_build(monkeypatch, tmp_path) -> None:
     sim.build(
         input_dir=tmp_path,
         new_params={
-                "delta_backbone": 5.0,
-                "theta0_hb_8": 1.5707963267948966,
-                "a_coax_1_f6": 40.0,
-                "r0_backbone": 0.756,
-            },
+            "delta_backbone": 5.0,
+            "theta0_hb_8": 1.5707963267948966,
+            "a_coax_1_f6": 40.0,
+            "r0_backbone": 0.756,
+        },
     )
     new_lines = (tmp_path / "oxdna-build" / "model.h").read_text().splitlines()
     expected_lines = expected_model_h.read_text().splitlines()
@@ -278,11 +283,13 @@ def test_oxdna_simulator_trajectory_read(monkeypatch, tmp_path) -> None:
 
     # mock for the simulation function to "write" a trajectory file
     shutil.copytree(test_dir, tmp_path, dirs_exist_ok=True)
+
     def copy_traj():
         shutil.copyfile(
             test_dir / "output.dat",
             tmp_path / "output.dat",
         )
+
     monkeypatch.setattr(subprocess, "check_call", lambda *_args, **_kwargs: copy_traj())
 
     sim = oxdna.oxDNASimulator(
@@ -323,6 +330,7 @@ def test_oxdna_trajectory_has_temperature(monkeypatch, tmp_path, t_value, expect
 
     def copy_traj():
         shutil.copyfile(test_dir / "output.dat", tmp_path / "output.dat")
+
     monkeypatch.setattr(subprocess, "check_call", lambda *_a, **_kw: copy_traj())
 
     sim = oxdna.oxDNASimulator(
@@ -354,8 +362,8 @@ def test_extract_kt(input_config, expected):
 
 
 def setup_umbrella_test_dir(
-        test_dir: Path, umbrella_sampling: int = 1, *, include_keys: bool = True, num_order_params: int = 1
-    ) -> None:
+    test_dir: Path, umbrella_sampling: int = 1, *, include_keys: bool = True, num_order_params: int = 1
+) -> None:
     """Setup a test directory configured for umbrella sampling."""
     test_dir.mkdir(parents=True, exist_ok=True)
 
@@ -394,12 +402,14 @@ def setup_umbrella_test_dir(
 
 
 class TestOxDNAUmbrellaSampler:
-
-    @pytest.mark.parametrize("keys", [
-        ("umbrella_sampling", "op_file"),
-        ("weights_file", "op_file"),
-        ("umbrella_sampling", "weights_file"),
-    ])
+    @pytest.mark.parametrize(
+        "keys",
+        [
+            ("umbrella_sampling", "op_file"),
+            ("weights_file", "op_file"),
+            ("umbrella_sampling", "weights_file"),
+        ],
+    )
     def test_umbrella_sampler_raises_for_missing_umbrella_sampling_key(self, tmp_path, mock_energy_fn, keys):
         setup_umbrella_test_dir(tmp_path, include_keys=False)
         # Add only some keys, missing umbrella_sampling
@@ -462,7 +472,8 @@ class TestOxDNAUmbrellaSampler:
         mock_output = SimulatorOutput(observables=[mock_trajectory], state={})
 
         monkeypatch.setattr(
-            oxdna.oxDNASimulator, "run_simulation",
+            oxdna.oxDNASimulator,
+            "run_simulation",
             lambda self, input_dir, **kwargs: mock_output,  # noqa: ARG005
         )
 
@@ -512,7 +523,8 @@ class TestOxDNAUmbrellaSampler:
         mock_trajectory = MagicMock(spec=SimulatorTrajectory)
         mock_output = SimulatorOutput(observables=[mock_trajectory], state={})
         monkeypatch.setattr(
-            oxdna.oxDNASimulator, "run_simulation",
+            oxdna.oxDNASimulator,
+            "run_simulation",
             lambda self, input_dir, **kwargs: mock_output,  # noqa: ARG005
         )
 

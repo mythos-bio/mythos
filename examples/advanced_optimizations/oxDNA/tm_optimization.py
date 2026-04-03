@@ -13,16 +13,17 @@ from pathlib import Path
 import fire
 import jax
 import jax.numpy as jnp
+import jax_md
+import optax
+import pandas as pd
+import ray
+
 import mythos.energy as jdna_energy
 import mythos.energy.dna1 as jdna1_energy
 import mythos.input.topology as jdna_top
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
 import mythos.utils.types as jdna_types
-import jax_md
-import optax
-import pandas as pd
-import ray
 from mythos.input import oxdna_input
 from mythos.observables.melting_temp import MeltingTemp
 from mythos.simulators import oxdna

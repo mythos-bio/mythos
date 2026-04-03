@@ -48,12 +48,13 @@ def test_log_metric(name: str, value: float, step: int, tmp_path) -> None:
 
 
 @pytest.mark.parametrize(
-        ("method"), [
-            ("update_objective_status"),
-            ("update_observable_status"),
-            ("update_simulator_status"),
-        ]
-    )
+    ("method"),
+    [
+        ("update_objective_status"),
+        ("update_observable_status"),
+        ("update_simulator_status"),
+    ],
+)
 def test_objective_status_updates(tmp_path, method: str) -> None:  # -- for testing
     """Test the objective status update functions."""
 
@@ -100,6 +101,7 @@ def test_single_file_logger(tmp_path) -> None:
     lines = fname.read_text().strip().split("\n")
     assert len(lines) == 3
 
+
 def test_null_logger() -> None:
     """Test the NullLogger class."""
     log = NullLogger()
@@ -118,8 +120,10 @@ def test_null_logger() -> None:
     log.set_objective_complete("A")
     log.set_objective_error("A")
 
+
 def test_multilogger() -> None:
     """Test the MultiLogger class."""
+
     class DummyLogger(Logger):
         def __init__(self):
             self.calls = []
@@ -164,7 +168,6 @@ def test_multilogger() -> None:
         getattr(log, f"set_{kind}_{status}")("A")
         assert log1.calls[-1] == ("update_status", "A", kind_map[kind], status_map[status])
         assert log2.calls[-1] == ("update_status", "A", kind_map[kind], status_map[status])
-
 
 
 def test_console_logger(capsys) -> None:

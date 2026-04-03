@@ -272,7 +272,7 @@ def _from_file_oxdna_new(lines: list[str]) -> Topology:
     # the first line of the new oxDNA format is:
     # n_nucleotides n_strands 5->3
     # we don't need the 5->3, so we'll just ignore it
-    n_nucleotides, n_strands = list(map(int, lines[0].strip().split()[:-1]))
+    n_nucleotides, _ = list(map(int, lines[0].strip().split()[:-1]))
 
     # the rest of the new oxDNA file format is laid out as follows:
     # nucleotides k=v

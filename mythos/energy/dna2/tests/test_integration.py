@@ -1,5 +1,3 @@
-
-
 import jax
 import jax.numpy as jnp
 import jax_md
@@ -128,7 +126,7 @@ def test_bonded_excluded_volume(base_dir: str):
         ("data/test-data/dna2/simple-helix", 296.15, None, False),
         ("data/test-data/dna2/simple-helix", 296.15, jnp.zeros((4, 4)), False),
         ("data/test-data/dna2/simple-helix", 296.15, None, True),
-    ]
+    ],
 )
 def test_stacking(base_dir: str, t_kelvin: float, weights: jnp.ndarray, *, use_pseq: bool):
     (
@@ -295,10 +293,7 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
     # compute energy terms
     kt = t_kelvin * 0.1 / 300.0
     energy_config = jd_energy.DebyeConfiguration(
-        **(
-            default_params["debye"]
-            | {"kt": kt, "salt_conc": salt_conc, "half_charged_ends": half_charged_ends}
-        )
+        **(default_params["debye"] | {"kt": kt, "salt_conc": salt_conc, "half_charged_ends": half_charged_ends})
     )
     energy_fn = jd_energy.Debye(
         displacement_fn=displacement_fn,
@@ -314,12 +309,11 @@ def test_debye(base_dir: str, t_kelvin: float, salt_conc: float, *, half_charged
 
 
 @pytest.mark.parametrize(
-        "base_dir",
-        ["data/test-data/dna2/simple-helix", "data/test-data/dna2/simple-helix-half-charged-ends"]
+    "base_dir", ["data/test-data/dna2/simple-helix", "data/test-data/dna2/simple-helix-half-charged-ends"]
 )
 def test_debye_is_end_initialization(base_dir: str):
     top, _, _, transform_fn, _ = get_setup_data(base_dir)
-    dummy = 1 # just to satisfy interface, but make clear here it is not used
+    dummy = 1  # just to satisfy interface, but make clear here it is not used
     debye_from_top = jd_energy.Debye(
         transform_fn=transform_fn,
         displacement_fn=dummy,
@@ -353,7 +347,7 @@ def test_debye_is_end_initialization(base_dir: str):
     [
         ("data/test-data/dna2/simple-helix", False),
         ("data/test-data/dna2/simple-helix-half-charged-ends", True),
-    ]
+    ],
 )
 def test_total_energy(base_dir: str, *, half_charged_ends: bool):
     (
@@ -370,8 +364,8 @@ def test_total_energy(base_dir: str, *, half_charged_ends: bool):
         topology=topology,
         displacement_fn=displacement_fn,
     ).with_params(
-        kt = get_kt(296.15),
-        half_charged_ends = half_charged_ends,
+        kt=get_kt(296.15),
+        half_charged_ends=half_charged_ends,
     )
 
     states = trajectory.state_rigid_body

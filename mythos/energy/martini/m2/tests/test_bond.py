@@ -38,9 +38,7 @@ def gromacs_trajectory() -> SimulatorTrajectory:
 def bond_config() -> BondConfiguration:
     """Create a BondConfiguration from the JSON parameters file."""
     params = load_bond_params()
-    return BondConfiguration(
-        **params
-    )
+    return BondConfiguration(**params)
 
 
 @pytest.fixture

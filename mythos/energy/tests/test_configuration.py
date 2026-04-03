@@ -64,8 +64,8 @@ def test_BaseConfiguration_opt_params(in_config: dict[str, Any], expected: dict[
 def test_BaseConfiguration_init_params() -> None:
     """Tests the init_params method of BaseConfiguration."""
 
+    test_config = MockConfig(a=1, b=2, c=3)
     with pytest.warns(Warning, match=configuration.WARN_INIT_PARAMS_NOT_IMPLEMENTED):
-        test_config = MockConfig(a=1, b=2, c=3)
         test_config.init_params()
 
 

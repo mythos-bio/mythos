@@ -16,4 +16,3 @@ class TestSimulatorBase:
                 pass
 
         MySimulator()
-

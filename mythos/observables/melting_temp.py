@@ -39,7 +39,7 @@ def jax_interp1d(x: jnp.ndarray, y: jnp.ndarray, x_new: float) -> jnp.ndarray:
 
 def compute_finf(ratio: jnp.ndarray) -> jnp.ndarray:
     """Finite size correction to bound:unbound ratio."""
-    return 1 + 1/(2*ratio) - jnp.sqrt((1 + 1/(2*ratio))**2 - 1)
+    return 1 + 1 / (2 * ratio) - jnp.sqrt((1 + 1 / (2 * ratio)) ** 2 - 1)
 
 
 def find_melting_temp(temperatures: jnp.ndarray, ratios: jnp.ndarray) -> float:
@@ -69,6 +69,7 @@ def compute_curve_width(temperatures: jnp.ndarray, ratios: jnp.ndarray) -> float
         The width of the interpolated temperature curve between 0.2 and 0.8
     """
     return jax_interp1d(ratios, temperatures, 0.8) - jax_interp1d(ratios, temperatures, 0.2)
+
 
 @chex.dataclass(frozen=True)
 class MeltingTemp(jd_obs.BaseObservable):
@@ -129,15 +130,14 @@ class MeltingTemp(jd_obs.BaseObservable):
         def finf_at_t(extrapolated_temp: float) -> float:
             energies_tx = self.energy_fn.with_params(opt_params, kt=extrapolated_temp).map(trajectory)
 
-            boltz_factor = jnp.exp((energies_t0/self.sim_temperature) - (energies_tx/extrapolated_temp))
+            boltz_factor = jnp.exp((energies_t0 / self.sim_temperature) - (energies_tx / extrapolated_temp))
             unbiased_counts = (1 / umbrella_weights) * boltz_factor
             total_unbound = jnp.where(bind_states == 0, unbiased_counts, 0).sum()
             total_bound = jnp.where(bind_states != 0, unbiased_counts, 0).sum()
             phi = total_bound / total_unbound
-            return compute_finf(phi) # apply finite size correction
+            return compute_finf(phi)  # apply finite size correction
 
         return jax.vmap(finf_at_t)(self.temperature_range)
-
 
     def get_melting_temperature(
         self,
@@ -151,15 +151,15 @@ class MeltingTemp(jd_obs.BaseObservable):
         return find_melting_temp(self.temperature_range, extrap_ratios)
 
     def get_melting_curve(
-       self,
-       trajectory: jd_sio.SimulatorTrajectory,
-       bind_states: jnp.ndarray,
-       umbrella_weights: jnp.ndarray,
-       opt_params: jd_types.PyTree,
-   ) -> tuple[jnp.ndarray, jnp.ndarray]:
-       """Calculate the melting curve."""
-       extrap_ratios = self.get_extrap_ratios(trajectory, bind_states, umbrella_weights, opt_params)
-       return self.temperature_range, extrap_ratios
+        self,
+        trajectory: jd_sio.SimulatorTrajectory,
+        bind_states: jnp.ndarray,
+        umbrella_weights: jnp.ndarray,
+        opt_params: jd_types.PyTree,
+    ) -> tuple[jnp.ndarray, jnp.ndarray]:
+        """Calculate the melting curve."""
+        extrap_ratios = self.get_extrap_ratios(trajectory, bind_states, umbrella_weights, opt_params)
+        return self.temperature_range, extrap_ratios
 
     def get_melting_curve_width(
         self,

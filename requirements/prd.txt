@@ -1,6 +1,7 @@
-jaxlib==0.4.35
-jax==0.4.35
-jax_md @ git+https://github.com/jax-md/jax-md@3571f47bd37a4a1d316d68797ed16f52add5e743
+chex==0.1.91
+jaxlib==0.9.2
+jax==0.9.2
+jax_md==0.2.28
 jaxopt==0.8.5
 jaxtyping==0.3.2
 numpy==2.2.6

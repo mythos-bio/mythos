@@ -17,9 +17,9 @@ TEST_INPUT = importlib.resources.files("mythos") / "../data/test-data/simple-hel
 TEST_N_NUC = 120
 TEST_DISP_FN = jax_md.space.periodic(200)[0]
 
+
 @pytest.fixture
 def sim_traj():
-
     top = from_oxdna_file(TEST_INPUT / "sys.top")
     test_traj = from_file(
         path=TEST_INPUT / "output.dat",
@@ -68,7 +68,7 @@ def test_persistence_length_fit_weights(lp_fun, sim_traj):
 
     # check with only the first frame weighted
     first_frame_baseline = lp_fun(sim_traj.slice(slice(0, 1)))
-    weights = jnp.array([1] + [0]*(sim_traj.length() - 1))
+    weights = jnp.array([1] + [0] * (sim_traj.length() - 1))
     lp = lp_fun(sim_traj, weights=weights)
     assert jnp.isclose(lp, first_frame_baseline)
 
@@ -76,4 +76,3 @@ def test_persistence_length_fit_weights(lp_fun, sim_traj):
 def test_persistence_length_fit_weights_bad_shape(lp_fun, sim_traj):
     with pytest.raises(TypeError):
         lp_fun(sim_traj, weights=np.array([1, 2]))  # wrong shape
-

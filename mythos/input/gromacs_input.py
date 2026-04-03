@@ -46,7 +46,7 @@ def _parse_boolean(value: str) -> tuple[bool, bool]:
 def _parse_value(value: str) -> str | float | int | bool:
     """Parse a value string, handling comments and type inference."""
     # Remove potential comment from end of line (GROMACS uses ; for comments)
-    value = value.split(";")[0].strip()
+    value = value.split(";", maxsplit=1)[0].strip()
 
     if not value:
         return ""
@@ -110,7 +110,7 @@ def write_mdp(input_config: dict, input_file: Path) -> None:
         write_mdp_to(input_config, f)
 
 
-def update_mdp_params(mdp_file: Path, params: dict, out_file: Path|None = None) -> None:
+def update_mdp_params(mdp_file: Path, params: dict, out_file: Path | None = None) -> None:
     """Update parameters in a GROMACS .mdp file.
 
     Args:
@@ -226,7 +226,6 @@ class GromacsParamsParser:
 
         self._handle_section_data(stripped, line)
 
-
     def _handle_section_header(self, stripped: str) -> None:
         section_name = stripped.replace(" ", "").strip("[]").lower()
 
@@ -259,9 +258,7 @@ class GromacsParamsParser:
         if self._write_mode:
             self._output_lines.append(output_line)
 
-    def _handle_molecule_section_data(
-        self, section: str | None, parts: list[str], original_line: str
-    ) -> str:
+    def _handle_molecule_section_data(self, section: str | None, parts: list[str], original_line: str) -> str:
         if section == "atoms":
             self._current_atom_types[int(parts[0])] = parts[1]
             self._current_atom_names[int(parts[0])] = parts[4]

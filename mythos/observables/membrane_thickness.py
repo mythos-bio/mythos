@@ -1,4 +1,5 @@
 """Membrane thickness observable."""
+
 import chex
 import lipyphilic as lpp
 import MDAnalysis
@@ -24,6 +25,7 @@ class MembraneThickness:
         thickness_sel: selection string for atoms to use in thickness
             calculation (e.g. "name PO4").
     """
+
     topology: MDAnalysis.Universe
     lipid_sel: str
     thickness_sel: str

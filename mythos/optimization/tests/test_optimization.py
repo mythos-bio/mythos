@@ -99,6 +99,7 @@ def _mock_ray(monkeypatch, request):  # mocks for ray infrastructure
         def __init__(self):
             self.call_count = -1
             self.wait_delay_count = request.param
+
         def __call__(self, refs, **_kwargs):
             self.call_count += 1
             if self.call_count <= self.wait_delay_count:  # used the ensure we visit some of ref filter dedup logic
@@ -131,7 +132,6 @@ def _mock_ray(monkeypatch, request):  # mocks for ray infrastructure
 
 
 class TestOptimizationPostInit:
-
     def test_raises_when_no_objectives(self, basic_simulator, basic_optimizer):
         with pytest.raises(ValueError, match=jdna_optimization.ERR_MISSING_OBJECTIVES):
             jdna_optimization.RayOptimizer(
@@ -206,10 +206,7 @@ class TestOptimizationPostInit:
 
 
 class TestOptimizationStep:
-
-    def test_step_returns_optimizer_output(
-        self, basic_objective, basic_simulator, basic_optimizer
-    ):
+    def test_step_returns_optimizer_output(self, basic_objective, basic_simulator, basic_optimizer):
         opt = jdna_optimization.RayOptimizer(
             objectives=[basic_objective],
             simulators=[basic_simulator],
@@ -227,9 +224,7 @@ class TestOptimizationStep:
         assert output.grads is not None
         assert output.observables is not None
 
-    def test_step_calls_simulator_with_state(
-        self, basic_objective, basic_optimizer
-    ):
+    def test_step_calls_simulator_with_state(self, basic_objective, basic_optimizer):
         received_state = {}
 
         simulator = MockSimulator(name="test_sim", state_tracker=received_state)
@@ -249,9 +244,7 @@ class TestOptimizationStep:
         assert received_state["custom_key"] == "custom_value"
         assert received_state["call_count"] == 5
 
-    def test_step_calls_objective_with_state(
-        self, basic_simulator, basic_optimizer
-    ):
+    def test_step_calls_objective_with_state(self, basic_simulator, basic_optimizer):
         received_state = {}
 
         objective = MockObjective(
@@ -278,9 +271,7 @@ class TestOptimizationStep:
         assert received_state.get("opt_steps") == 10
         assert received_state.get("call_count") == 3
 
-    def test_step_passes_objective_state_on_retry(
-        self, basic_simulator, basic_optimizer
-    ):
+    def test_step_passes_objective_state_on_retry(self, basic_simulator, basic_optimizer):
         call_records = []
 
         @chex.dataclass(frozen=True, kw_only=True)
@@ -350,9 +341,7 @@ class TestOptimizationStep:
         assert output.state.component_state["stateful_obj"]["call_count"] == 2
         assert output.state.component_state["stateful_obj"]["accumulated_data"] == [1, 2, 3, 4]
 
-    def test_step_returns_output_observables(
-        self, basic_simulator, basic_optimizer
-    ):
+    def test_step_returns_output_observables(self, basic_simulator, basic_optimizer):
         objective = MockObjective(
             name="test_obj",
             required_observables=("trajectory",),
@@ -383,9 +372,7 @@ class TestOptimizationStep:
         assert float(obj_observables["mean"]) == 2.0
         assert float(obj_observables["custom_metric"]) == 42.0
 
-    def test_step_initializes_optimizer_state(
-        self, basic_objective, basic_simulator
-    ):
+    def test_step_initializes_optimizer_state(self, basic_objective, basic_simulator):
         opt = jdna_optimization.RayOptimizer(
             objectives=[basic_objective],
             simulators=[basic_simulator],
@@ -398,9 +385,7 @@ class TestOptimizationStep:
 
         assert output.state.optimizer_state is not None
 
-    def test_step_preserves_optimizer_state_across_steps(
-        self, basic_objective, basic_simulator
-    ):
+    def test_step_preserves_optimizer_state_across_steps(self, basic_objective, basic_simulator):
         opt = jdna_optimization.RayOptimizer(
             objectives=[basic_objective],
             simulators=[basic_simulator],
@@ -415,9 +400,7 @@ class TestOptimizationStep:
         output2 = opt.step(params=output1.opt_params, state=output1.state)
         assert output2.state.optimizer_state is not None
 
-    def test_step_stores_objective_state_in_optimizer_state(
-        self, basic_simulator, basic_optimizer
-    ):
+    def test_step_stores_objective_state_in_optimizer_state(self, basic_simulator, basic_optimizer):
         objective = MockObjective(
             name="test_obj",
             required_observables=("trajectory",),
@@ -439,9 +422,7 @@ class TestOptimizationStep:
         assert output.state.component_state["test_obj"]["obj_call_count"] == 1
         assert output.state.component_state["test_obj"]["custom_obj_data"] == "abc"
 
-    def test_step_stores_simulator_state_in_optimizer_state(
-        self, basic_objective, basic_optimizer
-    ):
+    def test_step_stores_simulator_state_in_optimizer_state(self, basic_objective, basic_optimizer):
         simulator = MockSimulator(
             name="test_sim",
             output_state={"sim_call_count": 1, "custom_sim_data": "xyz"},
@@ -461,9 +442,7 @@ class TestOptimizationStep:
         assert output.state.component_state["test_sim"]["sim_call_count"] == 1
         assert output.state.component_state["test_sim"]["custom_sim_data"] == "xyz"
 
-    def test_step_with_multiple_objectives_and_simulators(
-        self, basic_optimizer
-    ):
+    def test_step_with_multiple_objectives_and_simulators(self, basic_optimizer):
         objective1 = MockObjective(
             name="obj_1",
             required_observables=("trajectory.sim_1",),
@@ -501,9 +480,7 @@ class TestOptimizationStep:
         assert "total" in output.observables["obj_1"]
         assert "total" in output.observables["obj_2"]
 
-    def test_step_with_multi_observable_simulator_and_objective(
-        self, basic_optimizer
-    ):
+    def test_step_with_multi_observable_simulator_and_objective(self, basic_optimizer):
         @chex.dataclass(frozen=True, kw_only=True)
         class MultiInputObjective(jdna_objective.Objective):
             @override
@@ -524,8 +501,8 @@ class TestOptimizationStep:
             name="multi_sim",
             return_observables=[
                 jnp.array([1.0, 2.0, 3.0]),  # trajectory
-                jnp.array([10.0, 20.0]),     # energy
-                jnp.array([0.5]),            # temperature
+                jnp.array([10.0, 20.0]),  # energy
+                jnp.array([0.5]),  # temperature
             ],
             exposed_observables=[
                 "trajectory.multi_sim",
@@ -556,10 +533,7 @@ class TestOptimizationStep:
         for obs, res in zip(simulator.exposes(), [6.0, 30.0, 0.5], strict=True):
             assert output.observables["multi_obj"][f"{obs}_sum"] == res
 
-
-    def test_step_handles_objective_not_ready(
-        self, basic_simulator, basic_optimizer
-    ):
+    def test_step_handles_objective_not_ready(self, basic_simulator, basic_optimizer):
         call_count = [0]
 
         @chex.dataclass(frozen=True, kw_only=True)
@@ -604,10 +578,7 @@ class TestOptimizationStep:
         assert output.grads is not None
         assert call_count[0] >= 2  # Should have been called at least twice
 
-    def test_step_updates_params_using_optimizer(
-        self, basic_simulator
-    ):
-
+    def test_step_updates_params_using_optimizer(self, basic_simulator):
         @chex.dataclass(frozen=True, kw_only=True)
         class FixedGradObjective(jdna_objective.Objective):
             @override
@@ -642,7 +613,6 @@ class TestOptimizationStep:
         assert jnp.allclose(output.opt_params["param"], expected_param)
 
     def test_step_raises_on_unresolvable_objective(self, basic_simulator, basic_optimizer):
-
         @chex.dataclass(frozen=True, kw_only=True)
         class NeverReadyObjective(jdna_objective.Objective):
             @override
@@ -700,7 +670,9 @@ class TestRayOptimizerSchedulerHints:
         [
             # No hints anywhere - empty options (except name/num_returns)
             pytest.param(
-                None, None, None,
+                None,
+                None,
+                None,
                 {},
                 {},
                 id="no_hints",
@@ -708,7 +680,8 @@ class TestRayOptimizerSchedulerHints:
             # Only default hints - both get defaults
             pytest.param(
                 {"num_cpus": 2},
-                None, None,
+                None,
+                None,
                 {"num_cpus": 2},
                 {"num_cpus": 2},
                 id="default_only",
@@ -804,23 +777,14 @@ class TestRayOptimizerSchedulerHints:
         opt.step(params=params)
 
         # Find simulator and objective calls by name prefix
-        sim_calls = [
-            opts for opts in ray_options_tracker
-            if opts.get("name", "").startswith("simulator_run:")
-        ]
-        obj_calls = [
-            opts for opts in ray_options_tracker
-            if opts.get("name", "").startswith("objective_compute:")
-        ]
+        sim_calls = [opts for opts in ray_options_tracker if opts.get("name", "").startswith("simulator_run:")]
+        obj_calls = [opts for opts in ray_options_tracker if opts.get("name", "").startswith("objective_compute:")]
 
         assert len(sim_calls) >= 1, "Expected at least one simulator call"
         assert len(obj_calls) >= 1, "Expected at least one objective call"
 
         # Check simulator options (excluding name and num_returns which are always set)
-        sim_opts = {
-            k: v for k, v in sim_calls[0].items()
-            if k not in ("name", "num_returns")
-        }
+        sim_opts = {k: v for k, v in sim_calls[0].items() if k not in ("name", "num_returns")}
         for key, expected_value in expected_sim_opts.items():
             assert key in sim_opts, f"Expected {key} in simulator options"
             assert sim_opts[key] == expected_value, (
@@ -828,10 +792,7 @@ class TestRayOptimizerSchedulerHints:
             )
 
         # Check objective options (excluding name)
-        obj_opts = {
-            k: v for k, v in obj_calls[0].items()
-            if k != "name"
-        }
+        obj_opts = {k: v for k, v in obj_calls[0].items() if k != "name"}
         for key, expected_value in expected_obj_opts.items():
             assert key in obj_opts, f"Expected {key} in objective options"
             assert obj_opts[key] == expected_value, (
@@ -840,10 +801,12 @@ class TestRayOptimizerSchedulerHints:
 
     def test_works_without_scheduler_hints_attribute(self, basic_optimizer):
         """Test compatibility when scheduler_hints attribute is missing."""
+
         # Create classes that don't have scheduler_hints at all
         @chex.dataclass(frozen=True, kw_only=True)
         class NoHintsSimulator(Simulator):
             name: str = "nohints_sim"
+
             @override
             def run(self, *_args, opt_params, **_state) -> SimulatorOutput:
                 return SimulatorOutput(observables=[jnp.array([1.0])], state={})
@@ -941,7 +904,7 @@ class TestOptimizerRun:
         opt = StubOptimizer()
         params = {"p": jnp.array(1.0)}
 
-        with pytest.raises(ValueError, match="n_steps must be at least 1."):
+        with pytest.raises(ValueError, match=r"n_steps must be at least 1."):
             opt.run(params, n_steps=0)
 
     def test_logs_metrics_with_qualified_names(self):
@@ -1043,4 +1006,3 @@ class TestOptimizerRun:
         assert float(received_params[0]["p"]) == 1.0
         assert float(received_params[1]["p"]) == 999.0
         assert float(received_params[2]["p"]) == 999.0
-

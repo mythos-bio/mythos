@@ -1,4 +1,5 @@
 """Membrane area per lipid observable."""
+
 import chex
 import jax.numpy as jnp
 import lipyphilic as lpp
@@ -23,6 +24,7 @@ class AreaPerLipid:
         lipid_sel: selection string for lipid tail atoms using MDAnalysis query
             (e.g. "name GL1 GL2").
     """
+
     topology: MDAnalysis.Universe
     lipid_sel: str
 

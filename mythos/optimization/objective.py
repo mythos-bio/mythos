@@ -111,9 +111,7 @@ class Objective(SchedulerUnit):
 
         # Build output observables from aux and input observables
         output_observables = dict(aux)
-        output_observables.update(
-            dict(zip(self.required_observables, sorted_obs, strict=True))
-        )
+        output_observables.update(dict(zip(self.required_observables, sorted_obs, strict=True)))
 
         return ObjectiveOutput(
             is_ready=True,
@@ -188,6 +186,7 @@ def compute_min_segment_neff(
     Returns:
         The minimum ``n_eff`` across all temperature segments.
     """
+
     def segment_neff(temp: float) -> float:
         mask = temperature == temp
         _, neff = compute_weights_and_neff(1.0 / temp, new_energies[mask], ref_energies[mask])
@@ -229,7 +228,7 @@ def compute_loss(
         new_energies,
         ref_energies,
     )
-    loss, (measured_value, meta) = loss_fn(ref_states, weights, energy_fn, opt_params, observables)
+    loss, (measured_value, _) = loss_fn(ref_states, weights, energy_fn, opt_params, observables)
     return loss, (neff, measured_value, new_energies)
 
 
@@ -271,9 +270,7 @@ class DiffTReObjective(Objective):
         if self.n_equilibration_steps is None:
             raise ValueError(ERR_MISSING_ARG.format(missing_arg="n_equilibration_steps"))
         if self.n_equilibration_steps < 0:
-            raise ValueError(
-                f"n_equilibration_steps must be non-negative, got {self.n_equilibration_steps}."
-            )
+            raise ValueError(f"n_equilibration_steps must be non-negative, got {self.n_equilibration_steps}.")
         if self.max_valid_opt_steps <= 0:
             raise ValueError("max_valid_opt_steps must be positive or infinity.")
 
@@ -321,8 +318,10 @@ class DiffTReObjective(Objective):
             raise ValueError("No SimulatorTrajectory observables found in observables.")
 
         if self.n_equilibration_steps > 0:
+
             def slc_f(n: int) -> slice:
                 return slice(self.n_equilibration_steps, n, None)
+
             trajectories = [obs.slice(slc_f(obs.length())) for obs in trajectories]
 
         reference_states = SimulatorTrajectory.concat(trajectories)
@@ -362,7 +361,7 @@ class DiffTReObjective(Objective):
             )
 
         # Compute gradients
-        (loss, (_, measured_value, new_energies)), grads = compute_loss_and_grad(
+        (loss, (_, measured_value, _)), grads = compute_loss_and_grad(
             opt_params,
             self.energy_fn,
             beta,

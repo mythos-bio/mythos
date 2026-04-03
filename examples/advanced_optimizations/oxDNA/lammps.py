@@ -14,20 +14,21 @@ See help message for more details.
 
 
 import logging
-from pathlib import Path
 import typing
+from pathlib import Path
 
 import fire
 import jax
 import jax.numpy as jnp
+import jax_md
+import optax
+
 import mythos.energy.dna1 as dna1_energy
 import mythos.observables as jd_obs
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
 import mythos.optimization.simulator as jdna_simulator
 import mythos.utils.types as jdna_types
-import jax_md
-import optax
 from mythos.input import topology
 from mythos.simulators.lammps.lammps_oxdna import LAMMPSoxDNASimulator
 from mythos.ui.loggers.console import ConsoleLogger

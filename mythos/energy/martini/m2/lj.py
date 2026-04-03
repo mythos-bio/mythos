@@ -1,6 +1,5 @@
 """Lennard-Jones potential energy function for Martini 2."""
 
-
 import chex
 import jax
 import jax.numpy as jnp
@@ -16,7 +15,7 @@ LJ_EPSILON_PREFIX = "lj_epsilon_"
 
 
 class LJConfiguration(MartiniEnergyConfiguration):
-    """"Configuration for Martini Lennard-Jones energy function.
+    """Configuration for Martini Lennard-Jones energy function.
 
     All parameters provided must be of the form "lj_sigma_A_B" or "lj_epsilon_A_B",
     where A and B are bead types. Pair order is ignored unless both orderings
@@ -25,6 +24,7 @@ class LJConfiguration(MartiniEnergyConfiguration):
 
     Couplings are supported (see :class:`MartiniEnergyConfiguration` for details).
     """
+
     @override
     def __post_init__(self) -> None:
         bead_types = set()
@@ -44,14 +44,12 @@ class LJConfiguration(MartiniEnergyConfiguration):
                 raise ValueError(f"Missing LJ {prefix} parameter for pair {a}_{b} ({b}_{a})")
             return param
 
-        self.sigmas: MatrixSq = jnp.array([
-            [get_param("sigma", i, j) for j in self.bead_types]
-            for i in self.bead_types
-        ])
-        self.epsilons: MatrixSq = jnp.array([
-            [get_param("epsilon", i, j) for j in self.bead_types]
-            for i in self.bead_types
-        ])
+        self.sigmas: MatrixSq = jnp.array(
+            [[get_param("sigma", i, j) for j in self.bead_types] for i in self.bead_types]
+        )
+        self.epsilons: MatrixSq = jnp.array(
+            [[get_param("epsilon", i, j) for j in self.bead_types] for i in self.bead_types]
+        )
 
 
 def lennard_jones(r: float, eps: float, sigma: float) -> float:
@@ -63,20 +61,22 @@ def lennard_jones(r: float, eps: float, sigma: float) -> float:
     v_c = 4 * eps * ((sigma / cutoff) ** 12 - (sigma / cutoff) ** 6)
     # applying the shifting function: V_s(r) = V(r) - V(r_c) for r < r_c, 0 otherwise
     return jnp.where(
-        r < cutoff, v - v_c, 0.0  # shifting the potential by subtracting V(r_c)
+        r < cutoff,
+        v - v_c,
+        0.0,  # shifting the potential by subtracting V(r_c)
     )
 
 
 def pair_lj(
-        centers: Arr_States_3,
-        i: int,
-        j: int,
-        bonded_mask: MatrixSq,
-        sigmas: MatrixSq,
-        epsilons: MatrixSq,
-        types: Arr_N,
-        displacement_fn: callable,
-    ) -> float:
+    centers: Arr_States_3,
+    i: int,
+    j: int,
+    bonded_mask: MatrixSq,
+    sigmas: MatrixSq,
+    epsilons: MatrixSq,
+    types: Arr_N,
+    displacement_fn: callable,
+) -> float:
     """Calculate LJ energy for a given pair of particles."""
     i_type = types[i]
     j_type = types[j]
@@ -99,7 +99,7 @@ class LJ(MartiniEnergyFunction):
         # Cache a mapping between atom index and its type within sigma/epsilon
         # matrices
         MartiniEnergyFunction.__post_init__(self)
-        type_map = {t: i for i,t in enumerate(self.params.bead_types)}
+        type_map = {t: i for i, t in enumerate(self.params.bead_types)}
         atom_type_map = jnp.array([type_map[t] for t in self.atom_types])
         object.__setattr__(self, "_atom_type_map", atom_type_map)
 
@@ -111,8 +111,8 @@ class LJ(MartiniEnergyFunction):
         triu_i, triu_j = jnp.triu_indices(len(self.atom_types), k=1)
         bonded_mask = jnp.ones((len(self.atom_types), len(self.atom_types)), dtype=bool)
         bn_i, bn_j = self.bonded_neighbors[:, 0], self.bonded_neighbors[:, 1]
-        bonded_mask = bonded_mask.at[bn_i, bn_j].set(False)  # noqa: FBT003
-        bonded_mask = bonded_mask.at[bn_j, bn_i].set(False)  # noqa: FBT003 ensure symmetry
+        bonded_mask = bonded_mask.at[bn_i, bn_j].set(False)
+        bonded_mask = bonded_mask.at[bn_j, bn_i].set(False)
         return triu_i, triu_j, bonded_mask
 
     @override
@@ -122,12 +122,14 @@ class LJ(MartiniEnergyFunction):
         # __post_init__ as the data structure could be large, we want to avoid
         # potential serialization.
         bonds_info = self._build_pair_info()
+
         def map_fn(trajectory: SimulatorTrajectory) -> float:
             # Apply any configured transform_fn before computing energy,
             # while still reusing the precomputed bonds_info.
             if self.transform_fn is not None:
                 trajectory = self.transform_fn(trajectory)
             return self.compute_energy(trajectory, _bonds_info=bonds_info)
+
         inner_fun = jax.checkpoint(map_fn) if self.map_checkpoint else map_fn
         return jax.lax.map(inner_fun, body_sequence, batch_size=self.map_batch_size)
 

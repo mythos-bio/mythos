@@ -91,11 +91,13 @@ class TestUseG96:
         deviation = jnp.deg2rad(20.0)
         angle = theta0 - deviation
 
-        centers = jnp.array([
-            [jnp.cos(angle), jnp.sin(angle), 0.0],
-            [0.0, 0.0, 0.0],
-            [1.0, 0.0, 0.0],
-        ])
+        centers = jnp.array(
+            [
+                [jnp.cos(angle), jnp.sin(angle), 0.0],
+                [0.0, 0.0, 0.0],
+                [1.0, 0.0, 0.0],
+            ]
+        )
 
         # Build an Angle energy function with a single angle triplet,
         # reshaping k and theta0 to arrays so they go through the vmap mapping.
@@ -122,5 +124,5 @@ class TestUseG96:
         energy = angle_fn.compute_energy(trajectory)
 
         # Should match 0.5 * k * (theta - theta0)^2
-        expected = 0.5 * k * deviation ** 2
+        expected = 0.5 * k * deviation**2
         assert jnp.isclose(energy, expected, atol=1e-8)

@@ -32,7 +32,7 @@ def _parse_boolean(value: str) -> tuple[bool, bool]:
 
 def _parse_value(value: str) -> str | float | int | bool:
     # remove potential comment from end of line
-    value = value.split("#")[0].strip()
+    value = value.split("#", maxsplit=1)[0].strip()
     parsed, is_numeric = _parse_numeric(value)
     if not is_numeric:
         parsed, is_boolean = _parse_boolean(value)
@@ -43,12 +43,12 @@ def _parse_value(value: str) -> str | float | int | bool:
 
 
 def _parse_dict(
-    line: str, lines: typing.Iterable[str]
+    in_line: str, lines: typing.Iterable[str]
 ) -> tuple[dict[str, str | float | int | bool], typing.Iterable[str]]:
-    if "=" not in line and "{" not in line:
-        raise ValueError(INVALID_DICT_LINE.format(line))
+    if "=" not in in_line and "{" not in in_line:
+        raise ValueError(INVALID_DICT_LINE.format(in_line))
 
-    var_name = line.split("=")[0].strip()
+    var_name = in_line.split("=", maxsplit=1)[0].strip()
     parsed = {}
     for line in lines:
         if "{" not in line and "}" not in line:

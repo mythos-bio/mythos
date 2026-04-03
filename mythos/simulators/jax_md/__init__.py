@@ -5,8 +5,8 @@ from mythos.simulators.jax_md.utils import NeighborList, NoNeighborList, Simulat
 
 __all__ = [
     "JaxMDSimulator",
-    "NoNeighborList",
     "NeighborList",
+    "NoNeighborList",
     "SimulationState",
     "StaticSimulatorParams",
 ]

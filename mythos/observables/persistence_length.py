@@ -78,13 +78,16 @@ get_all_l_vectors = vmap(jd_obs.local_helical_axis_with_norm, in_axes=(0, None, 
 
 
 def compute_metadata(
-    base_sites: jnp.ndarray, quartets: jnp.ndarray, displacement_fn: Callable, skip_ends: bool  # noqa: FBT001 -- vmap
+    base_sites: jnp.ndarray,
+    quartets: jnp.ndarray,
+    displacement_fn: Callable,
+    skip_ends: bool,  # noqa: FBT001 -- vmap
 ) -> tuple[jnp.ndarray, float]:
     """Computes (i) average correlations in alignment decay and (ii) average distance between base pairs."""
     all_l_vectors, l0_vals = get_all_l_vectors(quartets, base_sites, displacement_fn)
     if skip_ends:
-         all_l_vectors = all_l_vectors[2:-2, :]
-         l0_vals = l0_vals[2:-2]
+        all_l_vectors = all_l_vectors[2:-2, :]
+        l0_vals = l0_vals[2:-2]
     autocorr = vector_autocorrelate(all_l_vectors)
     return autocorr, jnp.mean(l0_vals)
 
@@ -158,7 +161,7 @@ class PersistenceLength(jd_obs.BaseObservable):
             weighted_l0_mean = jnp.mean(all_l0s, axis=0)
 
         if self.truncate:
-            weighted_corr_mean = weighted_corr_mean[:self.truncate]
+            weighted_corr_mean = weighted_corr_mean[: self.truncate]
 
         fit_lp, fit_offset = persistence_length_fit(weighted_corr_mean, weighted_l0_mean)
         return fit_lp, fit_offset

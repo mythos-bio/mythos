@@ -99,4 +99,3 @@ class TestUniverseFromTrajectory:
 
         np.testing.assert_array_equal(reconstructed.atoms.names, topology.atoms.names)
         np.testing.assert_array_equal(reconstructed.atoms.resnames, topology.atoms.resnames)
-

@@ -40,6 +40,7 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
             variable is set, it is used to populate the temperature field of the
             output trajectory.
     """
+
     energy_fn: EnergyFunction
     input_file_name: str = "input"
     variables: dict[str, Any] = field(default_factory=dict)
@@ -51,7 +52,7 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
             raise FileNotFoundError(f"LAMMPS input file not found: {self.input_file_name}")
 
     @override
-    def run_simulation(self, input_dir: Path, params: Params, seed: int|None = None) -> SimulatorOutput:
+    def run_simulation(self, input_dir: Path, params: Params, seed: int | None = None) -> SimulatorOutput:
         self._replace_parameters(input_dir, params, seed)
         run_command(["lmp", "-in", self.input_file_name], cwd=input_dir, log_prefix="lammps")
         traj = _read_lammps_output(input_dir.joinpath("trajectory.dat"))
@@ -62,10 +63,12 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
             temperature = jnp.full(n_states, float(kt))
 
         return SimulatorOutput(
-            observables=[SimulatorTrajectory.from_rigid_body(
-                traj.state_rigid_body,
-                temperature=temperature,
-            )]
+            observables=[
+                SimulatorTrajectory.from_rigid_body(
+                    traj.state_rigid_body,
+                    temperature=temperature,
+                )
+            ]
         )
 
     def _replace_parameters(self, input_dir: Path, params: Params, seed: int | None) -> None:
@@ -78,11 +81,11 @@ class LAMMPSoxDNASimulator(InputDirSimulator):
 
 
 def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
-        input_lines: list[str],
-        params: list[dict[str, float]],
-        seed: int | None,
-        variables: dict[str, Any] | None = None,
-    ) -> list[str]:
+    input_lines: list[str],
+    params: list[dict[str, float]],
+    seed: int | None,
+    variables: dict[str, Any] | None = None,
+) -> list[str]:
     variable_replacements = {"seed": seed or np.random.default_rng().integers(0, 2**24), **(variables or {})}
     new_lines = []
     seen = set()
@@ -120,10 +123,12 @@ def _lammps_oxdna_replace_inputs(  # noqa: C901 TODO: refactor perhaps to class
 
 def _replace_parts_in_line(inputs: str, replacements: tuple[str], params: dict[str, float]) -> str:
     parts = inputs.split()
+
     def repl(part: str, replacement: str | None) -> str:
         if replacement is None or replacement not in params:
             return part
         return f"{_transform_param(replacement, params[replacement]):f}"
+
     return " ".join([repl(part, r_param) for part, r_param in zip(parts, replacements, strict=True)])
 
 
@@ -330,13 +335,26 @@ def _transform_param(param: str, value: float) -> float:
 
 
 LAMMPS_REQUIRED_FIELDS = {
-    "x", "y", "z", "vx", "vy", "vz", "c_quat[1]", "c_quat[2]", "c_quat[3]", "c_quat[4]",
-    "angmomx", "angmomy", "angmomz"
+    "x",
+    "y",
+    "z",
+    "vx",
+    "vy",
+    "vz",
+    "c_quat[1]",
+    "c_quat[2]",
+    "c_quat[3]",
+    "c_quat[4]",
+    "angmomx",
+    "angmomy",
+    "angmomz",
 }
+
 
 def _transform_lammps_state(state: np.ndarray, fields: str) -> np.ndarray:
     def get_idx(*field_names: str) -> list[int]:
         return [fields.index(name) for name in field_names]
+
     pos = state[get_idx("x", "y", "z")]
     vel = state[get_idx("vx", "vy", "vz")]
     quat = state[get_idx("c_quat[1]", "c_quat[2]", "c_quat[3]", "c_quat[4]")]
@@ -350,10 +368,10 @@ def _transform_lammps_quat(quat: np.ndarray) -> np.ndarray:
     q_2 = quat**2
     i = 1 / q_2.sum()
     a0 = (q_2[0] + q_2[1] - q_2[2] - q_2[3]) * i
-    a1 = 2 * (quat[1]*quat[2] + quat[0]*quat[3]) * i
-    a2 = 2 * (quat[1]*quat[3] - quat[0]*quat[2]) * i
-    b0 = 2 * (quat[1]*quat[3] + quat[0]*quat[2]) * i
-    b1 = 2 * (quat[2]*quat[3] - quat[0]*quat[1]) * i
+    a1 = 2 * (quat[1] * quat[2] + quat[0] * quat[3]) * i
+    a2 = 2 * (quat[1] * quat[3] - quat[0] * quat[2]) * i
+    b0 = 2 * (quat[1] * quat[3] + quat[0] * quat[2]) * i
+    b1 = 2 * (quat[2] * quat[3] - quat[0] * quat[1]) * i
     b2 = (q_2[0] + q_2[3] - q_2[1] - q_2[2]) * i
     return np.array([a0, a1, a2, b0, b1, b2])
 
@@ -399,10 +417,14 @@ def _read_lammps_output(output_file: Path) -> Trajectory:
                 state_fields = line[12:].strip().split()
                 if LAMMPS_REQUIRED_FIELDS - set(state_fields):
                     raise ValueError("LAMMPS output file missing required fields.")
-                states.append(np.array([
-                    _transform_lammps_state(np.fromstring(next(f), dtype=np.float64, sep=" "), state_fields)
-                    for _ in range(num_atoms)
-                ]))
+                states.append(
+                    np.array(
+                        [
+                            _transform_lammps_state(np.fromstring(next(f), dtype=np.float64, sep=" "), state_fields)
+                            for _ in range(num_atoms)
+                        ]
+                    )
+                )
 
     validate_box_size(bs)
 

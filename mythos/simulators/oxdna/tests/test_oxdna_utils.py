@@ -115,7 +115,7 @@ def test_read_last_hist() -> None:
         "count",
         "unbiased_count",
     ]
-    assert list(hist_df.columns[:len(expected_columns)]) == expected_columns
+    assert list(hist_df.columns[: len(expected_columns)]) == expected_columns
     # 13 temp extraps plus above columns, permutations of 8 bonds plus unbonded
     # = 9 and bool mindistance = 2 -> 18 rows
     assert hist_df.shape == (18, 17)

@@ -27,7 +27,7 @@ def mock_return_function(should_return: typing.Any) -> Callable:
     return mock_function
 
 
-def make_mock_energy_fn(return_value = None) -> EnergyFunction:
+def make_mock_energy_fn(return_value=None) -> EnergyFunction:
     class MockEF:
         def __call__(self, n):
             return n.sum()
@@ -41,6 +41,7 @@ def make_mock_energy_fn(return_value = None) -> EnergyFunction:
             return self
 
     return MockEF()
+
 
 @pytest.fixture
 def mock_energy_fn():
@@ -73,7 +74,7 @@ def test_objective_init_raises(
 
 @pytest.mark.parametrize("max_valid_opt_steps", [0, -1, -10])
 def test_difftre_objective_init_raises_when_n_opt_steps_non_positive(max_valid_opt_steps: int) -> None:
-    with pytest.raises(ValueError, match="max_valid_opt_steps must be positive or infinity."):
+    with pytest.raises(ValueError, match=r"max_valid_opt_steps must be positive or infinity."):
         o.DiffTReObjective(
             name="test",
             required_observables=("a",),

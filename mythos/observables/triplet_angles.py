@@ -12,9 +12,7 @@ from mythos.simulators.io import SimulatorTrajectory
 from mythos.utils.types import Arr_N
 
 
-def _triplet_angle(
-    centers: jnp.ndarray, triplet: jnp.ndarray, displacement_fn: Callable
-) -> float:
+def _triplet_angle(centers: jnp.ndarray, triplet: jnp.ndarray, displacement_fn: Callable) -> float:
     """Compute the angle (in radians) at the central atom of a triplet.
 
     The angle is measured at atom ``j`` between rays ``j→i`` and ``j→k``.

@@ -114,7 +114,7 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
 
     @override
     def run_simulation(
-        self, input_dir: Path, opt_params: Params|None = None, seed: float|None = None, **_
+        self, input_dir: Path, opt_params: Params | None = None, seed: float | None = None, **_
     ) -> SimulatorOutput:
         input_config = jd_oxdna.read(input_dir / "input")
         input_config.update(self.input_overrides)
@@ -123,11 +123,11 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
 
         if opt_params is not None:
             if self.source_path:
-                self.build(input_dir = input_dir, new_params=opt_params, input_config=input_config)
+                self.build(input_dir=input_dir, new_params=opt_params, input_config=input_config)
             elif not self.ignore_params:
                 raise ValueError("params provided without source_path. Set ignore_params to override")
         elif self.source_path:
-            self.build(input_dir = input_dir, new_params={}, input_config=input_config)
+            self.build(input_dir=input_dir, new_params={}, input_config=input_config)
         binary_path = self.binary_path or input_dir / "oxdna-build" / "bin" / "oxDNA"
 
         # remove existing trajectory and energy files (others?), otherwise they
@@ -143,7 +143,6 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
         logger.info("oxDNA simulation complete")
 
         return SimulatorOutput(observables=[self._read_trajectory(input_dir, input_config)])
-
 
     def _read_trajectory(self, input_dir: Path, input_config: dict) -> jd_sio.SimulatorTrajectory:
         trajectory = oxdna_utils.read_output_trajectory(input_file=input_dir / "input")
@@ -166,7 +165,7 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
             return None
         return get_kt_from_string(t_value)
 
-    def build(self, *, input_dir: Path, new_params: Params, input_config: dict|None = None) -> None:
+    def build(self, *, input_dir: Path, new_params: Params, input_config: dict | None = None) -> None:
         """Update the simulation.
 
         This function will recompile the oxDNA binary with the new parameters.
@@ -215,7 +214,7 @@ def _reweight_from_histogram(hist: pd.DataFrame) -> pd.DataFrame:
     # columns before counts are the order parameters. We want to have them as
     # index in order to facilitate joins and reindexing to recover 0 value
     # entries typically needed by oxdna.
-    op_cols = list(hist.columns[:hist.columns.get_loc("count")])
+    op_cols = list(hist.columns[: hist.columns.get_loc("count")])
     hist = hist.set_index(op_cols)
     weights = hist.query("unbiased_count > 0").eval("weights = 1 / unbiased_count")[["weights"]]
     weights /= weights.min()  # for numerical stability
@@ -241,6 +240,7 @@ class oxDNAUmbrellaSampler(oxDNASimulator):  # noqa: N801 oxDNA is a special wor
     without a header, but otherwise unmodified. Ensure it has the appropriate
     fields and order.
     """
+
     exposed_observables: ClassVar[list[str]] = ["trajectory", "energy_info"]
 
     @override
@@ -256,7 +256,7 @@ class oxDNAUmbrellaSampler(oxDNASimulator):  # noqa: N801 oxDNA is a special wor
 
     @override
     def run_simulation(
-            self, input_dir: Path, opt_params: Params | None = None, weights: pd.DataFrame | None = None, **kwargs
+        self, input_dir: Path, opt_params: Params | None = None, weights: pd.DataFrame | None = None, **kwargs
     ) -> SimulatorOutput:
         # rewrite out weights file if provided
         if weights is not None:

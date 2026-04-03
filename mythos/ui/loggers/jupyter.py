@@ -52,10 +52,10 @@ def calc_rows_and_columns(
         is_valid_ncols = is_valid_nrows = False
 
     if not is_valid_nrows and not is_valid_ncols:
-        nrows = ncols = int(math.ceil(math.sqrt(n_plots)))
+        nrows = ncols = math.ceil(math.sqrt(n_plots))
     else:
-        nrows = nrows if is_valid_nrows else int(math.ceil(n_plots / ncols))
-        ncols = ncols if is_valid_ncols else int(math.ceil(n_plots / nrows))
+        nrows = nrows if is_valid_nrows else math.ceil(n_plots / ncols)
+        ncols = ncols if is_valid_ncols else math.ceil(n_plots / nrows)
 
     return nrows, ncols
 
@@ -86,7 +86,7 @@ def setup_figure_layout(
         ):
             fig.add_trace(scatter_f(x=[], y=[], name=name), row=row, col=col)
 
-        legend_name = f"legend{i+2}"
+        legend_name = f"legend{i + 2}"
         axis_num = str(i) if i > 1 else ""
         fig.update_traces(row=row, col=col, legend=legend_name)
         fig.update_layout(
@@ -217,13 +217,13 @@ class JupyterLogger(logger.Logger):
         self.obj_btns = [btn_f(description=obj) for obj in objectives]
 
         self.btn_map = {
-            StatusKind.SIMULATOR: { btn.description: btn for btn in self.sim_btns },
-            StatusKind.OBJECTIVE: { btn.description: btn for btn in self.obj_btns },
-            StatusKind.OBSERVABLE: { btn.description: btn for btn in self.obs_btns },
+            StatusKind.SIMULATOR: {btn.description: btn for btn in self.sim_btns},
+            StatusKind.OBJECTIVE: {btn.description: btn for btn in self.obj_btns},
+            StatusKind.OBSERVABLE: {btn.description: btn for btn in self.obs_btns},
         }
 
-        nrows, ncols = plots_nrows_ncols if plots_nrows_ncols else (None, None)
-        width_px, height_px = plots_size_px if plots_size_px else (None, None)
+        nrows, ncols = plots_nrows_ncols or (None, None)
+        width_px, height_px = plots_size_px or (None, None)
 
         self.plots = PlotlyLogger(
             metrics_to_log,

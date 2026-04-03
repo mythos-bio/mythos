@@ -8,8 +8,9 @@ repository. i.e. this file was invoked using:
 
 
 import functools
-from pathlib import Path
 import typing
+from pathlib import Path
+
 import jax
 import jax.numpy as jnp
 import jax_md
@@ -19,9 +20,9 @@ import mythos.energy as jdna_energy
 import mythos.energy.dna1 as dna1_energy
 import mythos.input.tree as jdna_tree
 import mythos.observables as jd_obs
-import mythos.optimization.simulator as jdna_simulator
 import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
+import mythos.optimization.simulator as jdna_simulator
 import mythos.simulators.oxdna as oxdna
 import mythos.utils.types as jdna_types
 from mythos.input import topology

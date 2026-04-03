@@ -17,6 +17,7 @@ from mythos.utils.scheduler import SchedulerUnit
 @chex.dataclass(frozen=True)
 class SimulatorOutput:
     """Output container for simlators."""
+
     observables: list[Any]
     state: dict[str, Any] = field(default_factory=dict)
 
@@ -24,6 +25,7 @@ class SimulatorOutput:
 @chex.dataclass(frozen=True, kw_only=True)
 class Simulator(SchedulerUnit):
     """Base class for a simulation."""
+
     name: str = field(default_factory=lambda: str(uuid.uuid4()))
     exposed_observables: ClassVar[list[str]] = ["trajectory"]
 
@@ -35,7 +37,7 @@ class Simulator(SchedulerUnit):
         return [f"{obs}.{self.__class__.__name__}.{self.name}" for obs in self.exposed_observables]
 
     @classmethod
-    def create_n(cls, n: int, name: str|None = None, **kwargs) -> list["Simulator"]:
+    def create_n(cls, n: int, name: str | None = None, **kwargs) -> list["Simulator"]:
         """Create N simulators with unique names."""
         name = name or str(uuid.uuid4())
         return [cls(name=f"{name}.{i}", **kwargs) for i in range(n)]
