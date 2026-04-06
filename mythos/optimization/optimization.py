@@ -256,7 +256,7 @@ class RayOptimizer(Optimizer):
         ref_map, grads_completed, output_observables = {}, {}, {}
 
         # schedule all objectives that already have their observables in state
-        while needed_objectives := set(obj_lookup) - set(grads_completed):
+        while (needed_objectives := set(obj_lookup) - set(grads_completed)) or ref_map:
             for obj_name in needed_objectives:
                 objective = obj_lookup[obj_name]
                 # skip if we are currently running it
