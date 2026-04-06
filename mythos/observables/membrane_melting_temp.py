@@ -69,7 +69,7 @@ def apl_residual(
         Element-wise residual ``sim_apls - predicted_apls``.
     """
     sim_apls, sim_temps = data
-    apl0, c_p_g, dAPL, k, Tm = coeffs[0], coeffs[1], coeffs[2], coeffs[3], coeffs[4]  # noqa: N806
+    apl0, c_p_g, dAPL, k, Tm = coeffs  # noqa: N806
     return sim_apls - calculate_apl(sim_temps, apl0, c_p_g, dAPL, k, Tm)
 
 
