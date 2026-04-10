@@ -81,6 +81,7 @@ def read_mdp(input_file: Path) -> dict[str, str | float | int | bool]:
             # Handle key = value format
             if "=" in line:
                 key, str_value = (v.strip() for v in line.split("=", 1))
+                key = key.replace("-", "_")  # equivalent in GROMACS
                 parsed[key] = _parse_value(str_value)
 
     return parsed
@@ -93,6 +94,7 @@ def write_mdp_to(input_config: dict, f: io.TextIOWrapper) -> None:
         input_config: Dictionary of configuration key-value pairs.
         f: File handle to write to.
     """
+    input_config = {k.replace("-", "_"): v for k, v in input_config.items()}
     for key, value in input_config.items():
         # GROMACS uses yes/no for booleans
         parsed_value = ("yes" if value else "no") if isinstance(value, bool) else str(value)

@@ -20,12 +20,12 @@ def universe_from_trajectory(topology: MDAnalysis.Universe, trajectory: Simulato
     Angstroms.  Box dimensions are extended with 90 degree angles for MDAnalysis
     compatibility.
     """
-    positions = np.asarray(trajectory.center * NM_TO_ANGSTROMS)
+    positions = np.array(trajectory.center * NM_TO_ANGSTROMS, copy=True)
     # box_size is (n_frames, 3) need (n_frames, 6) with 90 degree angles which
     # have been stripped from the trajectory when reading and converting to a
     # SimulatorTrajectory object. See mythos.simulators.io._read_gromacs_trajectory
     # for details.
-    box3 = np.asarray(trajectory.box_size * NM_TO_ANGSTROMS)
+    box3 = np.array(trajectory.box_size * NM_TO_ANGSTROMS, copy=True)
     angles = np.broadcast_to(np.array([90.0, 90.0, 90.0], dtype=box3.dtype), box3.shape)
     dimensions = np.concatenate([box3, angles], axis=-1)  # (n_frames, 6)
 

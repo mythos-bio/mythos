@@ -189,14 +189,18 @@ class GromacsSimulator(InputDirSimulator):
     def _update_topology_params(self, input_dir: Path, params: dict[str, Any]) -> None:
         # ensure we start with a preprocessed topology, so create using grompp
         # which then will be used for writing replacement parameters.
+        preproc_mdp = f"preprocess_{self.mdp_file}"
+        update_mdp_params(input_dir / self.mdp_file, self.input_overrides, out_file=input_dir / preproc_mdp)
         cmd = [
             "grompp",
             "-p",
             self.topology_file,
             "-f",
-            self.mdp_file,
+            preproc_mdp,
             "-c",
             self.structure_file,
+            "-n",
+            self.index_file,
             "-pp",
             PREPROCESSED_TOPOLOGY_FILE,
         ]

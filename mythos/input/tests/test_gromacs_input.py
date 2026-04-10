@@ -138,9 +138,9 @@ class TestRead:
         assert result["dt"] == 0.002
         assert result["nsteps"] == 50000
         assert result["tcoupl"] == "v-rescale"
-        assert result["ref-t"] == 300
+        assert result["ref_t"] == 300
         assert not result["pcoupl"]
-        assert result["gen-vel"]
+        assert result["gen_vel"]
         assert not result["continuation"]
         assert not result["pcouple"]
 
@@ -153,17 +153,17 @@ class TestRead:
             "dt",
             "nsteps",
             "tcoupl",
-            "tc-grps",
-            "tau-t",
-            "ref-t",
+            "tc_grps",
+            "tau_t",
+            "ref_t",
             "pcoupl",
             "nstxout",
             "nstvout",
             "nstenergy",
             "nstlog",
-            "cutoff-scheme",
+            "cutoff_scheme",
             "nstlist",
-            "ns-type",
+            "ns_type",
             "pbc",
             "rlist",
             "coulombtype",
@@ -171,9 +171,9 @@ class TestRead:
             "vdwtype",
             "rvdw",
             "constraints",
-            "gen-vel",
-            "gen-temp",
-            "gen-seed",
+            "gen_vel",
+            "gen_temp",
+            "gen_seed",
             "continuation",
             "pcouple",
         }
@@ -219,7 +219,7 @@ class TestWriteTo:
             "gen-vel": True,
             "pcoupl": False,
         }
-        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen-vel = yes\npcoupl = no\n"
+        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen_vel = yes\npcoupl = no\n"
 
         text_stream = io.StringIO()
         gi.write_mdp_to(input_dict, text_stream)
@@ -239,7 +239,7 @@ class TestWrite:
             "pcoupl": False,
         }
 
-        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen-vel = yes\npcoupl = no\n"
+        expected = "integrator = md\ndt = 0.002\nnsteps = 50000\ngen_vel = yes\npcoupl = no\n"
 
         output_file = tmp_path / "test.mdp"
         gi.write_mdp(in_config, output_file)
@@ -252,10 +252,10 @@ class TestWrite:
             "integrator": "md",
             "dt": 0.002,
             "nsteps": 50000,
-            "ref-t": 300,
-            "gen-vel": True,
+            "ref_t": 300,
+            "gen_vel": True,
             "pcoupl": False,
-            "cutoff-scheme": "Verlet",
+            "cutoff_scheme": "Verlet",
         }
 
         output_file = tmp_path / "roundtrip.mdp"
@@ -275,8 +275,8 @@ class TestIntegration:
 
         # Modify some values
         config["nsteps"] = 100000
-        config["ref-t"] = 310
-        config["gen-vel"] = False
+        config["ref_t"] = 310
+        config["gen_vel"] = False
 
         # Write to new file
         output_file = tmp_path / "modified.mdp"
@@ -285,8 +285,8 @@ class TestIntegration:
         # Read back and verify modifications
         modified_config = gi.read_mdp(output_file)
         assert modified_config["nsteps"] == 100000
-        assert modified_config["ref-t"] == 310
-        assert not modified_config["gen-vel"]
+        assert modified_config["ref_t"] == 310
+        assert not modified_config["gen_vel"]
 
 
 class TestGromacsParamsParser:
