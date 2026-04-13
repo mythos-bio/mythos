@@ -30,13 +30,13 @@ class JaxMDSimulator(jd_sim_base.Simulator):
 
     def __post_init__(self) -> None:
         """Builds the run function using the provided parameters."""
-        self.run = build_run_fn(
+        object.__setattr__(self, "run", build_run_fn(
             self.energy_fn,
             self.simulator_params,
             self.space,
             self.simulator_init,
             self.neighbors,
-        )
+        ))
 
 
 def build_run_fn(
