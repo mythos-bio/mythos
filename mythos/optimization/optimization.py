@@ -12,6 +12,7 @@ import jax.numpy as jnp
 import optax
 import ray
 from ray import ObjectRef as RayRef
+from ray.remote_function import RemoteFunction
 from typing_extensions import override
 
 from mythos.optimization.objective import Objective, ObjectiveOutput
@@ -146,6 +147,28 @@ class Optimizer(ABC):
         return output
 
 
+# Helper functions for running remote tasks
+@ray.remote
+def _simulator_run_fn(simulator: Simulator, params: Params, state: dict[str, Any]) -> tuple[list[RayRef], RayRef]:
+    output = simulator.run(opt_params=params, **state)
+    return *output.observables, output.state
+
+
+@ray.remote
+def _objective_compute_fn(
+    objective: Objective, obs: dict[str, RayRef], params: Params, state: dict[str, Any]
+) -> ObjectiveOutput:
+    # Since ray won't unpack nested refs automatically, we do so since we can
+    # guarantee the shape of the object
+    obs = {k: ray.get(v) for k, v in obs.items()}
+    return objective.calculate(observables=obs, opt_params=params, **state)
+
+
+# This indirection helps with mocking in testing
+def _create_and_run_remote(fun: RemoteFunction, ray_options: dict, *args) -> RayRef | list[RayRef]:
+    return fun.options(**ray_options).remote(*args)
+
+
 @chex.dataclass(frozen=True, kw_only=True)
 class RayOptimizer(Optimizer):
     """Optimization of a list of objectives using a list of simulators.
@@ -189,10 +212,6 @@ class RayOptimizer(Optimizer):
         if len(all_names) != len(set(all_names)):
             raise ValueError("All objective, simulator, and exposes names must be unique")
 
-    def _create_and_run_remote(self, fun: callable, ray_options: dict, *args) -> RayRef | list[RayRef]:
-        remote_fun = ray.remote(fun).options(**ray_options)
-        return remote_fun.remote(*args)
-
     def _get_ray_options(self, unit: SchedulerUnit) -> dict[str, Any]:
         options = {}
         if unit_hints := getattr(unit, "scheduler_hints", None):
@@ -202,28 +221,20 @@ class RayOptimizer(Optimizer):
         return {**self.remote_options_default, **options}
 
     def _run_simulator(self, simulator: Simulator, params: Params, **state) -> tuple[list[RayRef], RayRef]:
-        def simulator_run_fn(params: Params, state: dict[str, Any]) -> tuple[list[RayRef], RayRef]:
-            output = simulator.run(opt_params=params, **state)
-            return *output.observables, output.state
-
         ray_opts = {
             **self._get_ray_options(simulator),
             "name": "simulator_run:" + simulator.name,
             "num_returns": 1 + len(simulator.exposes()),
         }
-        refs = self._create_and_run_remote(simulator_run_fn, ray_opts, params, state)
+        refs = _create_and_run_remote(_simulator_run_fn, ray_opts, simulator, params, state)
         return refs[:-1], refs[-1]  # observables as a list, state
 
     def _run_objective(self, objective: Objective, observables: dict[str, RayRef], params: Params, **state) -> RayRef:
-        def objective_compute_fn(obs: dict[str, RayRef], params: Params, state: dict[str, Any]) -> ObjectiveOutput:
-            obs = {k: ray.get(v) for k, v in obs.items()}
-            return objective.calculate(observables=obs, opt_params=params, **state)
-
         ray_opts = {
             **self._get_ray_options(objective),
             "name": "objective_compute:" + objective.name,
         }
-        return self._create_and_run_remote(objective_compute_fn, ray_opts, observables, params, state)
+        return _create_and_run_remote(_objective_compute_fn, ray_opts, objective, observables, params, state)
 
     def _wait_remotes(self, refs: list[RayRef]) -> list[RayRef]:
         ref_list = list(refs)
@@ -245,7 +256,7 @@ class RayOptimizer(Optimizer):
         ref_map, grads_completed, output_observables = {}, {}, {}
 
         # schedule all objectives that already have their observables in state
-        while needed_objectives := set(obj_lookup) - set(grads_completed):
+        while (needed_objectives := set(obj_lookup) - set(grads_completed)) or ref_map:
             for obj_name in needed_objectives:
                 objective = obj_lookup[obj_name]
                 # skip if we are currently running it

@@ -109,7 +109,7 @@ def _mock_ray(monkeypatch, request):  # mocks for ray infrastructure
     def mock_ray_get(ref):
         return ref.value
 
-    def mock_create_and_run_remote(_self, fun, ray_options, *args):
+    def mock_create_and_run_remote(fun, ray_options, *args):
         result = fun(*args)
         # Handle multi-return case (num_returns > 1)
         num_returns = ray_options.get("num_returns", 1)
@@ -117,13 +117,19 @@ def _mock_ray(monkeypatch, request):  # mocks for ray infrastructure
             return [MockRef(r) for r in result]
         return MockRef(result)
 
+    def mock_sim_run_fun(simulator, params, state):
+        out = simulator.run(opt_params=params, **state)
+        return *out.observables, out.state
+
+    def mock_objective_compute_fun(objective, obs, params, state):
+        obs = {k: mock_ray_get(v) for k, v in obs.items()}
+        return objective.calculate(observables=obs, opt_params=params, **state)
+
     monkeypatch.setattr("mythos.optimization.optimization.ray.wait", StatefulWaiter())
     monkeypatch.setattr("mythos.optimization.optimization.ray.get", mock_ray_get)
-    monkeypatch.setattr(
-        jdna_optimization.RayOptimizer,
-        "_create_and_run_remote",
-        mock_create_and_run_remote,
-    )
+    monkeypatch.setattr("mythos.optimization.optimization._create_and_run_remote", mock_create_and_run_remote)
+    monkeypatch.setattr("mythos.optimization.optimization._simulator_run_fn", mock_sim_run_fun)
+    monkeypatch.setattr("mythos.optimization.optimization._objective_compute_fn", mock_objective_compute_fun)
 
 
 # =============================================================================
@@ -652,15 +658,14 @@ class TestRayOptimizerSchedulerHints:
         """Track ray options passed to _create_and_run_remote."""
         captured_options = []
 
-        original_create_and_run = jdna_optimization.RayOptimizer._create_and_run_remote
+        original_create_and_run = jdna_optimization._create_and_run_remote
 
-        def tracking_create_and_run(self, fun, ray_options, *args):
+        def tracking_create_and_run(fun, ray_options, *args):
             captured_options.append(ray_options.copy())
-            return original_create_and_run(self, fun, ray_options, *args)
+            return original_create_and_run(fun, ray_options, *args)
 
         monkeypatch.setattr(
-            jdna_optimization.RayOptimizer,
-            "_create_and_run_remote",
+            "mythos.optimization.optimization._create_and_run_remote",
             tracking_create_and_run,
         )
         return captured_options
