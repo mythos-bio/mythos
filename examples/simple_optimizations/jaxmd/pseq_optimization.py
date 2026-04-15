@@ -24,6 +24,7 @@ or with arguments::
 
 import argparse
 from pathlib import Path
+from typing import Any
 
 import chex
 import jax
@@ -38,12 +39,59 @@ import mythos.optimization.objective as jdna_objective
 import mythos.optimization.optimization as jdna_optimization
 import mythos.simulators.base as jdna_sim_base
 import mythos.simulators.jax_md as jdna_jaxmd
+from mythos.ui.loggers.console import ConsoleLogger
+from mythos.ui.loggers.disk import FileLogger
+from mythos.ui.loggers.multilogger import MultiLogger
 import mythos.utils.constants as jdna_const
 import numpy as np
 import optax
+from mythos.energy.base import ComposedEnergyFunction
+from mythos.utils.types import Params
 from typing_extensions import override
 
 jax.config.update("jax_enable_x64", True)
+
+
+def logits_to_pseq(
+    logits: tuple[jnp.ndarray, jnp.ndarray],
+    temperature: float,
+) -> tuple[jnp.ndarray, jnp.ndarray]:
+    """Convert logit pseq to probability distributions via Gumbel softmax."""
+    up_logits, bp_logits = logits
+    return (
+        jax.nn.softmax(up_logits / temperature),
+        jax.nn.softmax(bp_logits / temperature),
+    )
+
+
+@chex.dataclass(frozen=True)
+class GumbelSoftmaxEnergyFn(ComposedEnergyFunction):
+    """Energy function that converts logit pseq to probabilities via softmax.
+
+    Intercepts ``with_params`` to apply ``softmax(logits / temperature)``
+    before forwarding the resulting probability pseq to the underlying
+    energy functions.  This keeps the optimizer working in unconstrained
+    logit space while the energy function always sees valid distributions.
+    """
+
+    @override
+    def with_params(self, *repl_dicts: dict, **repl_kwargs: Any) -> "GumbelSoftmaxEnergyFn":
+        merged = {}
+        for d in repl_dicts:
+            merged.update(d)
+        merged.update(repl_kwargs)
+
+        temp = jax.lax.stop_gradient(merged.pop("pseq_temperature"))
+        merged["pseq"] = logits_to_pseq(merged["pseq"], temp)
+
+        return ComposedEnergyFunction.with_params(self, merged)
+
+    @classmethod
+    def create_from(cls, other: ComposedEnergyFunction) -> "GumbelSoftmaxEnergyFn":
+        return cls(
+            energy_fns=other.energy_fns,
+            weights=other.weights,
+        )
 
 
 def pseq_to_argmax_sequence(
@@ -117,12 +165,13 @@ def get_parser() -> argparse.ArgumentParser:
     parser.add_argument("--target", type=float, default=2.0, help="Target observable value in oxDNA units (default: 2.0)")
     parser.add_argument("--n-sim-steps", type=int, default=20_000, help="Simulation steps per iteration (default: 20000)")
     parser.add_argument("--n-opt-steps", type=int, default=50, help="Number of optimization steps (default: 50)")
-    parser.add_argument("--lr", type=float, default=0.05, help="Learning rate (default: 0.05)")
+    parser.add_argument("--lr", type=float, default=0.001, help="Learning rate (default: 0.001)")
     parser.add_argument("--seed", type=int, default=0, help="Random seed (default: 0)")
     parser.add_argument("--temp-start", type=float, default=2.0, help="Starting Gumbel softmax temperature (default: 2.0)")
     parser.add_argument("--temp-end", type=float, default=0.1, help="Ending Gumbel softmax temperature (default: 0.1)")
-    parser.add_argument("--min-neff", type=float, default=0.8, help="Minimum normalized n_eff before resimulating (default: 0.8)")
+    parser.add_argument("--min-neff", type=float, default=0.95, help="Minimum normalized n_eff before resimulating (default: 0.95)")
     parser.add_argument("--max-reweight-steps", type=int, default=10, help="Max optimizer steps before forced resimulation (default: 10)")
+    parser.add_argument("--metrics-file", type=str, default=None, help="Path to save optimization metrics as CSV (default: None)")
     return parser
 
 
@@ -139,7 +188,6 @@ def main():
         jdna_traj.from_file(
             experiment_dir / "init.conf",
             topology.strand_counts,
-            is_5p_3p=False,
         )
         .states[0]
         .to_rigid_body()
@@ -189,33 +237,34 @@ def main():
     )
 
     # Create the energy function with sequence-specific weights baked in.
-    # Only pseq needs to appear in opt_params (the part we differentiate
-    # w.r.t.).
-    energy_fn = jdna_energy.create_default_energy_fn(
+    # Wrap in GumbelSoftmaxEnergyFn so that opt_params can carry logits +
+    # temperature, and the softmax conversion happens inside the
+    # differentiable energy computation.
+    base_energy_fn = jdna_energy.create_default_energy_fn(
         topology=topology,
         displacement_fn=displacement_fn,
     ).with_params(
         pseq_constraints=sc,
         **ss_weights
     )
+    energy_fn = GumbelSoftmaxEnergyFn.create_from(base_energy_fn)
 
     # =========================================================================
     # Initial optimization parameters and temperature schedule
     # =========================================================================
-    # Start from uniform logits (large constant, like the reference). The
-    # softmax projection in the callback normalizes these to valid pseq
-    # distributions each step.
+    # Optimize in logit space
     init_unpaired_pseq, init_bp_pseq = init_pseq
-    init_logits = (
-        jnp.full(init_unpaired_pseq.shape, 100.0, dtype=jnp.float64),
-        jnp.full(init_bp_pseq.shape, 100.0, dtype=jnp.float64),
-    )
-    # Project initial logits to pseq via softmax at the starting temperature
     temperatures = np.linspace(args.temp_start, args.temp_end, args.n_opt_steps)
-    opt_params = {"pseq": (
-        jax.nn.softmax(init_logits[0] / temperatures[0]),
-        jax.nn.softmax(init_logits[1] / temperatures[0]),
-    )}
+    opt_params = {
+        "pseq": (
+            jnp.zeros(init_unpaired_pseq.shape, dtype=jnp.float64),
+            jnp.zeros(init_bp_pseq.shape, dtype=jnp.float64),
+        ),
+        # This is here to pass to energy function within DiffTre, we do not
+        # actually optimize over this, but rather use stop_gradient. It is for
+        # communication only.
+        "pseq_temperature": float(temperatures[0]),
+    }
 
     # =========================================================================
     # Build the simulator (wrapped for SimpleOptimizer protocol)
@@ -252,12 +301,10 @@ def main():
         key: jax.random.PRNGKey
 
         @override
-        def run(self, *_args, key=None, **_kwargs) -> jdna_sim_base.SimulatorOutput:
+        def run(self, opt_params: Params, key=None, **_kwargs) -> jdna_sim_base.SimulatorOutput:
             key = key if key is not None else self.key
             key, subkey = jax.random.split(key)
-            # First positional arg from SimpleOptimizer is opt_params
-            sim_opt_params = _args[0] if _args else {}
-            traj = self.inner.run(sim_opt_params, self.init_state, self.n_steps, subkey)
+            traj = self.inner.run(opt_params, self.init_state, self.n_steps, subkey)
             return jdna_sim_base.SimulatorOutput(
                 observables=[traj],
                 state={"key": key},
@@ -275,10 +322,12 @@ def main():
     # Select observable and build DiffTRe objective
     # =========================================================================
     if args.observable == "e2e":
-        single_obs_fn = lambda body: e2e_distance_single(body, displacement_fn)
+        def single_obs_fn(body):
+            return e2e_distance_single(body, displacement_fn)
         obs_name = "E2E"
     else:
-        single_obs_fn = lambda body: rg_single(body, displacement_fn)
+        def single_obs_fn(body):
+            return rg_single(body, displacement_fn)
         obs_name = "Rg"
 
     target_obs = jnp.array(args.target, dtype=jnp.float64)
@@ -311,10 +360,15 @@ def main():
     # =========================================================================
     # Build optimizer and run
     # =========================================================================
+    logger = MultiLogger([ConsoleLogger()])
+    if args.metrics_file is not None:
+        logger.loggers.append(FileLogger(args.metrics_file, mode="w"))
+
     simple_optimizer = jdna_optimization.SimpleOptimizer(
         objective=objective,
         simulator=simulator,
         optimizer=optax.adam(learning_rate=args.lr),
+        logger=logger,
     )
 
     print(f"System: {args.system} ({n_nucleotides} nt, {sc.n_unpaired} unpaired, {sc.n_bp} bp)")
@@ -324,44 +378,16 @@ def main():
     print(f"DiffTRe: min_neff={args.min_neff}, max_reweight_steps={args.max_reweight_steps}")
     print()
 
-    def log_callback(optimizer_output, step):
-        """Project pseq via Gumbel softmax annealing and print progress.
-
-        After each Adam update, the raw pseq values may no longer be valid
-        probability distributions. This callback projects them back via
-        softmax(values / temperature), where temperature decreases over
-        steps.
-        """
-        # Project to valid distributions via softmax with annealed temperature
+    def opt_callback(optimizer_output, step):
+        """Update the annealing temperature based on schedule, and print the current best sequence."""
         temp = temperatures[min(step + 1, len(temperatures) - 1)]
-        up, bp = optimizer_output.opt_params["pseq"]
-        projected_pseq = (jax.nn.softmax(up / temp), jax.nn.softmax(bp / temp))
-        optimizer_output = optimizer_output.replace(
-            opt_params={"pseq": projected_pseq},
-        )
+        new_params = {**optimizer_output.opt_params, "pseq_temperature": float(temp)}
+        optimizer_output = optimizer_output.replace(opt_params=new_params)
+        seq_str = pseq_to_argmax_sequence(logits_to_pseq(new_params["pseq"], temp), sc)
+        print(f"Step {step}: Temp={temp:.3f}, Seq={seq_str}")
+        return optimizer_output, True
 
-        obs = optimizer_output.observables.get("pseq_opt", {})
-        loss = obs.get("loss", float("nan"))
-        measured = obs.get(obs_name, float("nan"))
-        neff = obs.get("neff", float("nan"))
-        pseq = projected_pseq
-        seq_str = pseq_to_argmax_sequence(pseq, sc)
-        seq_display = f"{seq_str[:10]}...{seq_str[-10:]}" if len(seq_str) > 30 else seq_str
-        print(
-            f"Step {step:3d} | Loss: {loss:.4f} | {obs_name}: {measured:.4f} | "
-            f"n_eff: {neff:.3f} | Temp: {temp:.3f} | Seq: {seq_display}"
-        )
-        return optimizer_output, True  # return projected output for next step
-
-    output = simple_optimizer.run(opt_params, n_steps=args.n_opt_steps, callback=log_callback)
-
-    # =========================================================================
-    # Final result
-    # =========================================================================
-    final_pseq = output.opt_params["pseq"]
-    final_seq = pseq_to_argmax_sequence(final_pseq, sc)
-    print(f"\nOptimized sequence: {final_seq}")
-
+    simple_optimizer.run(opt_params, n_steps=args.n_opt_steps, callback=opt_callback)
 
 if __name__ == "__main__":
     main()
