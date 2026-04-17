@@ -603,3 +603,43 @@ class TestUpdateTopologyParams:
             pytest.raises(FileNotFoundError, match="Preprocessed topology file not found"),
         ):
             sim.run(seed=42)
+
+
+class TestPreprocessTopology:
+    """Tests for the preprocess_topology utility function."""
+
+    def test_copy_to_copies_input_and_preprocesses_in_copy(
+        self,
+        gromacs_input_dir: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Test that copy_to copies input files to the target directory and runs grompp there."""
+        from mythos.simulators.gromacs.utils import preprocess_topology
+
+        copy_dest = tmp_path / "archive"
+
+        commands_run = []
+
+        def mock_check_call(cmd, cwd=None, **kwargs):
+            commands_run.append({"cmd": cmd, "cwd": cwd})
+            return 0
+
+        with (
+            patch("mythos.simulators.gromacs.utils.shutil.which", return_value="gmx"),
+            patch("subprocess.check_call", side_effect=mock_check_call),
+        ):
+            preprocess_topology(
+                input_dir=gromacs_input_dir,
+                copy_to=copy_dest,
+            )
+
+        # The copy destination should exist with the original input files
+        assert copy_dest.exists()
+        assert (copy_dest / "md.mdp").exists()
+        assert (copy_dest / "topol.top").exists()
+        assert (copy_dest / "membrane.gro").exists()
+        assert (copy_dest / "index.ndx").exists()
+
+        # grompp should have been run in the copy, not the original
+        assert len(commands_run) == 1
+        assert Path(commands_run[0]["cwd"]) == copy_dest
