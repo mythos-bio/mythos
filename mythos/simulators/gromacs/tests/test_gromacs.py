@@ -7,6 +7,7 @@ from unittest.mock import patch
 import numpy as np
 import pytest
 from mythos.simulators.gromacs.gromacs import KB, PREPROCESSED_PREFIX, GromacsSimulator
+from mythos.simulators.gromacs.utils import preprocess_topology
 from mythos.simulators.io import SimulatorTrajectory
 
 # Test data directory
@@ -614,8 +615,6 @@ class TestPreprocessTopology:
         tmp_path: Path,
     ) -> None:
         """Test that copy_to copies input files to the target directory and runs grompp there."""
-        from mythos.simulators.gromacs.utils import preprocess_topology
-
         copy_dest = tmp_path / "archive"
 
         commands_run = []
