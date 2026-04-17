@@ -135,11 +135,14 @@ class GromacsSimulator(InputDirSimulator):
         gromacs_utils.preprocess_topology(
             input_dir=input_dir,
             params=overrides,
-            structure_name=structure_file,
-            topology_name=f"{PREPROCESSED_PREFIX}.top",
             output_prefix=OUTPUT_PREFIX,
             output_mdp_name=step_mdp,
             log_prefix=f"{step}_grompp",
+            gromacs_binary=self.binary_path,
+            mdp_name=self.mdp_file,
+            structure_name=structure_file,
+            topology_name=f"{PREPROCESSED_PREFIX}.top",
+            index_name=self.index_file,
         )
 
         # run the simulation
@@ -186,10 +189,14 @@ class GromacsSimulator(InputDirSimulator):
         gromacs_utils.preprocess_topology(
             input_dir=input_dir,
             params=self.input_overrides,
-            structure_name=self.structure_file,
             output_prefix=PREPROCESSED_PREFIX,
             output_mdp_name=preproc_mdp,
             log_prefix="topology_pp",
+            gromacs_binary=self.binary_path,
+            mdp_name=self.mdp_file,
+            structure_name=self.structure_file,
+            topology_name=self.topology_file,
+            index_name=self.index_file,
         )
         topo_pp = input_dir / f"{PREPROCESSED_PREFIX}.top"
 

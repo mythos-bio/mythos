@@ -8,15 +8,14 @@ an archive location before preprocessing.
 
 Example usage::
 
-    python gromacs_prep.py /path/to/gromacs/input
-    python gromacs_prep.py /path/to/input --copy-to /path/to/archive
-    python gromacs_prep.py /path/to/input --gromacs-binary /usr/local/bin/gmx
-    python gromacs_prep.py /path/to/input --params nsteps=5000 dt=0.002
+    python examples/gromacs_prep.py /path/to/gromacs/input
+    python examples/gromacs_prep.py /path/to/input --copy-to /path/to/archive
+    python examples/gromacs_prep.py /path/to/input --gromacs-binary /usr/local/bin/gmx
+    python examples/gromacs_prep.py /path/to/input --params nsteps=5000 dt=0.002
 """
 
 import argparse
 import logging
-import sys
 
 from mythos.simulators.gromacs.utils import preprocess_topology
 

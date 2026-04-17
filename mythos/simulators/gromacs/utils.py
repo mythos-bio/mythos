@@ -92,9 +92,10 @@ def preprocess_topology(
     input_dir = Path(input_dir)
 
     # pre-emptively check for the GROMACS binary before copying files
-    gromacs_binary = shutil.which(gromacs_binary or "gmx")
+    binary_name = gromacs_binary or "gmx"
+    gromacs_binary = shutil.which(binary_name)
     if not gromacs_binary:
-        raise FileNotFoundError(f"GROMACS binary not found or does not exist at: {gromacs_binary}")
+        raise FileNotFoundError(f"GROMACS binary not found or does not exist at: {binary_name}")
 
     if copy_to is not None:
         # Copy the input directory to the specified location to avoid modifying original files
