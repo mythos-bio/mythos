@@ -11,13 +11,13 @@ import jax.numpy as jnp
 import numpy as np
 
 from mythos.energy.base import EnergyFunction
-from mythos.input.gromacs_input import read_mdp, replace_params_in_topology, update_mdp_params
+from mythos.input.gromacs_input import read_mdp, replace_params_in_topology
 from mythos.simulators import io as jd_sio
 from mythos.simulators.base import InputDirSimulator, SimulatorOutput
 from mythos.simulators.gromacs import utils as gromacs_utils
 from mythos.utils.helpers import run_command, try_to_float
 
-PREPROCESSED_TOPOLOGY_FILE = "_pp_topol.top"
+PREPROCESSED_PREFIX = "preprocessed"
 OUTPUT_PREFIX = "output"
 KB = 0.0083144621  # Boltzmann constant in kJ/(mol·K)
 
@@ -132,22 +132,14 @@ class GromacsSimulator(InputDirSimulator):
 
     def _run_simulation_step(self, structure_file: str, overrides: dict[str, Any], input_dir: Path, step: str) -> None:
         step_mdp = f"{step}_{self.mdp_file}"
-        update_mdp_params(input_dir / self.mdp_file, overrides, out_file=input_dir / step_mdp)
-        # prepare the run
-        cmd = [
-            "grompp",
-            "-f",
-            step_mdp,
-            "-c",
-            structure_file,
-            "-p",
-            PREPROCESSED_TOPOLOGY_FILE,  # created in _update_topology_params
-            "-n",
-            self.index_file,
-            "-o",
-            f"{OUTPUT_PREFIX}.tpr",
-        ]
-        self._run_gromacs(cmd, cwd=input_dir, log_prefix=f"{step}_grompp")
+        gromacs_utils.preprocess_topology(
+            input_dir=input_dir,
+            params=overrides,
+            structure_name=structure_file,
+            topology_name=f"{PREPROCESSED_PREFIX}.top",
+            output_prefix=OUTPUT_PREFIX,
+            output_mdp_name=step_mdp,
+        )
 
         # run the simulation
         cmd = [
@@ -189,23 +181,15 @@ class GromacsSimulator(InputDirSimulator):
     def _update_topology_params(self, input_dir: Path, params: dict[str, Any]) -> None:
         # ensure we start with a preprocessed topology, so create using grompp
         # which then will be used for writing replacement parameters.
-        preproc_mdp = f"preprocess_{self.mdp_file}"
-        update_mdp_params(input_dir / self.mdp_file, self.input_overrides, out_file=input_dir / preproc_mdp)
-        cmd = [
-            "grompp",
-            "-p",
-            self.topology_file,
-            "-f",
-            preproc_mdp,
-            "-c",
-            self.structure_file,
-            "-n",
-            self.index_file,
-            "-pp",
-            PREPROCESSED_TOPOLOGY_FILE,
-        ]
-        self._run_gromacs(cmd, cwd=input_dir, log_prefix="topology_pp")
-        topo_pp = input_dir / PREPROCESSED_TOPOLOGY_FILE
+        preproc_mdp = f"{PREPROCESSED_PREFIX}.mdp"
+        gromacs_utils.preprocess_topology(
+            input_dir=input_dir,
+            params=self.input_overrides,
+            structure_name=self.structure_file,
+            output_prefix=PREPROCESSED_PREFIX,
+            output_mdp_name=preproc_mdp,
+        )
+        topo_pp = input_dir / f"{PREPROCESSED_PREFIX}.top"
 
         if not topo_pp.exists():
             raise FileNotFoundError(f"Preprocessed topology file not found after grompp: {topo_pp}")
