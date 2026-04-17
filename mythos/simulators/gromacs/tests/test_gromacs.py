@@ -6,7 +6,7 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from mythos.simulators.gromacs.gromacs import KB, PREPROCESSED_TOPOLOGY_FILE, GromacsSimulator
+from mythos.simulators.gromacs.gromacs import KB, PREPROCESSED_PREFIX, GromacsSimulator
 from mythos.simulators.io import SimulatorTrajectory
 
 # Test data directory
@@ -78,6 +78,12 @@ class TestGromacsSimulatorInstantiation:
 
 class TestGromacsSimulatorRun:
     """Tests for GromacsSimulator.run() method."""
+
+    @pytest.fixture(autouse=True)
+    def mock_shutil_which(self):
+        """Mock shutil.which in utils so the pre-flight binary check passes."""
+        with patch("mythos.simulators.gromacs.utils.shutil.which", return_value="gmx"):
+            yield
 
     @pytest.fixture
     def mock_subprocess_and_copy_outputs(self, gromacs_input_dir: Path):
@@ -536,6 +542,12 @@ class TestGromacsSimulatorTrajectory:
 class TestUpdateTopologyParams:
     """Tests for _update_topology_params method."""
 
+    @pytest.fixture(autouse=True)
+    def mock_shutil_which(self):
+        """Mock shutil.which in utils so the pre-flight binary check passes."""
+        with patch("mythos.simulators.gromacs.utils.shutil.which", return_value="gmx"):
+            yield
+
     def test_update_topology_params_creates_preprocessed_file(
         self,
         gromacs_input_dir: Path,
@@ -554,10 +566,10 @@ class TestUpdateTopologyParams:
             assert not cwd.samefile(gromacs_input_dir)  # Sanity check, we expect tmpdir
             if "grompp" in cmd and "-pp" in cmd:
                 # mock -pp making the expected preprocessed file
-                (cwd / PREPROCESSED_TOPOLOGY_FILE).write_text("; Preprocessed topology\n")
+                (cwd / f"{PREPROCESSED_PREFIX}.top").write_text("; Preprocessed topology\n")
             elif "grompp" in cmd:
                 # Test assertion ensuring we called and created in the correct dir and
-                assert (cwd / PREPROCESSED_TOPOLOGY_FILE).exists(), "Preprocessed topology should exist"
+                assert (cwd / f"{PREPROCESSED_PREFIX}.top").exists(), "Preprocessed topology should exist"
             if "mdrun" in cmd:
                 # to satisfy the completion of a run
                 shutil.copy(TEST_DATA_DIR / "output.tpr", cwd / "output.tpr")
