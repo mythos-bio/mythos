@@ -189,6 +189,7 @@ class GromacsSimulator(InputDirSimulator):
             structure_name=self.structure_file,
             output_prefix=PREPROCESSED_PREFIX,
             output_mdp_name=preproc_mdp,
+            log_prefix="topology_pp",
         )
         topo_pp = input_dir / f"{PREPROCESSED_PREFIX}.top"
 
