@@ -139,6 +139,7 @@ class GromacsSimulator(InputDirSimulator):
             topology_name=f"{PREPROCESSED_PREFIX}.top",
             output_prefix=OUTPUT_PREFIX,
             output_mdp_name=step_mdp,
+            log_prefix=f"{step}_grompp",
         )
 
         # run the simulation
