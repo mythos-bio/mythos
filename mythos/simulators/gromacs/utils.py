@@ -61,7 +61,7 @@ def preprocess_topology(
     copy_to: Path | None = None,
     output_prefix: str = "preprocessed",
     output_mdp_name: str = "preprocessed.mdp",
-    gromacs_binary: str | None = None,
+    gromacs_binary: str | Path | None = None,
     mdp_name: str = "md.mdp",
     topology_name: str = "topol.top",
     structure_name: str = "membrane.gro",
@@ -79,6 +79,7 @@ def preprocess_topology(
         input_dir: Directory containing the GROMACS input files.
         params: Optional dictionary of parameters to update in the .mdp file.
         copy_to: Optional directory to copy input files to before preprocessing.
+           If the directory exists, an exception is raised.
         output_prefix: Prefix for the preprocessed topology (.top extension)
             and tpr files (.tpr extension).
         output_mdp_name: Name of the output .mdp file after replacements.
