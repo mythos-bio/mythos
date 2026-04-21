@@ -332,6 +332,13 @@ def test_composed_energy_function_params_interactions(list_of_energy_functions):
         cef.with_params(non_existent_param=5.0)
 
 
+def test_composed_energy_function_strict_params_false(list_of_energy_functions):
+    """Test that strict_params=False allows unused parameters without error."""
+    cef = base.ComposedEnergyFunction(energy_fns=list_of_energy_functions, strict_params=False)
+    cef_updated = cef.with_params(non_existent_param=5.0)
+    assert cef_updated.params_dict() == {"param1": 1.0, "param2": 2.0, "param_shared": 3.0}
+
+
 def test_qualified_composed_energy_function_params_interactions(list_of_energy_functions):
     qualified_cef = base.QualifiedComposedEnergyFunction(energy_fns=list_of_energy_functions)
     assert qualified_cef.params_dict() == {

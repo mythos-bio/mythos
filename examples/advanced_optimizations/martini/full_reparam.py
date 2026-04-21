@@ -73,24 +73,6 @@ from mythos.utils.types import PyTree
 jax.config.update("jax_enable_x64", True)
 
 
-class PermissiveComposedEnergyFunction(ComposedEnergyFunction):
-    """ComposedEnergyFunction that silently ignores unknown parameters.
-
-    When multiple systems share an optimizer, the merged parameter dict
-    contains keys from all systems. The base class raises on params not
-    recognized by any sub-function; this subclass filters them out.
-    """
-
-    def with_params(self, *repl_dicts, **repl_kwargs):
-        merged = {}
-        for d in repl_dicts:
-            merged.update(d)
-        merged.update(repl_kwargs)
-        known = {k: v for k, v in merged.items()
-                 if any(self._param_in_fn(k, fn) for fn in self.energy_fns)}
-        return super().with_params(known)
-
-
 def tree_mean(trees: tuple[PyTree]) -> PyTree:
     if len(trees) <= 1:
         return trees[0]
@@ -169,7 +151,7 @@ def build_energy_fn(top, params, martini_version):
         fns.append(LJ.from_topology(topology=top, params=LJConfiguration(**params["nonbond_params"])))
     fns.append(Bond.from_topology(topology=top, params=BondConfiguration(**params["bond_params"])))
     fns.append(AngleCls.from_topology(topology=top, params=AngleConfiguration(**params["angle_params"])))
-    return PermissiveComposedEnergyFunction(energy_fns=fns)
+    return ComposedEnergyFunction(energy_fns=fns, strict_params=False)
 
 
 def parse_bond_angle_targets(cfg):

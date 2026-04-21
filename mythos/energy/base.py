@@ -224,10 +224,16 @@ class ComposedEnergyFunction(EnergyFunction):
     Parameters:
         energy_fns (list[BaseEnergyFunction]): a list of energy functions
         weights (jnp.ndarray): optional, the weights of the energy functions
+        strict_params (bool): optional, default True. whether to error on unused
+            parameters in with_params. When joint optimization is performed over
+            distinct energy functions, this can be set to False to enable a
+            global parameter space, effectively ignoring those params not in
+            this energy function.
     """
 
     energy_fns: list[BaseEnergyFunction]
     weights: jnp.ndarray | None = None
+    strict_params: bool = True
 
     def __post_init__(self) -> None:
         """Check that the input is valid."""
@@ -288,7 +294,7 @@ class ComposedEnergyFunction(EnergyFunction):
 
             energy_fns.append(fn.with_params(**new_params))
 
-        if unused := all_replacements - used_replacements:
+        if self.strict_params and (unused := all_replacements - used_replacements):
             raise ValueError(f"Some parameters were not used in any energy function: {unused}.")
         return self.replace(energy_fns=energy_fns)
 
