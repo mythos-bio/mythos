@@ -6,7 +6,8 @@ from unittest.mock import patch
 
 import numpy as np
 import pytest
-from mythos.simulators.gromacs.gromacs import KB, PREPROCESSED_TOPOLOGY_FILE, GromacsSimulator
+from mythos.simulators.gromacs.gromacs import KB, PREPROCESSED_PREFIX, GromacsSimulator
+from mythos.simulators.gromacs.utils import preprocess_topology
 from mythos.simulators.io import SimulatorTrajectory
 
 # Test data directory
@@ -78,6 +79,12 @@ class TestGromacsSimulatorInstantiation:
 
 class TestGromacsSimulatorRun:
     """Tests for GromacsSimulator.run() method."""
+
+    @pytest.fixture(autouse=True)
+    def mock_shutil_which(self):
+        """Mock shutil.which in utils so the pre-flight binary check passes."""
+        with patch("mythos.simulators.gromacs.utils.shutil.which", return_value="gmx"):
+            yield
 
     @pytest.fixture
     def mock_subprocess_and_copy_outputs(self, gromacs_input_dir: Path):
@@ -536,6 +543,12 @@ class TestGromacsSimulatorTrajectory:
 class TestUpdateTopologyParams:
     """Tests for _update_topology_params method."""
 
+    @pytest.fixture(autouse=True)
+    def mock_shutil_which(self):
+        """Mock shutil.which in utils so the pre-flight binary check passes."""
+        with patch("mythos.simulators.gromacs.utils.shutil.which", return_value="gmx"):
+            yield
+
     def test_update_topology_params_creates_preprocessed_file(
         self,
         gromacs_input_dir: Path,
@@ -554,10 +567,10 @@ class TestUpdateTopologyParams:
             assert not cwd.samefile(gromacs_input_dir)  # Sanity check, we expect tmpdir
             if "grompp" in cmd and "-pp" in cmd:
                 # mock -pp making the expected preprocessed file
-                (cwd / PREPROCESSED_TOPOLOGY_FILE).write_text("; Preprocessed topology\n")
+                (cwd / f"{PREPROCESSED_PREFIX}.top").write_text("; Preprocessed topology\n")
             elif "grompp" in cmd:
                 # Test assertion ensuring we called and created in the correct dir and
-                assert (cwd / PREPROCESSED_TOPOLOGY_FILE).exists(), "Preprocessed topology should exist"
+                assert (cwd / f"{PREPROCESSED_PREFIX}.top").exists(), "Preprocessed topology should exist"
             if "mdrun" in cmd:
                 # to satisfy the completion of a run
                 shutil.copy(TEST_DATA_DIR / "output.tpr", cwd / "output.tpr")
@@ -591,3 +604,41 @@ class TestUpdateTopologyParams:
             pytest.raises(FileNotFoundError, match="Preprocessed topology file not found"),
         ):
             sim.run(seed=42)
+
+
+class TestPreprocessTopology:
+    """Tests for the preprocess_topology utility function."""
+
+    def test_copy_to_copies_input_and_preprocesses_in_copy(
+        self,
+        gromacs_input_dir: Path,
+        tmp_path: Path,
+    ) -> None:
+        """Test that copy_to copies input files to the target directory and runs grompp there."""
+        copy_dest = tmp_path / "archive"
+
+        commands_run = []
+
+        def mock_check_call(cmd, cwd=None, **kwargs):
+            commands_run.append({"cmd": cmd, "cwd": cwd})
+            return 0
+
+        with (
+            patch("mythos.simulators.gromacs.utils.shutil.which", return_value="gmx"),
+            patch("subprocess.check_call", side_effect=mock_check_call),
+        ):
+            preprocess_topology(
+                input_dir=gromacs_input_dir,
+                copy_to=copy_dest,
+            )
+
+        # The copy destination should exist with the original input files
+        assert copy_dest.exists()
+        assert (copy_dest / "md.mdp").exists()
+        assert (copy_dest / "topol.top").exists()
+        assert (copy_dest / "membrane.gro").exists()
+        assert (copy_dest / "index.ndx").exists()
+
+        # grompp should have been run in the copy, not the original
+        assert len(commands_run) == 1
+        assert Path(commands_run[0]["cwd"]) == copy_dest

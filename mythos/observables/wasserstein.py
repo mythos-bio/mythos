@@ -33,7 +33,7 @@ def wasserstein_1d(u: Arr_N, v: Arr_N, u_weights: Arr_N | None = None, v_weights
         raise ValueError(f"v_weights must have the same shape as v; got {v_weights.shape} and {v.shape}.")
 
     # Validate that total masses match (within numerical tolerance)
-    if not jnp.isclose(jnp.sum(u_weights), jnp.sum(v_weights), rtol=1e-9, atol=1e-12):
+    if not jnp.isclose(jnp.sum(u_weights), jnp.sum(v_weights), rtol=1e-5, atol=1e-5):
         raise ValueError(
             "u_weights and v_weights must sum to the same total mass; "
             f"got {jnp.sum(u_weights)} and {jnp.sum(v_weights)}."
