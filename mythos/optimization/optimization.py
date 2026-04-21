@@ -176,7 +176,9 @@ class RayOptimizer(Optimizer):
     Parameters:
         objectives: A list of objectives to optimize.
         simulators: A list of simulators to use for the optimization.
-        aggregate_grad_fn: A function that aggregates the gradients from the objectives.
+        aggregate_grad_fn: A function that takes a list of gradients and
+            aggregates them into a single gradient. The gradients are provided
+            in the same order as the list of objectives.
         optimizer: An optax optimizer.
         optimizer_state: The state of the optimizer.
         logger: A logger to use for the optimization.
@@ -316,7 +318,8 @@ class RayOptimizer(Optimizer):
                 else:  # finally it must be simulator state
                     component_state[producer] = ray.get(ref)
 
-        grads = self.aggregate_grad_fn(list(grads_completed.values()))
+        # return the grads of the objectives in the order they were provided
+        grads = self.aggregate_grad_fn([grads_completed[obj.name] for obj in self.objectives])
         opt_state = state.optimizer_state or self.optimizer.init(params)
         updates, opt_state = self.optimizer.update(grads, opt_state, params)
         new_params = optax.apply_updates(params, updates)
