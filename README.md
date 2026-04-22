@@ -13,12 +13,15 @@ mythos is a Python package for simulating and fitting coarse-grained molecular
 models to macroscopic experimental data.
 
 Currently, mythos can run simulations using
-[JAX-MD](https://github.com/jax-md/jax-md) and [oxDNA](https://oxdna.org/)
-(You must install oxDNA yourself however).
+[JAX-MD](https://github.com/jax-md/jax-md), [oxDNA](https://oxdna.org/),
+[GROMACS](https://www.gromacs.org/), and
+[LAMMPS](https://www.lammps.org/).
+(oxDNA, GROMACS, and LAMMPS must be installed separately.)
 
-Further, mythos supports the fitting models using JAX-MD (Direct Differentiation,
-and [DiffTRe](https://www.nature.com/articles/s41467-021-27241-4)) and oxDNA
-(DiffTRe only).
+Further, mythos supports fitting models using JAX-MD (Direct Differentiation,
+and [DiffTRe](https://www.nature.com/articles/s41467-021-27241-4)) and oxDNA /
+GROMACS / LAMMPS (DiffTRe only). Built-in energy models include oxDNA1, oxDNA2,
+RNA, hybrid DNA/RNA, and MARTINI 2/3 coarse-grained lipid models.
 
 
 ## Quick Start
@@ -42,13 +45,13 @@ JAX.
 First install mythos using pip:
 
 ```bash
-pip install git+https://github.cpommythos-bio/mythos.git
+pip install git+https://github.com/mythos-bio/mythos.git
 ```
 
 ### Simulations
 
 Information on how to run a simulation can be found in the
-[documentation](https://mythos.readthedocs.io/en/latest/basic_usage.html#running-a-single-simulation).
+[documentation](https://mythos.readthedocs.io/en/latest/getting_started.html).
 
 One advantage of mythos is that you can specify a custom energy function for
 both simulations and optimizations. Information on how energy functions are
@@ -66,7 +69,7 @@ Simple optimizations are those optimizations where a set of parameters are fit
 with respect to a single objective as a function of a single simulation. This is
 usually a helpful introduction to how mythos works. Documentation on how simple
 optimizations work can be found
-[here](https://mythos.readthedocs.io/en/latest/basic_usage.html#running-a-simple-optimization)
+[here](https://mythos.readthedocs.io/en/latest/getting_started.html#example-oxdna-optimization-with-difftre)
 in the documentation.
 
 To see examples of simple simulations, go to
@@ -78,7 +81,7 @@ where you can find both JAX-MD and oxDNA examples.
 Advanced optimizations are those optimizations where a set of parameters are
 fit with respect to more than one objective and as a function of multiple possibly
 heterogeneous simulations. These kinds of optimizations are covered in the
-documentation [here](https://mythos.readthedocs.io/en/latest/advanced_usage.html#advanced-optimizations).
+documentation [here](https://mythos.readthedocs.io/en/latest/examples.html).
 
 
 To see examples of simple simulations go to see

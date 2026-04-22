@@ -54,7 +54,7 @@ if html_theme == "sphinx_book_theme":
             "image_dark": "../_staticautoapi/mythos/energy/configuration/index/SSEC_logo_vert_white_lg_1184x661.png",
             "text": f"{html_title}",
         },
-        "repository_url": "https://github.com/mythos-bio/mythos-dev",
+        "repository_url": "https://github.com/mythos-bio/mythos",
         "use_repository_button": True,
     })
 
