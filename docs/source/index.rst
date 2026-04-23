@@ -45,11 +45,6 @@ collecting observables, computing gradients, and updating parameters.
 
 For a full description, see :doc:`optimization`.
 
-.. note::
-
-   This project is under active development.
-   So expect the API to change frequently.
-
 Contents
 --------
 
@@ -61,5 +56,6 @@ Contents
    energy_functions
    observables
    optimization
+   ray_optimizer
    examples
    autoapi/index

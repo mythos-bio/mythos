@@ -6,7 +6,14 @@ Getting Started
 Installation
 ------------
 
-We recommend using a fresh conda environment with Python 3.11+:
+We recommend using a fresh virtual environment via tools like `conda` or `uv`
+with Python 3.11+:
+
+.. code-block:: bash
+
+    uv venv mythos --python 3.11
+    source mythos/bin/activate
+
 
 .. code-block:: bash
 

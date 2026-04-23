@@ -6,9 +6,6 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2411.09216-b31b1b.svg)](https://arxiv.org/abs/2411.09216)
 
 
-> [!NOTE]
-> This project is in active development, so expect the API to change frequently.
-
 mythos is a Python package for simulating and fitting coarse-grained molecular
 models to macroscopic experimental data.
 
