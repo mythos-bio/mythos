@@ -77,6 +77,8 @@ See :doc:`autoapi/mythos/optimization/optimization/index` for the full API.
 `simple optimizations <https://github.com/mythos-bio/mythos/tree/master/examples/simple_optimizations>`_
 
 
+.. _ray-optimizer:
+
 RayOptimizer
 ^^^^^^^^^^^^
 
@@ -112,6 +114,9 @@ gradients from multiple objectives into a single update:
     optimizer.run(params, n_steps=100)
 
 See :doc:`autoapi/mythos/optimization/optimization/index` for the full API.
+
+For detailed guidance on Ray session setup, resource hints, memory
+management, and gradient aggregation patterns, see :doc:`ray_optimizer`.
 
 **Examples:**
 `advanced optimizations <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations>`_
@@ -168,8 +173,8 @@ Defining a Loss Function for DiffTRe
 
 The ``DiffTReObjective`` accepts a ``grad_or_loss_fn`` that is called with the
 simulator's trajectory observables. Internally, DiffTRe uses
-``jax.value_and_grad`` on a ``compute_loss`` function whose ``loss_fn``
-argument has the following signature:
+``jax.value_and_grad`` and calls the ``grad_or_loss_fn`` providing positional
+arguments using the following signature:
 
 .. code-block:: python
 

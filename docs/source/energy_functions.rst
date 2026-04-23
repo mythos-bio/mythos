@@ -90,6 +90,23 @@ and :doc:`autoapi/mythos/energy/configuration/index`.
   Immutable parameter container. Defines which parameters are required,
   optimizable, and dependent (computed from others via ``init_params()``).
 
+Critical considerations for extending energy functions
+======================================================
+
+Several of the above classes provide convenience features like parameter
+management and configuration handling. The critical entrypoints used in the
+library to consider when choosing what class to extend are:
+
+* The ``EnergyFunction`` interface is the core contract that all energy
+  functions must fulfill. This is true via your subclass implementation and via
+  composition. ``BaseEnergyFunction`` provides a convenience layer over that
+  interface for parameter management, which we recommend using if possible.
+* We highly recommend ensuring that your energy functions are composable and
+  compatible with ``ComposedEnergyFunction`` and its variants. This allows users
+  to easily combine your energy functions with others, enabling more complex
+  and flexible energy models.
+* In order to be compatible fully compatible with the optimization framework,
+  your energy function must be serializable (for remote transport via ``ray``).
 
 .. _energy-extending-jaxmd:
 

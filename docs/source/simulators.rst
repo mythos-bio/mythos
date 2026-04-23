@@ -151,7 +151,8 @@ There are two base classes to choose from:
 - **``InputDirSimulator``** — for file-based simulators that shell out to an
   external binary (e.g. GROMACS, LAMMPS). Implement the
   ``run_simulation(input_dir, ...)`` method; the base class handles copying
-  input files to a temporary directory automatically.
+  input files to a temporary directory automatically based on its configured
+  options.
 
 Both are frozen ``chex`` dataclasses and must return a
 :class:`~mythos.simulators.base.SimulatorOutput`.
@@ -195,5 +196,8 @@ Key points:
   in ``DiffTReObjective.required_observables``.
 - Use ``Simulator.create_n(n, name, ...)`` to create multiple instances with
   unique names for parallel optimization with ``RayOptimizer``.
+- The simulator should be serializable for compatibility with distributed
+  optimizers like ``RayOptimizer``. Avoid including non-serializable objects
+  within the parameter definition of your simulator class.
 
 See :doc:`autoapi/mythos/simulators/base/index` for the full base class API.
