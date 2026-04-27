@@ -1,4 +1,5 @@
-# mythos
+<img src="https://raw.githubusercontent.com/mythos-bio/mythos/master/logo.svg" alt="mythos logo">
+
 [![CI](https://github.com/mythos-bio/mythos/actions/workflows/ci.yml/badge.svg)](https://github.com/mythos-bio/mythos/actions/workflows/ci.yml)
 [![Documentation Status](https://readthedocs.org/projects/mythos/badge/?version=latest)](https://mythos.readthedocs.io/en/latest/)
 [![codecov](https://codecov.io/gh/mythos-bio/mythos/branch/master/graph/badge.svg?token=0KPNKHRC2V)](https://codecov.io/gh/mythos-bio/mythos)
