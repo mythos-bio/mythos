@@ -9,10 +9,10 @@
 | Notebook | Description |
 |----------|-------------|
 | [simulation.ipynb](oxdna/simulation.ipynb) | Run a basic oxDNA simulation and read the trajectory |
+| [propeller_twist_optimization.ipynb](oxdna/propeller_twist_optimization.ipynb) | Direct gradient optimization of propeller twist using DiffTRe |
 | [persistence_length_optimization.ipynb](oxdna/persistence_length_optimization.ipynb) | Optimize parameters to match a target persistence length (multi-sim, Ray) |
 | [melting_temperature_optimization.ipynb](oxdna/melting_temperature_optimization.ipynb) | Optimize parameters to match a target melting temperature (umbrella sampling) |
 | [multi_trajectory_optimization.ipynb](oxdna/multi_trajectory_optimization.ipynb) | Multi-trajectory propeller twist optimization with RayOptimizer |
-| [propeller_twist_optimization.ipynb](oxdna/propeller_twist_optimization.ipynb) | Direct gradient optimization of propeller twist using DiffTRe |
 | [lammps_propeller_twist_optimization.ipynb](oxdna/lammps_propeller_twist_optimization.ipynb) | Propeller twist optimization using LAMMPS as the simulation engine |
 
 ### JAX-MD
