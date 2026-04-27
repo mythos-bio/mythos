@@ -7,16 +7,16 @@
 [![arXiv](https://img.shields.io/badge/arXiv-2411.09216-b31b1b.svg)](https://arxiv.org/abs/2411.09216)
 
 
-mythos is a Python package for simulating and fitting coarse-grained molecular
+Mythos is a Python package for simulating and fitting coarse-grained molecular
 models to macroscopic experimental data.
 
-Currently, mythos can run simulations using
+Currently, Mythos can run simulations using
 [JAX-MD](https://github.com/jax-md/jax-md), [oxDNA](https://oxdna.org/),
 [GROMACS](https://www.gromacs.org/), and
 [LAMMPS](https://www.lammps.org/).
 (oxDNA, GROMACS, and LAMMPS must be installed separately.)
 
-Further, mythos supports fitting models using JAX-MD (Direct Differentiation,
+Further, Mythos supports fitting models using JAX-MD (Direct Differentiation,
 and [DiffTRe](https://www.nature.com/articles/s41467-021-27241-4)) and oxDNA /
 GROMACS / LAMMPS (DiffTRe only). Built-in energy models include oxDNA1, oxDNA2,
 RNA, hybrid DNA/RNA, and MARTINI 2/3 coarse-grained lipid models.
@@ -58,33 +58,31 @@ documentation.
 
 ### Optimizations
 
-Optimizations can be thought of in two kinds: simple and advanced.
+The optimization framework is built around four abstractions:
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/mythos-bio/mythos/master/docs/_static/mythos_opt_diagram.svg" alt="mythos optimization lifecycle" width="80%">
+</p>
 
-#### Simple Optimizations
+- **Simulator** — runs a simulation and produces observables.
+- **Observable** — a quantity produced by a simulator (e.g. a trajectory,
+  structural property, or thermodynamic measurement).
+- **Objective** — computes gradients of a loss function with respect to
+  the parameters being optimized.
+- **Optimizer** — coordinates simulators, collects observables, passes them
+  to objectives, aggregates gradients, and applies parameter updates.
 
-Simple optimizations are those optimizations where a set of parameters are fit
-with respect to a single objective as a function of a single simulation. This is
-usually a helpful introduction to how mythos works. Documentation on how simple
-optimizations work can be found
-[here](https://mythos.readthedocs.io/en/latest/getting_started.html#example-oxdna-optimization-with-difftre)
-in the documentation.
+Multiple simulators (potentially using different backends) and multiple
+objectives can be jointly optimized. For example, you can simultaneously fit
+structural and thermodynamic properties across simulations at different
+conditions. Parallel execution is supported via
+[Ray](https://ray.io), enabling distribution across local cores or a remote
+cluster.
 
-To see examples of simple simulations, go to
-[examples](https://github.com/mythos-bio/mythos/tree/master/examples/simulations),
-where you can find both JAX-MD and oxDNA examples.
-
-### Advanced Optimizations
-
-Advanced optimizations are those optimizations where a set of parameters are
-fit with respect to more than one objective and as a function of multiple possibly
-heterogeneous simulations. These kinds of optimizations are covered in the
-documentation [here](https://mythos.readthedocs.io/en/latest/examples.html).
-
-
-To see examples of simple simulations go to see
-[examples](https://github.com/mythos-bio/mythos/tree/master/examples/simulations),
-where you can find both JAX-MD and oxDNA examples.
+For more details, see the
+[optimization docs](https://mythos.readthedocs.io/en/latest/optimization.html)
+and the
+[examples](https://github.com/mythos-bio/mythos/tree/master/examples).
 
 
 ## Development
