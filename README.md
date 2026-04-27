@@ -1,4 +1,4 @@
-<img src="https://raw.githubusercontent.com/mythos-bio/mythos/master/logo.svg" alt="mythos logo">
+<img src="https://raw.githubusercontent.com/mythos-bio/mythos/transition-docs-1/logo.svg" alt="mythos logo">
 
 [![CI](https://github.com/mythos-bio/mythos/actions/workflows/ci.yml/badge.svg)](https://github.com/mythos-bio/mythos/actions/workflows/ci.yml)
 [![Documentation Status](https://readthedocs.org/projects/mythos/badge/?version=latest)](https://mythos.readthedocs.io/en/latest/)
