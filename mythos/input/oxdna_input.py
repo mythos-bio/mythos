@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import io
 import typing
 from dataclasses import dataclass
 from pathlib import Path
@@ -11,6 +10,9 @@ import jax.numpy as jnp
 
 from mythos.input import topology as _topology
 from mythos.utils.units import get_kt_from_string
+
+if typing.TYPE_CHECKING:
+    import io
 
 INVALID_DICT_LINE = "Invalid dictionary line: {}"
 
@@ -129,7 +131,7 @@ def read_box_size(conf_file: Path) -> jnp.ndarray:
 
 
 @dataclass
-class oxDNAInputData:
+class oxDNAInputData:  # noqa: N801
     """Data loaded from an oxDNA input directory.
 
     Attributes:
@@ -140,7 +142,7 @@ class oxDNAInputData:
     """
 
     topology: _topology.Topology
-    kT: float
+    kT: float  # noqa: N815
     box_size: jnp.ndarray
     config: dict[str, typing.Any]
 
@@ -165,7 +167,7 @@ def read_input_dir(
     input_dir = Path(input_dir)
     config = read(input_dir / input_file)
     top = _topology.from_oxdna_file(input_dir / config.get("topology", "sys.top"))
-    kT = get_kt_from_string(str(config["T"]))
+    kT = get_kt_from_string(str(config["T"]))  # noqa: N806
     box_size = read_box_size(input_dir / config["conf_file"])
     return oxDNAInputData(topology=top, kT=kT, box_size=box_size, config=config)
 

@@ -125,14 +125,14 @@ def test_read_box_size_existing_file() -> None:
 def test_read_box_size_missing_raises(tmp_path: Path) -> None:
     conf = tmp_path / "no_box.conf"
     conf.write_text("t = 0.0\nE = 0.0 0.0 0.0\n")
-    with pytest.raises(ValueError, match="No 'b = ...' line found"):
+    with pytest.raises(ValueError, match=r"No 'b = ...' line found"):
         oi.read_box_size(conf)
 
 
 # --- Tests for read_input_dir ---
 
 
-@pytest.fixture()
+@pytest.fixture
 def oxdna_input_dir(tmp_path: Path) -> Path:
     """Create a minimal oxDNA input directory."""
     # topology: 6 nucleotides, 2 strands
