@@ -136,15 +136,7 @@ def test_read_box_size_missing_raises(tmp_path: Path) -> None:
 def oxdna_input_dir(tmp_path: Path) -> Path:
     """Create a minimal oxDNA input directory."""
     # topology: 6 nucleotides, 2 strands
-    (tmp_path / "sys.top").write_text(
-        "6 2\n"
-        "1 A -1 1\n"
-        "1 C 0 2\n"
-        "1 G 1 -1\n"
-        "2 C -1 4\n"
-        "2 G 3 5\n"
-        "2 T 4 -1\n"
-    )
+    (tmp_path / "sys.top").write_text("6 2\n1 A -1 1\n1 C 0 2\n1 G 1 -1\n2 C -1 4\n2 G 3 5\n2 T 4 -1\n")
     # configuration
     (tmp_path / "init.conf").write_text(
         "t = 0.0\n"
@@ -158,12 +150,7 @@ def oxdna_input_dir(tmp_path: Path) -> Path:
         "5 0 0 1 0 0 0 1 0 0 0 0 0 0 0\n"
     )
     # input file
-    (tmp_path / "input").write_text(
-        "T = 300K\n"
-        "steps = 1000\n"
-        "conf_file = init.conf\n"
-        "topology = sys.top\n"
-    )
+    (tmp_path / "input").write_text("T = 300K\nsteps = 1000\nconf_file = init.conf\ntopology = sys.top\n")
     return tmp_path
 
 
@@ -178,12 +165,7 @@ def test_read_input_dir(oxdna_input_dir: Path) -> None:
 
 
 def test_read_input_dir_custom_input_file(oxdna_input_dir: Path) -> None:
-    (oxdna_input_dir / "custom_input").write_text(
-        "T = 350K\n"
-        "steps = 500\n"
-        "conf_file = init.conf\n"
-        "topology = sys.top\n"
-    )
+    (oxdna_input_dir / "custom_input").write_text("T = 350K\nsteps = 500\nconf_file = init.conf\ntopology = sys.top\n")
     result = oi.read_input_dir(oxdna_input_dir, input_file="custom_input")
     assert result.kT == pytest.approx(oi.get_kt_from_string("350K"))
     assert result.config["steps"] == 500
