@@ -101,15 +101,15 @@ def _make_fake_simulator_init():
     """Create a fake simulator_init function that mimics jax_md simulator init/step."""
 
     def simulator_init(energy_fn, shift_fn, **kwargs):
-        def init_fn(key, r, **init_kwargs):
+        def init_fn(key, R, **init_kwargs):  # noqa: N803 it is called by named parameters in the run function
             mass = jax_md.rigid_body.RigidBody(
-                center=jnp.ones_like(r.center),
+                center=jnp.ones_like(R.center),
                 orientation=jax_md.rigid_body.RigidBody(
-                    center=jnp.ones_like(r.center),
-                    orientation=jnp.ones_like(r.center),
+                    center=jnp.ones_like(R.center),
+                    orientation=jnp.ones_like(R.center),
                 ),
             )
-            return FakeSimState(position=r, mass=mass)
+            return FakeSimState(position=R, mass=mass)
 
         def step_fn(state, **step_kwargs):
             new_center = state.position.center + 0.01
