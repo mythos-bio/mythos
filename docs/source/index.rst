@@ -17,7 +17,7 @@ Core Features
   GROMACS, and LAMMPS; see https://www.nature.com/articles/s41467-021-27241-4).
   See :doc:`optimization`.
 - **DNA, RNA, and lipid energy models** — built-in support for oxDNA1,
-  oxDNA2, RNA, hybrid DNA/RNA, and MARTINI coarse-grained models, with a
+  oxDNA2, oxRNA, oxNA (hybrid DNA/RNA), and MARTINI coarse-grained models, with a
   clear extension API. See :doc:`energy_functions`.
 - **Parallel optimization with Ray** — run multiple simulators and objectives in
   parallel across heterogeneous hardware, enabling hyperscale optimization
