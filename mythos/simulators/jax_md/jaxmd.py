@@ -9,7 +9,6 @@ import jax.numpy as jnp
 import jax_md
 
 import mythos.energy.base as jd_energy_fn
-import mythos.input.trajectory as jd_traj
 import mythos.simulators.base as jd_sim_base
 import mythos.simulators.io as jd_sio
 import mythos.simulators.jax_md.utils as jaxmd_utils
@@ -30,12 +29,16 @@ class JaxMDSimulator(jd_sim_base.Simulator):
 
     def __post_init__(self) -> None:
         """Builds the run function using the provided parameters."""
-        self.run = build_run_fn(
-            self.energy_fn,
-            self.simulator_params,
-            self.space,
-            self.simulator_init,
-            self.neighbors,
+        object.__setattr__(
+            self,
+            "run",
+            build_run_fn(
+                self.energy_fn,
+                self.simulator_params,
+                self.space,
+                self.simulator_init,
+                self.neighbors,
+            ),
         )
 
 
@@ -45,7 +48,7 @@ def build_run_fn(
     space: jax_md.space.Space,
     simulator_init: Callable[[Callable, Callable], jax_md.simulate.Simulator],
     neighbors: jaxmd_utils.NeighborHelper,
-) -> Callable[[dict[str, float], jax_md.rigid_body.RigidBody, int, jax.random.PRNGKey], jd_traj.Trajectory]:
+) -> Callable[[dict[str, float], jax_md.rigid_body.RigidBody, int, jax.random.PRNGKey], jd_sim_base.SimulatorOutput]:
     """Builds the run function for the jax_md simulation."""
     _, shift_fn = space
     scan_fn = (
@@ -59,7 +62,7 @@ def build_run_fn(
         init_state: jax_md.rigid_body.RigidBody,
         n_steps: int,
         key: jax.random.PRNGKey,
-    ) -> jd_sio.SimulatorTrajectory:
+    ) -> jd_sim_base.SimulatorOutput:
         # The  energy function configuration init calls need to happen inside the function
         # so that if the gradient is calculated for this run it will be tracked
         updated_energy_fn = energy_fn.with_params(opt_params)
@@ -90,9 +93,11 @@ def build_run_fn(
 
         _, trajectory = scan_fn(jax.jit(apply_fn), (init_state, neighbors), jnp.arange(n_steps))
 
-        return jd_sio.SimulatorTrajectory.from_rigid_body(
+        trajectory = jd_sio.SimulatorTrajectory.from_rigid_body(
             trajectory,
             temperature=jnp.full(n_steps, simulator_params.kT),
         )
+
+        return jd_sim_base.SimulatorOutput(observables=[trajectory])
 
     return run_fn
