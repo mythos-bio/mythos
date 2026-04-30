@@ -36,6 +36,17 @@
 |--------|-------------|
 | [gromacs_prep.py](scripts/gromacs_prep.py) | CLI tool to preprocess a GROMACS topology for use with mythos |
 
+### Examples of particular mythos features
+
+A few of the examples above include demonstration of particular mythos features that
+may be of interest to users. These include:
+
+| Feature | Notebooks | Description |
+|---------|-----------|-------------|
+| Optimzation callbacks | [melting_temperature_optimization.ipynb](oxdna/melting_temperature_optimization.ipynb) | Example of using optimization callbacks to update umbrella sampling weights at each optimization step |
+| Jupyter plotting logger | [lammps_propeller_twist_optimization.ipynb](oxdna/lammps_propeller_twist_optimization.ipynb) | Example of using the Jupyter plotting logger to visualize optimization progress in real time |
+| Multi-trajectory optimization | [multi_trajectory_optimization.ipynb](oxdna/multi_trajectory_optimization.ipynb) | Example of using RayOptimizer for parallel multi-trajectory optimization |
+
 ## Running the Examples
 
 ### As notebooks
