@@ -9,8 +9,9 @@ Core Features
 -------------
 
 - **Multiple simulation backends** — run simulations with JAX-MD, oxDNA,
-  GROMACS, or LAMMPS from a unified interface. Simple API for simulators make
+  GROMACS, or LAMMPS from a unified interface. Simple API for simulators makes
   extensions easy. See :doc:`simulators`.
+
 - **Differentiable optimization** — compute gradients via JAX automatic
   differentiation (JAX-MD; https://github.com/jax-md/jax-md) or Boltzmann
   reweighting with DiffTRe (for non-differentiable simulators, such as oxDNA,

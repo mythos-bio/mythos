@@ -69,7 +69,7 @@ translates these hints into Ray task options when dispatching remote calls.
     simulator = oxdna.oxDNASimulator(
         ...,
         scheduler_hints=SchedulerHints(
-            num_cpus=4,        # Sets OMP_NUM_THREADS=4, a commonly used environment for controlling cpu parallelism
+            num_cpus=4,        # Sets OMP_NUM_THREADS=4, a commonly used environment variable for controlling CPU parallelism
             num_gpus=0,        # For NVIDIA devices, sets CUDA_VISIBLE_DEVICES to partition GPUs for fulfilling requests
             mem_mb=8192,       # 8 GB — converted to bytes for Ray
             max_retries=2,
