@@ -105,7 +105,7 @@ library to consider when choosing what class to extend are:
   compatible with ``ComposedEnergyFunction`` and its variants. This allows users
   to easily combine your energy functions with others, enabling more complex
   and flexible energy models.
-* In order to be compatible fully compatible with the optimization framework,
+* In order to be fully compatible with the optimization framework,
   your energy function must be serializable (for remote transport via ``ray``).
 
 .. _energy-extending-jaxmd:

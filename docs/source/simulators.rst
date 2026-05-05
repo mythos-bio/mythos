@@ -60,7 +60,7 @@ trajectories).
 .. note::
 
    You must install oxDNA yourself. Pass the path to the oxDNA binary
-   (simulation mode) or source directory (optimization mode)as parameters when
+   (simulation mode) or source directory (optimization mode) as parameters when
    constructing the simulator. See the `oxDNA documentation
    <https://lorenzo-rovigatti.github.io/oxDNA/install.html>`_ for installation
    instructions.
