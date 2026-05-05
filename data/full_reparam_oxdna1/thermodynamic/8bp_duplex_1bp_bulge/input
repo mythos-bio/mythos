@@ -29,8 +29,8 @@ use_average_seq = 1
 
 
 # Input/output
-topology = 8bp_duplex_1bp_bulge.top
-conf_file = 8bp_duplex_1bp_bulge.conf
+topology = sys.top
+conf_file = sys.conf
 trajectory_file = trajectory.dat
 log_file = sim.log
 no_stdout_energy = 0
