@@ -71,6 +71,7 @@ See :doc:`autoapi/mythos/simulators/oxdna/index` for the full API reference.
 `simulation <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/oxdna>`_ ·
 `advanced optimization <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA>`_
 
+.. _gromacs-simulator-docs:
 
 GromacsSimulator
 ----------------

@@ -178,10 +178,6 @@ Energy functions can be combined using the ``+`` operator:
 
     total_energy = trivial_energy + fene_energy + stacking_energy
 
-More examples can be found in the implemented energies under
-:doc:`autoapi/mythos/energy/dna1/index` and in the
-`custom energy functions examples <https://github.com/mythos-bio/mythos/tree/master/examples/custom_energy_functions>`_.
-
 
 .. _energy-extending-external:
 
@@ -270,7 +266,7 @@ coarse-grained lipid simulations.
 **martini/m2 — Martini 2**
   Coarse-grained lipid model with harmonic bonds, G96 cosine-based angles,
   and Lennard-Jones non-bonded interactions. Used with the
-  :doc:`GROMACS simulator <simulators>`.
+  :ref:`GromacsSimulator <gromacs-simulator-docs>`.
   See :doc:`autoapi/mythos/energy/martini/index`.
 
 .. _energy-martini-m3:
