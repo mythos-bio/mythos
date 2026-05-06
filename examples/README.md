@@ -70,7 +70,14 @@ repository for installation instructions.
 Further, environment specific notebooks may have additional requirements or
 considerations:
 
-- **oxDNA examples**: Require the [oxDNA source](https://github.com/lorenzo-rovigatti/oxDNA) cloned alongside the mythos repository (i.e. `../../../oxDNA` relative to the notebook in `examples/oxdna/`). Alternatively, set `source_path` or `binary_path` in the notebook to point to your oxDNA installation.
+- **oxDNA examples**: Require the [oxDNA
+  source](https://github.com/lorenzo-rovigatti/oxDNA) cloned alongside the
+    mythos repository (i.e. `../../../oxDNA` relative to the notebook in
+  `examples/oxdna/`). Alternatively, set `source_path` or `binary_path` in the
+  notebook to point to your oxDNA installation.
 - **JAX-MD examples**: Run on CPU or GPU. GPU recommended for longer simulations.
-- **Martini examples**: Require GROMACS installed and accessible as `gmx` on PATH (or via `--gromacs-binary`).
+- **Martini examples**: Require GROMACS installed and accessible as `gmx` on
+  PATH (or via `GROMACS_BINARY` variable). Please note that the latest versions of
+  GROMACS are not compatible with some versions of MDAnalysis, the `2025.4` is
+  known to work.
 - **LAMMPS examples**: Require a LAMMPS build with oxDNA support.
