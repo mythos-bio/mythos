@@ -2,7 +2,7 @@
 T = 296.15K
 equilibration_steps = 0
 steps = 2.5e5
-conf_file = init.conf
+conf_file = sys.conf
 topology = sys.top
 trajectory_file = output.dat
 time_scale = linear

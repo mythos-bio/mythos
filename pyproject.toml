@@ -12,6 +12,7 @@ license = {file = "LICENSE"}
 
 requires-python = ">=3.11"
 dependencies = [
+    "chex",
     "jax_md",
     "jax",
     "jaxlib",
