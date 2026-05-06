@@ -67,6 +67,10 @@ All notebooks assume you have a working installation of mythos and the relevant
 simulation engines. Please refer to the `README.md` in the root of this
 repository for installation instructions.
 
+All notebooks also assume that they are executed from the `examples/` directory
+of a checked out mythos repository in order to refer to data files (such as
+simulation input files) that are included in the repository as reference.
+
 Further, environment specific notebooks may have additional requirements or
 considerations:
 
