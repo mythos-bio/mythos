@@ -25,7 +25,7 @@ The optimization framework is built around four abstractions:
     :align: center
     :width: 80%
 
-- **Simulator**: An actor that runs a simulation and exposes one or more
+- **Simulator**: Runs a simulation and exposes one or more
   **Observables**. See :doc:`simulators` for available backends.
 - **Observable**: Something produced by a ``Simulator`` — a trajectory,
   scalar, vector, or tensor. Observables are named and matched to objectives
