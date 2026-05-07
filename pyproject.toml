@@ -22,6 +22,7 @@ dependencies = [
     "ray",
     "tqdm",
     "ipywidgets",
+    "anywidget",
     "plotly",
     "mdanalysis",
     "lipyphilic",
