@@ -1,8 +1,18 @@
 """oxDNA input file parser."""
 
-import io
+from __future__ import annotations
+
 import typing
+from dataclasses import dataclass
 from pathlib import Path
+
+import jax.numpy as jnp
+
+from mythos.input import topology as _topology
+from mythos.utils.units import get_kt_from_string
+
+if typing.TYPE_CHECKING:
+    import io
 
 INVALID_DICT_LINE = "Invalid dictionary line: {}"
 
@@ -97,6 +107,69 @@ def write_to(input_config: dict, f: io.TextIOWrapper) -> None:
                 parsed_value = str(value)
 
             f.write(f"{key} = {parsed_value}\n")
+
+
+def read_box_size(conf_file: Path) -> jnp.ndarray:
+    """Read the box size from an oxDNA configuration file.
+
+    Parses the ``b = ...`` line from the configuration file header.
+
+    Args:
+        conf_file: Path to the oxDNA configuration (``.conf`` / ``.dat``) file.
+
+    Returns:
+        A JAX array of shape ``(3,)`` with the box dimensions.
+
+    Raises:
+        ValueError: If no ``b = ...`` line is found in the file.
+    """
+    with conf_file.open("r") as f:
+        for line in f:
+            if line.startswith("b ="):
+                return jnp.array([float(v) for v in line.split("=")[1].strip().split()])
+    raise ValueError(f"No 'b = ...' line found in {conf_file}")
+
+
+@dataclass
+class oxDNAInputData:  # noqa: N801
+    """Data loaded from an oxDNA input directory.
+
+    Attributes:
+        topology: The parsed topology.
+        kT: The simulation temperature in oxDNA energy units.
+        box_size: Box dimensions as a JAX array of shape ``(3,)``.
+        config: The full parsed input-file dictionary.
+    """
+
+    topology: _topology.Topology
+    kT: float  # noqa: N815
+    box_size: jnp.ndarray
+    config: dict[str, typing.Any]
+
+
+def read_input_dir(
+    input_dir: Path,
+    input_file: str = "input",
+) -> oxDNAInputData:
+    """Load topology, temperature and box size from an oxDNA input directory.
+
+    Reads the oxDNA ``input`` file (or the name given by *input_file*),
+    extracts the topology, simulation temperature (``kT``), and box
+    dimensions from the configuration files referenced therein.
+
+    Args:
+        input_dir: Directory containing the oxDNA input files.
+        input_file: Name of the input file inside *input_dir*.
+
+    Returns:
+        An :class:`oxDNAInputData` with the parsed values.
+    """
+    input_dir = Path(input_dir)
+    config = read(input_dir / input_file)
+    top = _topology.from_oxdna_file(input_dir / config.get("topology", "sys.top"))
+    kT = get_kt_from_string(str(config["T"]))  # noqa: N806
+    box_size = read_box_size(input_dir / config["conf_file"])
+    return oxDNAInputData(topology=top, kT=kT, box_size=box_size, config=config)
 
 
 def write(input_config: dict, input_file: Path) -> None:

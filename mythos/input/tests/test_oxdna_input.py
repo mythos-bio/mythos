@@ -3,6 +3,7 @@
 import io
 from pathlib import Path
 
+import jax.numpy as jnp
 import pytest
 
 import mythos.input.oxdna_input as oi
@@ -102,3 +103,69 @@ def test_write(tmpdir) -> None:
 
     with Path(tmpdir / "test.txt").open("r") as f:
         assert f.read() == expected
+
+
+# --- Tests for read_box_size ---
+
+
+def test_read_box_size(tmp_path: Path) -> None:
+    conf = tmp_path / "init.conf"
+    conf.write_text("t = 0.0\nb = 10.0 20.0 30.0\nE = 0.0 0.0 0.0\n")
+    result = oi.read_box_size(conf)
+    expected = jnp.array([10.0, 20.0, 30.0])
+    assert jnp.allclose(result, expected)
+
+
+def test_read_box_size_existing_file() -> None:
+    result = oi.read_box_size(TEST_FILES_DIR / "simple-helix-8bp-5steps.conf")
+    expected = jnp.array([50.0, 50.0, 50.0])
+    assert jnp.allclose(result, expected)
+
+
+def test_read_box_size_missing_raises(tmp_path: Path) -> None:
+    conf = tmp_path / "no_box.conf"
+    conf.write_text("t = 0.0\nE = 0.0 0.0 0.0\n")
+    with pytest.raises(ValueError, match=r"No 'b = ...' line found"):
+        oi.read_box_size(conf)
+
+
+# --- Tests for read_input_dir ---
+
+
+@pytest.fixture
+def oxdna_input_dir(tmp_path: Path) -> Path:
+    """Create a minimal oxDNA input directory."""
+    # topology: 6 nucleotides, 2 strands
+    (tmp_path / "sys.top").write_text("6 2\n1 A -1 1\n1 C 0 2\n1 G 1 -1\n2 C -1 4\n2 G 3 5\n2 T 4 -1\n")
+    # configuration
+    (tmp_path / "init.conf").write_text(
+        "t = 0.0\n"
+        "b = 25.0 25.0 25.0\n"
+        "E = 0.0 0.0 0.0\n"
+        "0 0 0 1 0 0 0 1 0 0 0 0 0 0 0\n"
+        "1 0 0 1 0 0 0 1 0 0 0 0 0 0 0\n"
+        "2 0 0 1 0 0 0 1 0 0 0 0 0 0 0\n"
+        "3 0 0 1 0 0 0 1 0 0 0 0 0 0 0\n"
+        "4 0 0 1 0 0 0 1 0 0 0 0 0 0 0\n"
+        "5 0 0 1 0 0 0 1 0 0 0 0 0 0 0\n"
+    )
+    # input file
+    (tmp_path / "input").write_text("T = 300K\nsteps = 1000\nconf_file = init.conf\ntopology = sys.top\n")
+    return tmp_path
+
+
+def test_read_input_dir(oxdna_input_dir: Path) -> None:
+    result = oi.read_input_dir(oxdna_input_dir)
+
+    assert result.topology.n_nucleotides == 6
+    assert len(result.topology.strand_counts) == 2
+    assert jnp.allclose(result.box_size, jnp.array([25.0, 25.0, 25.0]))
+    assert result.kT == pytest.approx(oi.get_kt_from_string("300K"))
+    assert result.config["steps"] == 1000
+
+
+def test_read_input_dir_custom_input_file(oxdna_input_dir: Path) -> None:
+    (oxdna_input_dir / "custom_input").write_text("T = 350K\nsteps = 500\nconf_file = init.conf\ntopology = sys.top\n")
+    result = oi.read_input_dir(oxdna_input_dir, input_file="custom_input")
+    assert result.kT == pytest.approx(oi.get_kt_from_string("350K"))
+    assert result.config["steps"] == 500

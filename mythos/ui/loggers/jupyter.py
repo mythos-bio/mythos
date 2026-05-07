@@ -137,9 +137,11 @@ class PlotlyLogger(logger.Logger):
     @override
     def log_metric(self, name: str, value: float, step: int) -> None:
         """Log a metric to the plotly figure."""
-        graph_obj = next(filter(lambda f: f.name == name, self.fig.data))
-        graph_obj.x += (step,)
-        graph_obj.y += (value,)
+        graph_obj = [i for i in self.fig.data if i.name == name]
+        if graph_obj:
+            graph_obj = graph_obj[0]
+            graph_obj.x += (step,)
+            graph_obj.y += (value,)
 
     def update_status(self, name: str, status: Status) -> None:
         """Null operation."""
