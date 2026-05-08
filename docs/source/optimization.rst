@@ -74,7 +74,7 @@ when fitting parameters against one simulation and one loss function.
 See :doc:`autoapi/mythos/optimization/optimization/index` for the full API.
 
 **Examples:**
-`simple optimizations <https://github.com/mythos-bio/mythos/tree/master/examples/simple_optimizations>`_
+`simple optimizations notebook <https://github.com/mythos-bio/mythos/tree/master/examples/jaxmd/propeller_twist_optimization.ipynb>`_
 
 
 .. _ray-optimizer:
@@ -119,7 +119,7 @@ For detailed guidance on Ray session setup, resource hints, memory
 management, and gradient aggregation patterns, see :doc:`ray_optimizer`.
 
 **Examples:**
-`advanced optimizations <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations>`_
+`advanced optimizations notebook <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/propeller_twist_optimization.ipynb>`_
 
 
 .. _objectives:
@@ -234,7 +234,7 @@ This loss function is then passed to the ``DiffTReObjective``:
 For more complex optimizations — such as fitting to full distributions using
 ``WassersteinDistance``, or combining multiple observables in a single
 objective — see the
-`advanced optimization examples <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations>`_.
+`advanced optimization examples <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/multi_trajectory_optimization.ipynb>`_.
 
 For the full catalog of available observables and the ``ObservableLossFn``
 convenience wrapper, see :doc:`observables`.

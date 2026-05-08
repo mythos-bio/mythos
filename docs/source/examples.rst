@@ -2,8 +2,12 @@ Examples
 ========
 
 The `examples directory <https://github.com/mythos-bio/mythos/tree/master/examples>`_
-contains runnable scripts and notebooks covering simulations, optimizations,
-and custom energy functions.
+contains runnable notebooks covering simulations and optimizations.
+
+When experimenting with the notebooks, be sure to read the `examples README
+<https://github.com/mythos-bio/mythos/tree/master/examples/README.md>`_,
+including the prequisites section to ensure you have the necessary software and
+access to example data.
 
 
 Simulations
@@ -13,18 +17,18 @@ Simulations
    :header-rows: 1
    :widths: 25 20 55
 
-   * - Example
+   * - Notebook
      - Backend
      - Description
-   * - `jaxmd.py <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/jaxmd/jaxmd.py>`_
+   * - `simulation.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/jaxmd/simulation.ipynb>`_
      - JAX-MD
      - Run a DNA simulation entirely in JAX with Langevin dynamics.
-   * - `oxDNA.py <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/oxdna/oxDNA.py>`_
+   * - `simulation.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/simulation.ipynb>`_
      - oxDNA
      - Run an oxDNA simulation and read back the trajectory.
-   * - `gromacs.py <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/gromacs/gromacs.py>`_
+   * - `bottom_up_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/martini/bottom_up_optimization.ipynb>`_
      - GROMACS
-     - Run a GROMACS simulation for a MARTINI lipid system.
+     - Run a GROMACS-based MARTINI workflow (includes simulation + analysis).
 
 
 Optimizations
@@ -37,10 +41,10 @@ Simple (direct differentiation)
    :header-rows: 1
    :widths: 25 20 55
 
-   * - Example
+   * - Notebook
      - Backend
      - Description
-   * - `jaxmd.py <https://github.com/mythos-bio/mythos/tree/master/examples/simple_optimizations/jaxmd/jaxmd.py>`_
+   * - `propeller_twist_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/jaxmd/propeller_twist_optimization.ipynb>`_
      - JAX-MD
      - Optimize stacking parameters against propeller twist via autodiff.
 
@@ -51,52 +55,30 @@ Advanced (DiffTRe / multi-objective)
    :header-rows: 1
    :widths: 25 20 55
 
-   * - Example
+   * - Notebook
      - Backend
      - Description
-   * - `oxDNA.py <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA/oxDNA.py>`_
+   * - `propeller_twist_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/propeller_twist_optimization.ipynb>`_
      - oxDNA
      - Single-trajectory DiffTRe optimization of stacking parameters.
-   * - `multi_trajectory.py <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA/multi_trajectory.py>`_
+   * - `multi_trajectory_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/multi_trajectory_optimization.ipynb>`_
      - oxDNA
      - Multi-trajectory DiffTRe optimization with Ray parallelism.
-   * - `lp_optimization.py <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA/lp_optimization.py>`_
+   * - `persistence_length_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/persistence_length_optimization.ipynb>`_
      - oxDNA
      - Persistence length optimization using DiffTRe.
-   * - `tm_optimization.py <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA/tm_optimization.py>`_
+   * - `melting_temperature_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/melting_temperature_optimization.ipynb>`_
      - oxDNA
      - Melting temperature optimization with umbrella sampling.
-   * - `lammps.py <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA/lammps.py>`_
+   * - `lammps_propeller_twist_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/lammps_propeller_twist_optimization.ipynb>`_
      - LAMMPS
      - oxDNA model optimization using the LAMMPS backend.
-   * - `m2_bottom_up_opt.py <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/martini/m2_bottom_up_opt.py>`_
+   * - `bottom_up_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/martini/bottom_up_optimization.ipynb>`_
      - GROMACS
      - Bottom-up Martini M2 fitting via Wasserstein distance matching.
-   * - `m2_thickness_opt.py <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/martini/m2_thickness_opt.py>`_
+   * - `membrane_thickness_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/martini/membrane_thickness_optimization.ipynb>`_
      - GROMACS
      - Membrane thickness optimization for Martini M2.
-   * - `m3_melting_temp.py <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/martini/m3_melting_temp.py>`_
+   * - `melting_temperature_optimization.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/martini/melting_temperature_optimization.ipynb>`_
      - GROMACS
      - Melting temperature optimization for Martini M3 with Ray.
-
-
-Tutorials (Notebooks)
----------------------
-
-.. list-table::
-   :header-rows: 1
-   :widths: 35 65
-
-   * - Notebook
-     - Description
-   * - `jaxmd.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/jaxmd/jaxmd.ipynb>`_
-     - Interactive JAX-MD simulation walkthrough.
-   * - `oxDNA.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/oxdna/oxDNA.ipynb>`_
-     - Interactive oxDNA simulation walkthrough.
-   * - `Optimization tutorial <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/Optimization_with_JaxDNA_tutorial.ipynb>`_
-     - End-to-end optimization tutorial.
-   * - `FNANO 2025 tutorial <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/jaxDNA_tutorial_FNANO_2025.ipynb>`_
-     - Tutorial from the FNANO 2025 workshop.
-   * - `multi_trajectory.ipynb <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA/multi_trajectory.ipynb>`_
-     - Multi-trajectory DiffTRe notebook.
-

@@ -139,22 +139,22 @@ in the repository contains runnable examples for a variety of scenarios:
 
 **Simulations:**
 
-- `JAX-MD simulation <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/jaxmd>`_
-- `oxDNA simulation <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/oxdna>`_
-- `GROMACS simulation <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/gromacs>`_
+- `JAX-MD simulation <https://github.com/mythos-bio/mythos/tree/master/examples/jaxmd/simulation.ipynb>`_
+- `oxDNA simulation <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/simulation.ipynb>`_
+- `GROMACS (Martini) workflow <https://github.com/mythos-bio/mythos/tree/master/examples/martini/bottom_up_optimization.ipynb>`_
 
 **Optimizations:**
 
-- `Simple optimization (JAX-MD) <https://github.com/mythos-bio/mythos/tree/master/examples/simple_optimizations/jaxmd>`_
+- `Simple optimization (JAX-MD) <https://github.com/mythos-bio/mythos/tree/master/examples/jaxmd/propeller_twist_optimization.ipynb>`_
   — direct differentiation through a JAX-MD simulation
-- `oxDNA DiffTRe optimization <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA>`_
+- `oxDNA DiffTRe optimization <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/propeller_twist_optimization.ipynb>`_
   — single and multi-trajectory DiffTRe, persistence length, melting temperature
-- `MARTINI optimization (GROMACS) <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/martini>`_
+- `MARTINI optimization (GROMACS) <https://github.com/mythos-bio/mythos/tree/master/examples/martini/bottom_up_optimization.ipynb>`_
   — bottom-up fitting, membrane thickness, melting temperature
 
 **Custom energy functions:**
 
-- `Custom energy function examples <https://github.com/mythos-bio/mythos/tree/master/examples/custom_energy_functions>`_
+- See :doc:`energy_functions` for custom energy function development patterns.
 
 
 Where to Go Next
@@ -164,4 +164,4 @@ Where to Go Next
 - :doc:`energy_functions` — energy models and how to extend them
 - :doc:`observables` — observable API, catalog, and loss functions
 - :doc:`optimization` — optimization lifecycle, DiffTRe, and the optimizer framework
-- :doc:`examples` — runnable scripts and notebooks
+- :doc:`examples` — runnable notebooks

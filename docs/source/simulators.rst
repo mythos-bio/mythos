@@ -35,8 +35,8 @@ methods.
 See :doc:`autoapi/mythos/simulators/jax_md/index` for the full API reference.
 
 **Examples:**
-`simulation <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/jaxmd>`_ ·
-`optimization <https://github.com/mythos-bio/mythos/tree/master/examples/simple_optimizations/jaxmd>`_
+`simulation notebook <https://github.com/mythos-bio/mythos/tree/master/examples/jaxmd/simulation.ipynb>`_ ·
+`optimization notebook <https://github.com/mythos-bio/mythos/tree/master/examples/jaxmd/propeller_twist_optimization.ipynb>`_
 
 
 oxDNASimulator
@@ -68,8 +68,8 @@ trajectories).
 See :doc:`autoapi/mythos/simulators/oxdna/index` for the full API reference.
 
 **Examples:**
-`simulation <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/oxdna>`_ ·
-`advanced optimization <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/oxDNA>`_
+`simulation notebook <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/simulation.ipynb>`_ ·
+`advanced optimization notebook <https://github.com/mythos-bio/mythos/tree/master/examples/oxdna/propeller_twist_optimization.ipynb>`_
 
 .. _gromacs-simulator-docs:
 
@@ -103,8 +103,8 @@ obtained via :ref:`DiffTRe <difftre>`.
 See :doc:`autoapi/mythos/simulators/gromacs/index` for the full API reference.
 
 **Examples:**
-`simulation <https://github.com/mythos-bio/mythos/tree/master/examples/simulations/gromacs>`_ ·
-`MARTINI optimization <https://github.com/mythos-bio/mythos/tree/master/examples/advanced_optimizations/martini>`_
+`bottom-up optimization notebook <https://github.com/mythos-bio/mythos/tree/master/examples/martini/bottom_up_optimization.ipynb>`_ ·
+`MARTINI optimization notebook <https://github.com/mythos-bio/mythos/tree/master/examples/martini/membrane_thickness_optimization.ipynb>`_
 
 
 LAMMPSoxDNASimulator
