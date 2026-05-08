@@ -44,19 +44,15 @@ Quick Overview
 
 The two primary use cases for ``mythos`` are:
 
-1. **Running simulations** using one of several backends (JAX-MD, oxDNA,
+1. **Running differentiable simulations** using one of several backends (JAX-MD, oxDNA,
    GROMACS, LAMMPS). See :doc:`simulators` for the full list.
-2. **Optimizing force field parameters** against experimental observables.
+2. **Optimizing force field parameters** against target observable values, which can be ``top-down'' (experimentally derived) or ``bottom-up'' (derived from more fine-grained models).
    See :doc:`optimization` for the framework details.
 
-Energy functions define the physics of the simulation and provide the
-parameters being optimized. See :doc:`energy_functions` for available models
-and how to extend them.
+Energy functions define the physics of the biomolecular model and typically house the
+parameters being optimized (though optimization with respect to other simulation parameters, such as temperature, number of particles, etc. is possible). See :doc:`energy_functions` for currently available models and how to extend them or develop a bespoke model.
 
-Observables compute measurable quantities (helical rise, persistence length,
-membrane thickness, etc.) from trajectories and feed into loss functions.
-See :doc:`observables` for the full catalog and API.
-
+Observables compute measurable quantities (e.g. helical pitch, persistence length, membrane thickness, bond and angle distributions, etc.) from trajectories. Observables are packaged into objectives and fed into loss functions. See :doc:`observables` for the full catalog and API.
 
 .. _basic-optimization:
 
