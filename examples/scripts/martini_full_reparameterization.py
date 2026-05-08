@@ -6,9 +6,9 @@ parameters using RayOptimizer with gradient averaging.
 
 Usage::
 
-    python full_reparam.py --config-dir configs/ --opt-steps 100
-    python full_reparam.py --config-file dopc.yaml --config-file dppc.yaml
-    python full_reparam.py --config-dir configs/ --config-file extra.yaml
+    python martini_full_reparameterization.py --config-dir configs/ --opt-steps 100
+    python martini_full_reparameterization.py --config-file dopc.yaml --config-file dppc.yaml
+    python martini_full_reparameterization.py --config-dir configs/ --config-file extra.yaml
 
 YAML config format (one file per system)::
 
