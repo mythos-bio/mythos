@@ -159,11 +159,12 @@ def parse_bond_angle_targets(cfg):
 
     Bond/angle names in YAML use '-' separators (e.g. NC3-PO4) nested under
     residue names. These are converted to the topology format using '_'
-    separators (e.g. DOPC_NC3_PO4).
+    separators (e.g. DOPC_NC3_PO4). Paths to the reference distributions are
+    resolved relative to the config file for relative paths.
 
     Units can be specified per-section via a 'units' key:
-      bonds.units: 'angstrom' (default) or 'nm'
-      angles.units: 'radian' (default) or 'degree'
+      bonds.units: 'angstrom' (default) or 'nm' angles.units: 'radian' (default)
+      or 'degree'
     """
     bonds_section = cfg.get("bonds") or {}
     bond_units = bonds_section.pop("units", "angstrom") if isinstance(bonds_section, dict) else "angstrom"
@@ -171,7 +172,11 @@ def parse_bond_angle_targets(cfg):
     for resname, bonds in bonds_section.items():
         for bond_name, bond_info in bonds.items():
             topo_name = f"{resname}_{bond_name.replace('-', '_')}"
-            ref = np.load(bond_info["distribution"])
+            dist_file= Path(bond_info["distribution"])
+            if not dist_file.absolute():
+                # if the path is not absolute, resolve relative to the config file
+                dist_file = cfg["_file"].parent / dist_file
+            ref = np.load(dist_file)
             if bond_units == "angstrom":
                 ref = ref * 0.1
             bond_map[topo_name] = jnp.array(ref)
@@ -182,7 +187,11 @@ def parse_bond_angle_targets(cfg):
     for resname, angles in angles_section.items():
         for angle_name, angle_info in angles.items():
             topo_name = f"{resname}_{angle_name.replace('-', '_')}"
-            ref = np.load(angle_info["distribution"])
+            dist_file = Path(angle_info["distribution"])
+            if not dist_file.absolute():
+                # if the path is not absolute, resolve relative to the config file
+                dist_file = cfg["_file"].parent / dist_file
+            ref = np.load(dist_file)
             if angle_units == "degree":
                 ref = np.deg2rad(ref)
             angle_map[topo_name] = jnp.array(ref)
@@ -247,6 +256,9 @@ def main():
         # Wasserstein objective for bonds + angles
         if has_bonds_or_angles:
             bond_map, angle_map = parse_bond_angle_targets(cfg)
+            if not bond_map and not angle_map:
+                raise SystemExit(f"Config {cfg['_file']}: no bonds or angles specified for Wasserstein objective")
+
             wasserstein_observables = []
             if bond_map:
                 wasserstein_observables.append(WassersteinDistanceMapped(
