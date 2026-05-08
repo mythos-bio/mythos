@@ -35,6 +35,7 @@
 | Script | Description |
 |--------|-------------|
 | [gromacs_prep.py](scripts/gromacs_prep.py) | CLI tool to preprocess a GROMACS topology for use with mythos |
+| [martini_full_reparameterization.py](scripts/martini_full_reparameterization.py) | Script for a full Martini reparameterization workflow based on yaml config files |
 
 ### Examples of particular mythos features
 
