@@ -19,7 +19,7 @@ Core Features
   See :doc:`optimization`.
 - **DNA, RNA, and lipid energy models** — built-in support for oxDNA1,
   oxDNA2, oxRNA, oxNA (hybrid DNA/RNA), and MARTINI coarse-grained models, with a
-  clear extension API. See :doc:`energy_functions`.
+  clear extension API for implementing custom models. See :doc:`energy_functions`.
 - **Parallel optimization with Ray** — run multiple simulators and objectives in
   parallel across heterogeneous hardware, enabling hyperscale optimization
   campaigns. See :doc:`optimization`.
@@ -33,14 +33,13 @@ Core Features
 Optimization Lifecycle
 ----------------------
 
-Optimizations in ``mythos`` are organized around four abstractions:
+Optimizations in ``mythos`` are organized as follows:
 
 .. image:: ../_static/mythos_opt_diagram.svg
     :align: center
     :width: 70%
 
-**Simulators** run molecular dynamics and expose **Observables** (trajectories,
-scalars). **Objectives** consume observables and compute gradients of a loss
+**Simulators** run simulations (typically molecular dynamics or Monte Carlo) and expose **Observables** (trajectories and summary statistics). **Objectives** consume observables and compute gradients of a loss
 function. The **Optimizer** orchestrates the loop — running simulations,
 collecting observables, computing gradients, and updating parameters.
 
