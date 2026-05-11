@@ -17,7 +17,7 @@ from mythos.simulators.base import Simulator, SimulatorOutput
 @pytest.fixture(scope="module", autouse=True)
 def _ray_session():
     """Start a minimal local Ray session for the module and shut it down after."""
-    ray.init(num_cpus=2, log_to_driver=False, local_mode=True)
+    ray.init(address="local", num_cpus=2, log_to_driver=False, local_mode=True)
     yield
     ray.shutdown()
 
