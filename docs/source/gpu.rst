@@ -21,7 +21,7 @@ for large systems.
 Enabling the CUDA backend
 ^^^^^^^^^^^^^^^^^^^^^^^^^
 
-Set the ``backend`` to ``CUDA`` in your oxDNA input file:
+Set the ``backend`` to ``CUDA`` in your oxDNA input file(s):
 
 .. code-block:: text
 
@@ -29,7 +29,28 @@ Set the ``backend`` to ``CUDA`` in your oxDNA input file:
     CUDA_device = <device_id>
 
 When ``mythos`` detects ``backend = CUDA`` in the input configuration, it
-automatically passes ``-DCUDA=ON`` to CMake during the oxDNA build step.
+automatically passes ``-DCUDA=ON`` to CMake during the oxDNA build step. Note
+that the ``CUDA_device`` is a relative index, so when running with the ray
+optimizer backend, in general it can be set to ``0``, as we will assign one GPU
+to the task via Ray's scheduler hints (see below).
+
+The option can be passed in the input file directly as above or overridden via
+the ``oxdna.oxDNASimulator`` constructor using `input_overrides`:
+
+.. code-block:: python
+
+    simulator = oxdna.oxDNASimulator(
+        ...,
+        input_overrides={
+            "backend": "CUDA",
+            "CUDA_device": 0,  # optional: specify which GPU to use
+        },
+    )
+
+Finally, note also that there may be other input parameters that are required to
+use the CUDA backend, depending on the simulation type. Some types do not
+support CUDA at all. See the `oxDNA documentation
+<https://lorenzo-rovigatti.github.io/oxDNA/input.html#cuda-options>`_
 
 Build requirements
 ^^^^^^^^^^^^^^^^^^
