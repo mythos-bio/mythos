@@ -57,5 +57,7 @@ Contents
    observables
    optimization
    ray_optimizer
+   gpu
+   slurm
    examples
    autoapi/index

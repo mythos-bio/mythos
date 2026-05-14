@@ -272,6 +272,8 @@ indicates a learning rate that is too high or a numerical precision issue
 (see the ``JAX_ENABLE_X64`` note above).
 
 
+.. _observability-and-debugging:
+
 Observability and Debugging
 ===========================
 
@@ -294,3 +296,25 @@ machine, you can specify the address of the head node in ``ray.init()``::
 
 For more details on using the dashboard and configuring Ray clusters, see the
 `Ray documentation <https://docs.ray.io/>`_.
+
+Accessing the dashboard on Slurm
+^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+
+When running on a Slurm cluster (see also :doc:`slurm`) with ``ray
+symmetric-run``, the head node is started automatically — no need to run ``ray
+start --head`` separately. All that is required is having ``ray[default]``
+installed. The dashboard will be available on port 8265 of the head node.
+
+Since HPC login nodes typically don't expose compute-node ports directly, use
+SSH port forwarding to access the dashboard from your local machine:
+
+.. code-block:: bash
+
+    # From your local machine, forward through the login node to the head node:
+    ssh -L 8265:<head-node>:8265 <user>@<login-node>
+
+Replace ``<head-node>`` with the hostname of the first node in your Slurm
+allocation (the one printed as "IP Head" in the sbatch script). Once
+connected, open ``http://localhost:8265`` in your browser.
+
+See :doc:`slurm` for the full Slurm setup guide.
