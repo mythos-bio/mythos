@@ -1,5 +1,5 @@
 [project]
-name = "mythos"
+name = "mythos-bio"
 dynamic = ["version"]
 authors = [
     {name = "Ryan Kreuger", email = "ryan_krueger@g.harvard.edu"},
