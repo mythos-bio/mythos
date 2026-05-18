@@ -1,0 +1,60 @@
+<?xml version="1.0" encoding="UTF-8"?> <svg width="760" height="200" viewBox="0 0 760 200" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="mythos logo"> <defs> <style> .fg { stroke: #0f172a; fill: none; } .fill-fg { fill: #0f172a; } .accent { stroke: #0ea5b5; fill: none; } .accent-dark { stroke: #0891a2; fill: none; } .accent-fill { fill: #0ea5b5; } .gray { stroke: #94a3b8; fill: none; } .muted { fill: #64748b; } </style> </defs> <!-- Wordmark: ALL CAPS, fatter strokes, slightly more slant --> <g transform="translate(50,110) skewX(-8)">
+<!-- M: darker teal accent color -->
+<path class="accent-dark" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M0,0 V-40 L18,-20 L36,-40 V0" />
+
+<!-- Y: clean V with stem, DNA helix overlay -->
+<path class="fg" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M60,-40 L78,-16 L96,-40" />
+<path class="fg" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M78,-16 V0" />
+<!-- DNA double helix twist -->
+<path class="accent" stroke-width="2.8" stroke-linecap="round"
+  d="M64,-38 Q71,-30 86,-30 Q93,-22 78,-22 Q63,-14 78,-14" />
+<path class="accent" stroke-width="2.8" stroke-linecap="round"
+  d="M92,-38 Q85,-30 70,-30 Q63,-22 78,-22 Q93,-14 78,-14" />
+
+<!-- T: simple vertical with top bar -->
+<path class="fg" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M120,-40 H152" />
+<path class="fg" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M136,-40 V0" />
+
+<!-- H: two verticals with crossbar -->
+<path class="fg" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M176,0 V-40" />
+<path class="fg" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M176,-20 H204" />
+<path class="fg" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M204,0 V-40" />
+
+<!-- O: circular with optimization dial inside -->
+<circle cx="244" cy="-20" r="20" class="fg" stroke-width="12"/>
+<!-- dial face (gray) -->
+<circle cx="244" cy="-20" r="11" class="gray" stroke-width="2.5"/>
+<!-- tick marks (gray) -->
+<g class="gray" stroke-width="2.2" stroke-linecap="round">
+  <path d="M244,-33 V-30"/>
+  <path d="M253,-30 L251,-28"/>
+  <path d="M257,-20 H254"/>
+  <path d="M253,-10 L251,-12"/>
+  <path d="M244,-7 V-10"/>
+  <path d="M235,-10 L237,-12"/>
+  <path d="M231,-20 H234"/>
+  <path d="M235,-30 L237,-28"/>
+</g>
+<!-- needle (accent) -->
+<path class="accent" stroke-width="3.2" stroke-linecap="round" d="M244,-20 L254,-26"/>
+<circle cx="244" cy="-20" r="2.5" class="accent-fill"/>
+
+<!-- S: correct orientation, matching style -->
+<path class="fg" stroke-width="12" stroke-linecap="round" stroke-linejoin="round"
+  d="M328,-36 C308,-44 288,-36 288,-28
+     C288,-20 308,-18 318,-16
+     C328,-14 332,-8 328,-2
+     C324,6 296,6 284,-4" /></g> <!-- Underline: closer to letters --> <g transform="translate(50,118)"> <path class="accent" stroke-width="3.5" stroke-linecap="round" d="M0,0 H420"/> <path class="accent" stroke-width="3.5" stroke-linecap="round" d="M420,0 L411,-6 M420,0 L411,6"/> </g> <!-- Subtitle: tighter spacing below underline --> <g transform="translate(50,150)" font-family="Inter,Segoe UI,Roboto,Helvetica,Arial,sans-serif" font-size="13"> <text class="muted"> <tspan class="fill-fg" font-weight="700">M</tspan>olecular d<tspan class="fill-fg" font-weight="700">Y</tspan>namics <tspan class="fill-fg" font-weight="700">T</tspan>uning and <tspan class="fill-fg" font-weight="700">H</tspan>yperparameter <tspan class="fill-fg" font-weight="700">O</tspan>ptimization <tspan class="fill-fg" font-weight="700">S</tspan>ystem </text> </g> </svg>
+
+
+
+
+
