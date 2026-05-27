@@ -43,8 +43,10 @@ JAX.
 First install mythos using pip:
 
 ```bash
-pip install git+https://github.com/mythos-bio/mythos.git
+pip install mythos-bio
 ```
+
+> **Note**: The PyPI package name is `mythos-bio`, but it installs as `mythos` (use `import mythos` in your code).
 
 ### Simulations
 
