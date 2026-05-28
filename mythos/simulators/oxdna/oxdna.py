@@ -85,7 +85,7 @@ class oxDNASimulator(InputDirSimulator):  # noqa: N801 oxDNA is a special word
     """
 
     energy_fn: EnergyFunction
-    n_build_threads: int = 4
+    n_build_threads: int = 1
     logger_config: dict[str, Any] | None = None
     binary_path: Path | None = None
     source_path: Path | None = None
