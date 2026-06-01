@@ -30,7 +30,10 @@ Install ``mythos`` using pip:
 
 .. code-block:: bash
 
-    pip install git+https://github.com/mythos-bio/mythos.git
+    pip install mythos-bio
+
+.. note::
+   The PyPI package name is ``mythos-bio``, but it installs as ``mythos`` (use ``import mythos`` in your code).
 
 Some simulator backends have additional dependencies:
 
