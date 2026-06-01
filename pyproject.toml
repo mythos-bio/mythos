@@ -6,7 +6,7 @@ authors = [
     {name = "Megan Engel", email = "megan.engel@ucalgary.ca"},
     {name = "Scientifc Software Engineering Center at JHU", email = "ssec@jhu.edu"},
 ]
-description = ""
+description = "Differentiable models of bio-molecular dynamics"
 readme = "README.md"
 license = {file = "LICENSE"}
 
